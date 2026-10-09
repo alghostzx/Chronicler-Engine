@@ -8,7 +8,7 @@ services:
       # Apenas loopback: a interface não tem autenticação e guarda a chave da API (§11.9).
       - "127.0.0.1:3000:3000"
     volumes:
-      - ./data:/data
+      - ./data:/data:Z
     environment:
       - DATABASE_PATH=/data/chronicler.db
       - PORT=3000

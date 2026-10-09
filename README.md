@@ -28,6 +28,15 @@ Abra <http://localhost:3000>, informe a **chave da API do Gemini** na tela inici
 - Os dados (SQLite, incluindo a chave) ficam em `./data` no host. Faça backup dessa pasta.
 - Parar: `docker compose down` (os dados permanecem).
 
+### Com Podman (rootless, ex.: Fedora com SELinux)
+
+```bash
+mkdir -p data
+podman-compose -f docker-compose.yml -f docker-compose.podman.yml up -d --build
+```
+
+O arquivo `docker-compose.podman.yml` usa `userns_mode: keep-id` para que `./data` continue pertencendo ao seu usuário (o `:Z` do volume cuida do rótulo SELinux). Ajuste `user: "1000:1000"` se o seu UID/GID for outro. Para parar: `podman-compose -f docker-compose.yml -f docker-compose.podman.yml down`. O `HEALTHCHECK` do Dockerfile é ignorado pelo Podman no formato OCI (apenas um aviso no build).
+
 ## Desenvolvimento local
 
 Requer **Node.js ≥ 22**.

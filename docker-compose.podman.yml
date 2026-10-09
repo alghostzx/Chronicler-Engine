@@ -1,0 +1,8 @@
+# Ajustes para Podman rootless (Fedora/SELinux):
+#   podman-compose -f docker-compose.yml -f docker-compose.podman.yml up -d --build
+# Mapeia o seu usuário do host para dentro do contêiner, de modo que ./data continue
+# pertencendo a você (sem isso, o entrypoint rebaixaria a posse para um subuid).
+services:
+  chronicler:
+    user: "1000:1000"
+    userns_mode: keep-id

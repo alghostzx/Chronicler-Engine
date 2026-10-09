@@ -71,7 +71,8 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] `docker-compose.yml` com bind `127.0.0.1:3000`, volume `./data`, entrypoint com `su-exec`
 - [x] README em pt-BR
 - [x] Validado sem Docker: build, `npm ci --omit=dev` isolado e servidor de produção respondendo (Docker indisponível no ambiente)
-- [ ] `docker compose up --build` real — **pendente na máquina do usuário**
+- [x] Subida real com **Podman rootless** (`podman-compose` + `docker-compose.podman.yml`): build da imagem OK, contêiner responde em `127.0.0.1:3000` (`/api/health`, `/`, `/assets/*`, `/fonts/*` = 200) e `./data` permanece do usuário
+- [ ] Teste com Docker propriamente dito — não disponível no ambiente (o Dockerfile é o mesmo)
 
 ## Fase 9 — Verificação final ✅
 - [x] Checklist da seção 10 do design document (5/5, com evidências no próprio documento)
@@ -79,7 +80,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Teste ponta a ponta com chave real (`scripts/live-*.ts`, modelo `gemini-3.8-flash`)
 
 ### Pendências conhecidas / riscos
-- `docker compose up --build` ainda não foi executado de verdade (Docker ausente no ambiente de desenvolvimento).
+- A imagem foi construída e executada com Podman rootless; `docker compose up --build` com Docker propriamente dito não foi testado (Docker ausente no ambiente).
 - A UI foi validada em jsdom (sem navegador real): vale uma passada visual nos 4 temas.
 - Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/modo JSON não foram testados com eles.
 - `npm audit` acusa 7 vulnerabilidades, todas em dependências de desenvolvimento (a instalação de produção tem 0).
