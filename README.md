@@ -49,7 +49,7 @@ Em qualquer máquina com Linux, macOS ou Windows (WSL2) que rode contêineres, o
 ## Subindo com Docker
 
 ```bash
-git clone <url-deste-repositório> chronicler-engine
+git clone https://github.com/alghostzx/Chronicler-Engine.git chronicler-engine
 cd chronicler-engine
 docker compose up -d --build
 ```
@@ -68,7 +68,7 @@ Rootless (sem `sudo`), inclusive em Fedora/RHEL com SELinux. Há duas formas equ
 **A) Com `podman-compose`** (instale com `pip install --user podman-compose` ou `sudo dnf install podman-compose`):
 
 ```bash
-git clone <url-deste-repositório> chronicler-engine
+git clone https://github.com/alghostzx/Chronicler-Engine.git chronicler-engine
 cd chronicler-engine
 mkdir -p data
 podman-compose -f docker-compose.yml -f docker-compose.podman.yml up -d --build

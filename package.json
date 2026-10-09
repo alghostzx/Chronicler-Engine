@@ -2,6 +2,11 @@
   "name": "chronicler-engine",
   "version": "0.1.0",
   "description": "Plataforma de escrita e RPG narrativo colaborativo com IA (Gemini)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alghostzx/Chronicler-Engine.git"
+  },
+  "homepage": "https://github.com/alghostzx/Chronicler-Engine#readme",
   "private": true,
   "type": "module",
   "engines": {
