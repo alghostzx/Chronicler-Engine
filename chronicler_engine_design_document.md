@@ -434,3 +434,13 @@ O schema implementado em [`src/db/schema.ts`](src/db/schema.ts) acrescenta ao §
 * Índice único parcial `idx_one_active_dialogue` em `dialogue_sessions(session_id) WHERE status = 'active'`, que impõe no banco a regra de um diálogo ativo por sessão.
 * O `order_index` considera blocos arquivados e nunca é reutilizado após uma compactação.
 * O controle de versão do schema usa `PRAGMA user_version`.
+
+### 11.11 API de configurações e modelos (§8.1)
+Endpoints adicionados/ajustados em relação ao §8.1:
+* `POST /api/settings/key` **valida a chave** chamando `models.list` antes de gravar; chave inválida → 400 e nada é salvo. A chave nunca é devolvida por nenhum endpoint.
+* `DELETE /api/settings/key` remove a chave; `PUT /api/settings/model` define o modelo padrão global.
+* `GET /api/models` devolve `{ models, default_model, effective_default_model, available }`. A lista vem de `models.list` (apenas modelos com `generateContent`), filtrada para **texto** (excluindo imagem, TTS, música, transcrição, agentes e modelos multimodais de saída) e em cache por 10 minutos (`?refresh=true` força atualização). O `effective_default_model` aplica o fallback do §11.2.
+* `GET /api/sessions/:id` retorna também `archives` e `active_dialogue` (para a reconexão pós-reload).
+* `DELETE /api/sessions/:id` exclui a sessão (cascata nas tabelas filhas).
+* Temas válidos de `active_theme`: `medieval`, `cyberpunk`, `pos-apocaliptico`, `contemporaneo`.
+* Campos desconhecidos no corpo das requisições geram 400 (o Ajv não descarta em silêncio).

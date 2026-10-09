@@ -15,10 +15,12 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Repositórios: settings, sessions, blocks, archives, dialogues
 - [x] Testes com SQLite `:memory:` (12 testes)
 
-## Fase 2 — Configurações e sessões
-- [ ] `GET /api/settings`, `POST /api/settings/key`
-- [ ] Lista de modelos Gemini disponíveis (`models.list`) + seletor
-- [ ] CRUD de sessões, `PUT /api/sessions/:id/context`
+## Fase 2 — Configurações e sessões ✅
+- [x] `GET /api/settings`, `POST /api/settings/key` (valida a chave via `models.list` antes de gravar), `DELETE /api/settings/key`, `PUT /api/settings/model`
+- [x] `GET /api/models`: lista real de modelos de texto (`models.list`), cache de 10 min, fallback para o primeiro Flash
+- [x] CRUD de sessões, `PUT /api/sessions/:id/context` (regras, contexto, tema, modelo, `token_limit`)
+- [x] Validação estrita do corpo (campos desconhecidos → 400)
+- [x] Verificado contra a API real (`scripts/live-models.ts`): `gemini-3.8-flash` existe
 
 ## Fase 3 — Núcleo narrativo
 - [ ] `contextBuilder` (sem prompts passados)
