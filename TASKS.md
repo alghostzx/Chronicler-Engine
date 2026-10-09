@@ -47,9 +47,12 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Refatoração: `TurnRunner` compartilhado (travas de concorrência e SSE)
 - [x] Verificado contra a API real (`scripts/live-dialogue.ts`)
 
-## Fase 6 — Compactação
-- [ ] `compact/preview` (split 75/25 por peso em tokens)
-- [ ] `compact/commit` transacional (`## Crônica — Volume N`)
+## Fase 6 — Compactação ✅
+- [x] `splitForCompaction`: 75/25 por peso (tamanho do texto), ≥ 1 bloco de cada lado
+- [x] `POST /api/sessions/:id/compact/preview`: sinopse factual do Corpus Passado, sem efeitos colaterais
+- [x] `POST /api/sessions/:id/compact/commit` transacional: volume em `chronicle_archives`, `## Crônica — Volume N` no `world_context`, blocos `is_archived`
+- [x] Validação da faixa no commit (prefixo dos ativos, preserva o último bloco) e rollback atômico
+- [x] Verificado contra a API real (`scripts/live-compaction.ts`): HP 62,6% → 79,3%
 
 ## Fase 7 — Frontend (Vanilla TS + Tailwind, pt-BR)
 - [ ] Layout: Context Drawer, Interactive Tome, Action Dock

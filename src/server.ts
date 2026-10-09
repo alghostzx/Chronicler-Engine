@@ -13,6 +13,7 @@ import { TokenCounter } from './ai/tokens.js';
 import { loadConfig, type AppConfig } from './config.js';
 import { HttpError, type AppContext } from './context.js';
 import { openRepositories, type Repositories } from './db/index.js';
+import { registerCompactionRoutes } from './routes/compaction.js';
 import { registerDialogueRoutes } from './routes/dialogue.js';
 import { TurnRunner } from './routes/turnRunner.js';
 import { registerNarrativeRoutes } from './routes/narrative.js';
@@ -73,6 +74,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   registerSessionRoutes(app, ctx);
   registerNarrativeRoutes(app, ctx);
   registerDialogueRoutes(app, ctx);
+  registerCompactionRoutes(app, ctx);
   registerTokenRoutes(app, ctx);
 
   if (fs.existsSync(config.publicDir)) {
