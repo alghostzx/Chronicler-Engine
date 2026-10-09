@@ -52,6 +52,9 @@ async function boot(opts: { withKey: boolean; hash?: string }): Promise<void> {
   document.documentElement.className = '';
   document.body.innerHTML = INDEX.slice(INDEX.indexOf('<body'), INDEX.indexOf('</body>')).replace(/<script[\s\S]*?<\/script>/g, '').replace(/^<body[^>]*>/, '');
   location.hash = opts.hash ?? '#/';
+  // O jsdom despacha `hashchange` de forma assíncrona: deixa o evento pendente passar antes de
+  // registrar o roteador desta instância, senão ele re-renderizaria a tela no meio do teste.
+  await new Promise((r) => setTimeout(r, 30));
   vi.resetModules();
   await import('../client/main');
 }
@@ -108,8 +111,8 @@ describe('UI — sessão', () => {
 
     gateway.queue(narratorJson('A porta rangeu.\n\nUma sombra cruzou o corredor.'));
     await send('Abro a porta');
-    await waitFor(() => text().includes('A porta rangeu.'), 'primeiro bloco');
-    expect(document.querySelectorAll('.prose-tome p').length).toBe(2);
+    await waitFor(() => document.querySelectorAll('.prose-tome p').length === 2, 'primeiro bloco persistido');
+    expect(text()).toContain('A porta rangeu.');
     expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
     await waitFor(() => /\d+% — /.test(text()), 'HP calculado');
 
@@ -201,6 +204,66 @@ describe('UI — sessão', () => {
     click(await waitFor(() => button('Descartar e ramificar'), 'confirmação'));
     await waitFor(() => !text().includes('Cena B.'), 'bloco B descartado');
     expect(text()).toContain('Cena A.');
+  });
+
+  it('salva a crônica em .md pelo botão do cabeçalho (com e sem contexto)', async () => {
+    await openNewSession();
+    gateway.queue(narratorJson('A porta rangeu.'));
+    await send('Abro a porta');
+    await waitFor(() => text().includes('A porta rangeu.') && !button('Narrando…'), 'bloco');
+
+    const blobs: Blob[] = [];
+    const downloads: string[] = [];
+    URL.createObjectURL = ((b: Blob) => (blobs.push(b), 'blob:teste')) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download);
+    });
+    const readBlob = (b: Blob) =>
+      new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.readAsText(b);
+      });
+
+    click(button('Salvar .md')!);
+    click(await waitFor(() => button('Baixar arquivo .md'), 'modal de exportação'));
+    await waitFor(() => downloads.length === 1, 'download disparado');
+    expect(downloads[0]).toBe('Teste.md');
+    const plain = await readBlob(blobs[0]!);
+    expect(plain).toContain('# Teste');
+    expect(plain).toContain('A porta rangeu.');
+    expect(plain).not.toContain('Abro a porta');
+    await waitFor(() => !document.querySelector('[role=dialog]'), 'modal fechada');
+
+    await fetch(`/api/sessions/${location.hash.slice(4)}/context`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ world_context: 'Reino de Valdoria.' }),
+    });
+    click(button('Salvar .md')!);
+    const box = await waitFor(() => document.querySelector<HTMLInputElement>('#export-context'), 'checkbox de contexto');
+    box.checked = true;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 2, 'segundo download');
+    const withCtx = await readBlob(blobs[1]!);
+    expect(withCtx).toContain('## Mundo e personagens\n\nReino de Valdoria.');
+    expect(withCtx).toContain('## Narrativa');
+    expect(plain).not.toContain('Valdoria');
+    clickSpy.mockRestore();
+  });
+
+  it('alterna entre modo claro e escuro mantendo o tema da sessão', async () => {
+    await openNewSession();
+    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Modo claro ou escuro"]')!;
+    select.value = 'dark';
+    select.dispatchEvent(new Event('change'));
+    expect(document.documentElement.classList.contains('mode-dark')).toBe(true);
+    expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
+    select.value = 'light';
+    select.dispatchEvent(new Event('change'));
+    expect(document.documentElement.classList.contains('mode-light')).toBe(true);
+    expect(localStorage.getItem('chronicler.mode')).toBe('light');
   });
 
   it('mostra erro do Narrador e mantém o texto digitado', async () => {

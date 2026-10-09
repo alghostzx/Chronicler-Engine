@@ -3,10 +3,14 @@
 @tailwind utilities;
 
 /* ============================================================================
-   Motor de temas (design document §7.2): classes de escopo raiz em <html>.
+   Motor de temas (design document §7.2 e §11.19): <html> recebe `theme-<tema>` e
+   `mode-light|mode-dark`. Cada tema tem uma variação clara e uma escura; o modo vem da
+   preferência do usuário (Automático = sistema, Claro ou Escuro).
    ============================================================================ */
+
+/* --- Medieval ---------------------------------------------------------------------- */
 :root,
-.theme-medieval {
+.theme-medieval.mode-light {
   --bg-main: #f4ecd8; /* pergaminho */
   --bg-panel: #ebe0c4;
   --text-main: #2c221e; /* tinta sépia */
@@ -20,8 +24,23 @@
   --hp-warn: #f9a825;
   --hp-low: #c62828;
 }
+.theme-medieval.mode-dark {
+  --bg-main: #1e1710; /* couro escuro */
+  --bg-panel: #2a2016;
+  --text-main: #e8d9b8; /* pergaminho à luz de vela */
+  --text-muted: #a8946f;
+  --text-strong: #f3e4c0;
+  --font-reading: 'Merriweather', 'Cinzel', serif;
+  --font-display: 'Cinzel', 'Merriweather', serif;
+  --accent: #d99a4e; /* âmbar */
+  --border: #4a3a26;
+  --hp-ok: #7cb342;
+  --hp-warn: #f9a825;
+  --hp-low: #e55353;
+}
 
-.theme-cyberpunk {
+/* --- Cyberpunk ---------------------------------------------------------------------- */
+.theme-cyberpunk.mode-dark {
   --bg-main: #0d1117; /* preto profundo */
   --bg-panel: #161b22;
   --text-main: #e6edf3;
@@ -35,8 +54,23 @@
   --hp-warn: #ffea00;
   --hp-low: #ff1744;
 }
+.theme-cyberpunk.mode-light {
+  --bg-main: #f3f6fa; /* painel de laboratório */
+  --bg-panel: #e6ecf4;
+  --text-main: #1b2430;
+  --text-muted: #566474;
+  --text-strong: #007a66;
+  --font-reading: 'JetBrains Mono', monospace;
+  --font-display: 'JetBrains Mono', monospace;
+  --accent: #d6004b;
+  --border: #c4cedb;
+  --hp-ok: #00838f;
+  --hp-warn: #c77800;
+  --hp-low: #d50032;
+}
 
-.theme-pos-apocaliptico {
+/* --- Pós-apocalíptico --------------------------------------------------------------- */
+.theme-pos-apocaliptico.mode-dark {
   --bg-main: #1c1a17; /* cinza terra */
   --bg-panel: #26231f;
   --text-main: #d4c5b9; /* desbotado */
@@ -50,8 +84,23 @@
   --hp-warn: #e0a030;
   --hp-low: #bf360c;
 }
+.theme-pos-apocaliptico.mode-light {
+  --bg-main: #e4ddd0; /* papel sujo */
+  --bg-panel: #d8cfbf;
+  --text-main: #2e2923;
+  --text-muted: #6e6354;
+  --text-strong: #1c1814;
+  --font-reading: 'Special Elite', monospace;
+  --font-display: 'Special Elite', monospace;
+  --accent: #a8481c;
+  --border: #b5a998;
+  --hp-ok: #4a7a22;
+  --hp-warn: #b8780f;
+  --hp-low: #a62a0a;
+}
 
-.theme-contemporaneo {
+/* --- Contemporâneo ------------------------------------------------------------------ */
+.theme-contemporaneo.mode-light {
   --bg-main: #ffffff;
   --bg-panel: #f9fafb;
   --text-main: #111827; /* cinza escuro */
@@ -65,13 +114,26 @@
   --hp-warn: #f59e0b;
   --hp-low: #ef4444;
 }
+.theme-contemporaneo.mode-dark {
+  --bg-main: #0f1115;
+  --bg-panel: #171a21;
+  --text-main: #e5e7eb;
+  --text-muted: #9ca3af;
+  --text-strong: #f9fafb;
+  --font-reading: 'Lora', 'Inter', serif;
+  --font-display: 'Inter', 'Lora', sans-serif;
+  --accent: #60a5fa;
+  --border: #2a2f3a;
+  --hp-ok: #34d399;
+  --hp-warn: #fbbf24;
+  --hp-low: #f87171;
+}
 
 @layer base {
   html {
     color-scheme: light;
   }
-  html.theme-cyberpunk,
-  html.theme-pos-apocaliptico {
+  html.mode-dark {
     color-scheme: dark;
   }
   body {

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chronicler Engine">
+  <rect width="64" height="64" rx="14" fill="#1e1710"/>
+  <!-- Tome aberto -->
+  <path d="M32 22C26 18 16 17 9 19v28c7-2 17-1 23 3z" fill="#f3e4c0"/>
+  <path d="M32 22c6-4 16-5 23-3v28c-7-2-17-1-23 3z" fill="#d99a4e"/>
+  <path d="M32 22v28" stroke="#1e1710" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- Linhas de texto -->
+  <g stroke="#1e1710" stroke-opacity=".45" stroke-width="2" stroke-linecap="round">
+    <path d="M14 27c4-1 9-1 13 1M14 33c4-1 9-1 13 1M14 39c4-1 9-1 13 1"/>
+    <path d="M37 28c4-2 9-2 13-1M37 34c4-2 9-2 13-1M37 40c4-2 9-2 13-1"/>
+  </g>
+  <!-- Centelha da narrativa -->
+  <path d="M46 5l1.8 4.2L52 11l-4.2 1.8L46 17l-1.8-4.2L40 11l4.2-1.8z" fill="#f3e4c0"/>
+</svg>

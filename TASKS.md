@@ -84,3 +84,10 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - A UI foi validada em jsdom (sem navegador real): vale uma passada visual nos 4 temas.
 - Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/modo JSON não foram testados com eles.
 - `npm audit` acusa 7 vulnerabilidades, todas em dependências de desenvolvimento (a instalação de produção tem 0).
+
+## Fase 10 — Melhorias pós-entrega ✅
+- [x] Favicon (SVG + ICO + apple-touch-icon), servidos localmente
+- [x] Variações clara/escura para os 4 temas (Automático/Claro/Escuro, sem "flash" na carga)
+- [x] Botão **Salvar .md**: `GET /api/sessions/:id/export` (inclui blocos arquivados; contexto opcional; sem prompts do jogador)
+- [x] Testes: exportação (módulo + rota), temas/modo (jsdom) e UI (download + alternância de modo); 142 testes passando
+- [ ] Subir novamente a imagem no Podman com estas mudanças

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type AppContext } from '../context.js';
+import { buildStoryMarkdown, contentDisposition } from '../export.js';
 import { DEFAULT_SYSTEM_RULES } from '../prompts/narrator.js';
 import { publicDialogue } from './dialogue.js';
 
@@ -71,6 +72,31 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
       active_dialogue: active ? publicDialogue(active) : null,
     };
   });
+
+  // Exporta a história como arquivo Markdown (download). Inclui os blocos arquivados.
+  app.get<{ Params: { id: string }; Querystring: { include_context?: boolean } }>(
+    '/api/sessions/:id/export',
+    {
+      schema: {
+        params: idParams,
+        querystring: { type: 'object', properties: { include_context: { type: 'boolean' } } },
+      },
+    },
+    async (req, reply) => {
+      const session = requireSession(req.params.id);
+      const markdown = buildStoryMarkdown({
+        session,
+        blocks: repos.blocks.listAll(session.id),
+        exportedAt: new Date(),
+        includeContext: req.query.include_context === true,
+      });
+      return reply
+        .header('Content-Type', 'text/markdown; charset=utf-8')
+        .header('Content-Disposition', contentDisposition(session.title))
+        .header('Cache-Control', 'no-store')
+        .send(markdown);
+    },
+  );
 
   app.put<{ Params: { id: string }; Body: Record<string, unknown> }>(
     '/api/sessions/:id/context',

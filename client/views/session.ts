@@ -11,8 +11,9 @@ import {
   type TokenInfo,
   type Session,
 } from '../api';
+import { downloadStoryMarkdown } from '../download';
 import { confirmModal, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
-import { applyTheme } from '../theme';
+import { applyTheme, createModeSelect } from '../theme';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
 
@@ -111,6 +112,33 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   });
 
   const drawerBtn = h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', onClick: () => toggleDrawer() }, 'Contexto');
+  const exportBtn = h('button', { class: 'btn', type: 'button', title: 'Baixar a crônica como arquivo Markdown', onClick: () => openExport() }, 'Salvar .md');
+
+  function openExport(): void {
+    const withContext = h('input', { type: 'checkbox', id: 'export-context', class: 'mr-2' });
+    const go = h('button', { class: 'btn btn-primary', type: 'button' }, 'Baixar arquivo .md');
+    const modal = openModal(
+      'Salvar crônica em Markdown',
+      h(
+        'div',
+        { class: 'space-y-3' },
+        h('p', { class: 'text-sm text-muted' }, 'O arquivo contém o título e toda a prosa da crônica, inclusive os capítulos já compactados. Suas instruções (prompts) não são incluídas.'),
+        h('label', { class: 'flex items-center text-sm text-ink', for: 'export-context' }, withContext, 'Incluir o mundo, os personagens e as sinopses dos volumes'),
+        h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'), go),
+      ),
+    );
+    go.addEventListener('click', async () => {
+      go.disabled = true;
+      try {
+        const name = await downloadStoryMarkdown(sessionId, withContext.checked);
+        toast(`Arquivo “${name}” gerado.`, 'success');
+        modal.close();
+      } catch (err) {
+        go.disabled = false;
+        toast((err as Error).message, 'error');
+      }
+    });
+  }
 
   function toggleDrawer(): void {
     drawerOpen = !drawerOpen;
@@ -126,10 +154,12 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       { class: 'flex h-screen flex-col' },
       h(
         'header',
-        { class: 'flex items-center gap-3 border-b border-line bg-panel px-4 py-2' },
+        { class: 'flex flex-wrap items-center gap-2 border-b border-line bg-panel px-4 py-2 sm:gap-3' },
         h('a', { href: '#/', class: 'btn', 'aria-label': 'Voltar à biblioteca' }, '← Biblioteca'),
         titleEl,
         themeSelect,
+        createModeSelect(),
+        exportBtn,
         drawerBtn,
       ),
       h('div', { class: 'relative flex min-h-0 flex-1' }, h('main', { class: 'flex min-w-0 flex-1 flex-col' }, tomeScroll, dock), drawerWrap),

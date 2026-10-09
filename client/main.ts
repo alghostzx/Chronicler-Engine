@@ -1,5 +1,5 @@
 import { mount } from './dom';
-import { applyTheme, savedTheme } from './theme';
+import { initTheme } from './theme';
 import { renderHome } from './views/home';
 import { renderSession } from './views/session';
 
@@ -24,7 +24,7 @@ async function route(): Promise<void> {
   await renderHome(root);
 }
 
-applyTheme(savedTheme());
+initTheme();
 window.addEventListener('hashchange', () => void route());
 route().catch((err) => {
   mount(root, Object.assign(document.createElement('p'), { className: 'p-8 text-hp-low', textContent: `Erro inesperado: ${(err as Error).message}` }));
