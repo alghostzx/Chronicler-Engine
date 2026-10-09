@@ -38,11 +38,14 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Cache por hash do conteúdo (sem polling, sem valores obsoletos)
 - [x] Verificado contra a API real (`scripts/live-tokens.ts`); descoberta: `systemInstruction` não é aceito em `countTokens` na Developer API → regras contadas junto ao conteúdo
 
-## Fase 5 — Modo Diálogo
-- [ ] Ativação via `dialogue_trigger`, um diálogo ativo por sessão
-- [ ] Mensagens isoladas com persona do NPC
-- [ ] `/conclude` com costura em prosa
-- [ ] Reconexão pós-reload
+## Fase 5 — Modo Diálogo ✅
+- [x] Ativação via `dialogue_trigger` (Fase 3), um diálogo ativo por sessão (índice único no banco)
+- [x] `POST /api/dialogue/:id/message`: persona do NPC, histórico isolado multi-turno, sinal `npc_wants_to_end`
+- [x] `POST /api/dialogue/:id/conclude`: costura em prosa via SSE, único ponto em que o diálogo altera a história
+- [x] `POST /api/dialogue/:id/cancel` (extensão) e `GET /api/sessions/:id/dialogue/active` (reconexão pós-reload)
+- [x] `dynamic_system_prompt` nunca é exposto pela API
+- [x] Refatoração: `TurnRunner` compartilhado (travas de concorrência e SSE)
+- [x] Verificado contra a API real (`scripts/live-dialogue.ts`)
 
 ## Fase 6 — Compactação
 - [ ] `compact/preview` (split 75/25 por peso em tokens)

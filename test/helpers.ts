@@ -70,6 +70,11 @@ export function narratorJson(
   return JSON.stringify({ narrative_text: text, dialogue_trigger: trigger });
 }
 
+/** JSON de resposta do NPC no Modo Diálogo. */
+export function npcJson(reply: string, endConversation = false): string {
+  return JSON.stringify({ reply, end_conversation: endConversation });
+}
+
 export interface SseEvent {
   event: string;
   data: any;

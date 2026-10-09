@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type AppContext } from '../context.js';
 import { DEFAULT_SYSTEM_RULES } from '../prompts/narrator.js';
+import { publicDialogue } from './dialogue.js';
 
 export const THEMES = ['medieval', 'cyberpunk', 'pos-apocaliptico', 'contemporaneo'] as const;
 
@@ -62,11 +63,12 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
 
   app.get<{ Params: { id: string } }>('/api/sessions/:id', { schema: { params: idParams } }, async (req) => {
     const session = requireSession(req.params.id);
+    const active = repos.dialogues.getActive(session.id);
     return {
       session,
       blocks: repos.blocks.listActive(session.id),
       archives: repos.archives.list(session.id),
-      active_dialogue: repos.dialogues.getActive(session.id) ?? null,
+      active_dialogue: active ? publicDialogue(active) : null,
     };
   });
 

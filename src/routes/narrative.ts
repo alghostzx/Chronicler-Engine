@@ -1,11 +1,7 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { buildNarratorRequest } from '../ai/contextBuilder.js';
-import { GenerationError } from '../ai/gateway.js';
-import { streamNarratorTurn } from '../ai/narrator.js';
-import { NarratorResponseError, type NarratorResult } from '../ai/narratorSchema.js';
 import { HttpError, type AppContext } from '../context.js';
-import type { DialogueSession, NarrativeBlock, Session } from '../db/types.js';
-import { openSse } from './sse.js';
+import type { Session } from '../db/types.js';
 
 const idParams = {
   type: 'object',
@@ -20,24 +16,8 @@ const instructionBody = {
   properties: { player_instruction: { type: 'string', minLength: 1, maxLength: 20000 } },
 };
 
-interface PersistOutcome {
-  block: NarrativeBlock;
-  /** Blocos posteriores descartados (apenas em regeneração intermediária). */
-  discarded: number;
-  dialogue?: DialogueSession;
-}
-
-function friendlyError(err: unknown): string {
-  if (err instanceof GenerationError || err instanceof NarratorResponseError) return err.message;
-  const message = err instanceof Error ? err.message : String(err);
-  return `Falha ao gerar a narrativa: ${message.slice(0, 300)}`;
-}
-
 export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): void {
-  const { repos } = ctx;
-
-  /** Sessões com geração em andamento: evita dois turnos concorrentes embaralharem a história. */
-  const busy = new Set<string>();
+  const { repos, turns } = ctx;
 
   const requireSession = (id: string): Session => {
     const session = repos.sessions.get(id);
@@ -51,89 +31,6 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     }
   };
 
-  /**
-   * Executa um turno do Narrador via SSE. Eventos:
-   *  - `start`  {model}
-   *  - `chunk`  {text}              (parse incremental de narrative_text)
-   *  - `block`  {block, discarded}  (no fechamento do payload, após persistir)
-   *  - `dialogue_trigger` {dialogue_id, npc_name}   (somente se o Narrador ativou diálogo)
-   *  - `error`  {message}
-   *  - `done`   {}
-   * Nada é gravado se a geração falhar ou o cliente desconectar.
-   */
-  async function runTurn(
-    req: FastifyRequest,
-    reply: FastifyReply,
-    opts: {
-      session: Session;
-      precedingBlocks: NarrativeBlock[];
-      instruction: string;
-      persist: (result: NarratorResult, model: string) => PersistOutcome;
-    },
-  ): Promise<void> {
-    const { session } = opts;
-    // A sessão já foi reservada por `claim`. Falhas antes de abrir o SSE (ex.: sem chave)
-    // ainda retornam JSON normal e precisam liberar a reserva.
-    let gateway;
-    let model: string;
-    try {
-      gateway = ctx.gatewayProvider();
-      model = await ctx.models.resolve(session);
-    } catch (err) {
-      busy.delete(session.id);
-      throw err;
-    }
-
-    const sse = openSse(req, reply);
-    try {
-      sse.send('start', { model });
-      const request = buildNarratorRequest({
-        session,
-        precedingBlocks: opts.precedingBlocks,
-        playerInstruction: opts.instruction,
-      });
-
-      let result: NarratorResult | undefined;
-      for await (const ev of streamNarratorTurn(gateway, { model, request, signal: sse.signal })) {
-        if (ev.type === 'chunk') sse.send('chunk', { text: ev.text });
-        else result = ev.result;
-      }
-      if (sse.signal.aborted || !result) return;
-
-      const outcome = opts.persist(result, model);
-      sse.send('block', { block: outcome.block, discarded: outcome.discarded });
-      if (outcome.dialogue) {
-        sse.send('dialogue_trigger', {
-          dialogue_id: outcome.dialogue.id,
-          npc_name: outcome.dialogue.npc_name,
-        });
-      }
-      sse.send('done', {});
-    } catch (err) {
-      if (!sse.signal.aborted) {
-        req.log.error({ err }, 'Falha na geração do turno narrativo');
-        sse.send('error', { message: friendlyError(err) });
-      }
-    } finally {
-      busy.delete(session.id);
-      sse.end();
-    }
-  }
-
-  /** Reserva a sessão para uma geração; falha com 409 se já houver uma em andamento. */
-  const claim = (sessionId: string) => {
-    if (busy.has(sessionId)) {
-      throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
-    }
-    busy.add(sessionId);
-  };
-
-  const maybeCreateDialogue = (sessionId: string, result: NarratorResult): DialogueSession | undefined => {
-    const t = result.dialogue_trigger;
-    if (!t.activate) return undefined;
-    return repos.dialogues.create(sessionId, t.npc_name!, t.dynamic_system_prompt!);
-  };
-
   // --- Próximo bloco -------------------------------------------------------------------
   app.post<{ Params: { id: string }; Body: { player_instruction: string } }>(
     '/api/sessions/:id/narrative/next',
@@ -141,13 +38,16 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     async (req, reply) => {
       const session = requireSession(req.params.id);
       assertNoActiveDialogue(session.id);
-      claim(session.id);
+      turns.claim(session.id);
       const instruction = req.body.player_instruction;
 
-      await runTurn(req, reply, {
+      await turns.run(req, reply, {
         session,
-        precedingBlocks: repos.blocks.listActive(session.id),
-        instruction,
+        request: buildNarratorRequest({
+          session,
+          precedingBlocks: repos.blocks.listActive(session.id),
+          playerInstruction: instruction,
+        }),
         persist: (result, model) =>
           repos.transaction(() => {
             const block = repos.blocks.append(session.id, {
@@ -155,7 +55,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
               generated_text: result.narrative_text,
               model_identifier: model,
             });
-            const dialogue = maybeCreateDialogue(session.id, result);
+            const dialogue = turns.maybeCreateDialogue(session.id, result);
             repos.sessions.touch(session.id);
             return { block, discarded: 0, dialogue };
           }),
@@ -181,7 +81,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       const block = repos.blocks.get(req.params.id);
       if (!block) throw new HttpError(404, 'Bloco não encontrado.');
       if (block.is_archived) throw new HttpError(409, 'Blocos arquivados não podem ser editados.');
-      if (busy.has(block.session_id)) {
+      if (turns.isBusy(block.session_id)) {
         throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
       }
       const updated = repos.blocks.updateText(block.id, req.body.generated_text);
@@ -227,14 +127,17 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
           blocks_to_discard: following.length,
         });
       }
-      claim(session.id);
+      turns.claim(session.id);
       const instruction = req.body.player_instruction;
 
-      await runTurn(req, reply, {
+      await turns.run(req, reply, {
         session,
         // O corpus de regeneração contém apenas os blocos ativos ANTERIORES a K.
-        precedingBlocks: active.filter((b) => b.order_index < block.order_index),
-        instruction,
+        request: buildNarratorRequest({
+          session,
+          precedingBlocks: active.filter((b) => b.order_index < block.order_index),
+          playerInstruction: instruction,
+        }),
         // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem
         // numa única transação, então uma falha de geração nunca apaga dados (§11.5).
         persist: (result, model) =>
@@ -245,7 +148,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
               generated_text: result.narrative_text,
               model_identifier: model,
             })!;
-            const dialogue = maybeCreateDialogue(session.id, result);
+            const dialogue = turns.maybeCreateDialogue(session.id, result);
             repos.sessions.touch(session.id);
             return { block: updated, discarded, dialogue };
           }),

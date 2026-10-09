@@ -13,6 +13,8 @@ import { TokenCounter } from './ai/tokens.js';
 import { loadConfig, type AppConfig } from './config.js';
 import { HttpError, type AppContext } from './context.js';
 import { openRepositories, type Repositories } from './db/index.js';
+import { registerDialogueRoutes } from './routes/dialogue.js';
+import { TurnRunner } from './routes/turnRunner.js';
 import { registerNarrativeRoutes } from './routes/narrative.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerSettingsRoutes } from './routes/settings.js';
@@ -36,13 +38,14 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   const repos = opts.repos ?? openRepositories(config.databasePath);
   const gatewayFactory = opts.gatewayFactory ?? defaultGatewayFactory;
   const gatewayProvider = createGatewayProvider(repos.settings, undefined, gatewayFactory);
-  const ctx: AppContext = {
+  const ctx = {
     repos,
     gatewayProvider,
     gatewayFactory,
     models: new ModelService(gatewayProvider, repos.settings),
     tokens: new TokenCounter(gatewayProvider),
-  };
+  } as AppContext;
+  ctx.turns = new TurnRunner(ctx);
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {
     if (err instanceof HttpError) {
@@ -69,6 +72,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   registerSettingsRoutes(app, ctx);
   registerSessionRoutes(app, ctx);
   registerNarrativeRoutes(app, ctx);
+  registerDialogueRoutes(app, ctx);
   registerTokenRoutes(app, ctx);
 
   if (fs.existsSync(config.publicDir)) {

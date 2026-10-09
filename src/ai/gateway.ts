@@ -12,10 +12,17 @@ export interface ModelInfo {
   outputTokenLimit?: number;
 }
 
+export interface ChatTurn {
+  role: 'user' | 'model';
+  text: string;
+}
+
 export interface GenerateRequest {
   model: string;
   systemInstruction?: string;
-  /** Turno único do usuário (texto). */
+  /** Turnos anteriores da conversa (usado no Modo Diálogo), em ordem cronológica. */
+  history?: ChatTurn[];
+  /** Último turno do usuário (texto). */
   userText: string;
   /** Se informado, força resposta JSON aderente a este JSON Schema. */
   responseJsonSchema?: unknown;
@@ -82,7 +89,10 @@ export class GeminiGatewayImpl implements GeminiGateway {
   async *streamGenerate(req: GenerateRequest): AsyncIterable<string> {
     const stream = await this.ai.models.generateContentStream({
       model: req.model,
-      contents: req.userText,
+      contents: [
+        ...(req.history ?? []).map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+        { role: 'user', parts: [{ text: req.userText }] },
+      ],
       config: {
         systemInstruction: req.systemInstruction,
         abortSignal: req.signal,

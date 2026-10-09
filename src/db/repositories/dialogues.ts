@@ -44,6 +44,11 @@ export class DialoguesRepository {
     this.db.prepare(`UPDATE dialogue_sessions SET status = 'concluded' WHERE id = ?`).run(id);
   }
 
+  /** Remove o diálogo e suas mensagens (cascata). Usado no cancelamento. */
+  delete(id: string): boolean {
+    return this.db.prepare('DELETE FROM dialogue_sessions WHERE id = ?').run(id).changes > 0;
+  }
+
   addMessage(dialogueSessionId: string, sender: 'player' | 'npc', content: string): DialogueMessage {
     const id = randomUUID();
     this.db
