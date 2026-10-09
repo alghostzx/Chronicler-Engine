@@ -4,16 +4,16 @@ Legenda: `[x]` concluído · `[~]` em andamento · `[ ]` pendente
 
 Plano completo: ver seção 11 do [design document](chronicler_engine_design_document.md).
 
-## Fase 0 — Scaffold e infraestrutura
+## Fase 0 — Scaffold e infraestrutura ✅
 - [x] `package.json`, `tsconfig.json`, scripts (`dev`, `build`, `test`, `typecheck`)
 - [x] Fastify + `@fastify/static`, `GET /api/health`
 - [x] `.gitignore` com `data/`, `*.db*` e `GEMINIKEY.txt`
 - [x] Teste do health check
 
-## Fase 1 — Banco de dados e repositórios
-- [ ] Schema idempotente + migração na inicialização (WAL, foreign_keys)
-- [ ] Repositórios: settings, sessions, blocks, archives, dialogues
-- [ ] Testes com SQLite `:memory:`
+## Fase 1 — Banco de dados e repositórios ✅
+- [x] Schema idempotente + migração na inicialização (WAL, foreign_keys, `user_version`)
+- [x] Repositórios: settings, sessions, blocks, archives, dialogues
+- [x] Testes com SQLite `:memory:` (12 testes)
 
 ## Fase 2 — Configurações e sessões
 - [ ] `GET /api/settings`, `POST /api/settings/key`

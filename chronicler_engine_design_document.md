@@ -426,3 +426,11 @@ Esta seção registra decisões tomadas durante o planejamento e a implementaç�
 * O compose publica a porta apenas em loopback: `127.0.0.1:3000:3000`. Não há autenticação; a chave da API fica em texto plano no SQLite (uso local, usuário único).
 * O Dockerfile compila dependências nativas (`better-sqlite3`) no estágio de build e o runtime usa `npm ci --omit=dev`. O campo `version:` do compose é omitido por estar obsoleto.
 * `data/`, `*.db*` e `GEMINIKEY.txt` são ignorados pelo git.
+
+### 11.10 Ajustes no schema SQL (§5)
+O schema implementado em [`src/db/schema.ts`](src/db/schema.ts) acrescenta ao §5:
+* `sessions.model TEXT` — modelo Gemini da sessão (`NULL` = padrão global).
+* `UNIQUE (session_id, order_index)` em `narrative_blocks` e `UNIQUE (session_id, volume_number)` em `chronicle_archives`.
+* Índice único parcial `idx_one_active_dialogue` em `dialogue_sessions(session_id) WHERE status = 'active'`, que impõe no banco a regra de um diálogo ativo por sessão.
+* O `order_index` considera blocos arquivados e nunca é reutilizado após uma compactação.
+* O controle de versão do schema usa `PRAGMA user_version`.
