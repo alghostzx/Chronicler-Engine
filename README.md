@@ -1,3 +1,3 @@
-# Narrative Game
+# Chronicler Engine
 
-A narrative game project.
+A narrative game engine and project.
