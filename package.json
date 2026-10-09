@@ -19,7 +19,7 @@
     "fonts": "node scripts/copy-fonts.mjs",
     "screenshots": "tsx scripts/screenshots.ts"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "@fastify/static": "^10.1.6",
     "@google/genai": "^2.28.0",

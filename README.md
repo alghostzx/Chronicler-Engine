@@ -23,6 +23,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 - [Capturas de tela](#capturas-de-tela)
 - [Como funciona](#como-funciona)
 - [Desenvolvimento local](#desenvolvimento-local)
+- [Licença](#licença)
 - [Sobre a autoria](#sobre-a-autoria)
 
 ## Recursos
@@ -193,6 +194,10 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | `PUBLIC_DIR` | `./public` | Diretório do frontend estático |
 
 A chave da API é configurada pela interface (e gravada no banco local). O arquivo `GEMINIKEY.txt`, usado apenas pelos scripts de verificação em `scripts/live-*.ts`, está no `.gitignore`.
+
+## Licença
+
+Distribuído sob a licença **MIT**. Consulte o arquivo [`LICENSE`](LICENSE) para mais detalhes (isenção total de garantia e responsabilidade).
 
 ## Sobre a autoria
 
