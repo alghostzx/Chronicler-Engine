@@ -66,10 +66,12 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Modal de revisão da sinopse (minuta editável → consolidar)
 - [x] Testes: parser SSE do cliente, serviço estático, e integração da UI em jsdom contra o servidor real (7 cenários)
 
-## Fase 8 — Docker
-- [ ] Dockerfile multi-stage + `.dockerignore`
-- [ ] `docker-compose.yml` com bind `127.0.0.1:3000`
-- [ ] README
+## Fase 8 — Docker ✅
+- [x] Dockerfile multi-stage (Node 22, deps de produção isoladas, runtime enxuto) + `.dockerignore`
+- [x] `docker-compose.yml` com bind `127.0.0.1:3000`, volume `./data`, entrypoint com `su-exec`
+- [x] README em pt-BR
+- [x] Validado sem Docker: build, `npm ci --omit=dev` isolado e servidor de produção respondendo (Docker indisponível no ambiente)
+- [ ] `docker compose up --build` real — **pendente na máquina do usuário**
 
 ## Fase 9 — Verificação final
 - [ ] Checklist da seção 10 do design document
