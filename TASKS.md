@@ -22,12 +22,15 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Validação estrita do corpo (campos desconhecidos → 400)
 - [x] Verificado contra a API real (`scripts/live-models.ts`): `gemini-3.8-flash` existe
 
-## Fase 3 — Núcleo narrativo
-- [ ] `contextBuilder` (sem prompts passados)
-- [ ] Geração estruturada com `responseSchema`
-- [ ] SSE com parse incremental de `narrative_text`
-- [ ] Edição direta de bloco
-- [ ] Regeneração com truncamento atômico pós-geração
+## Fase 3 — Núcleo narrativo ✅
+- [x] `contextBuilder` puro (sem prompts passados), testado
+- [x] Geração estruturada com `responseJsonSchema` (`narrative_text` primeiro, `propertyOrdering`)
+- [x] SSE com parse incremental de `narrative_text` (`NarrativeTextExtractor`, testado com todas as fatias)
+- [x] `POST /api/sessions/:id/narrative/next` (eventos `start`/`chunk`/`block`/`dialogue_trigger`/`error`/`done`)
+- [x] Edição direta de bloco (`PUT /api/narrative/blocks/:id`)
+- [x] Regeneração com truncamento atômico pós-geração e `confirm_truncate`
+- [x] Trava de concorrência por sessão e bloqueio durante diálogo ativo
+- [x] Verificado contra a API real (`scripts/live-narrative.ts`, `gemini-3.8-flash`): streaming e `dialogue_trigger` OK
 
 ## Fase 4 — Token count e HP
 - [ ] `GET /api/sessions/:id/token-count` (`countTokens`)

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { GeminiGateway, ModelInfo } from '../src/ai/gateway.js';
+import type { GeminiGateway, GenerateRequest, ModelInfo } from '../src/ai/gateway.js';
 import { loadConfig } from '../src/config.js';
 import { createRepositories, type Repositories } from '../src/db/index.js';
 import { openDatabase } from '../src/db/connection.js';
@@ -15,21 +15,84 @@ export const SAMPLE_MODELS: ModelInfo[] = [
   { id: 'gemini-2.5-flash-preview-tts', displayName: 'Gemini 2.5 Flash TTS' },
 ];
 
-export function mockGateway(overrides: Partial<GeminiGateway> = {}): GeminiGateway {
-  return { listModels: async () => SAMPLE_MODELS, ...overrides };
+export interface MockGateway extends GeminiGateway {
+  /** Todas as requisições de geração recebidas, em ordem. */
+  requests: GenerateRequest[];
+  /** Enfileira respostas (texto bruto) para as próximas chamadas de `streamGenerate`. */
+  queue(...replies: string[]): void;
+}
+
+export interface MockGatewayOptions {
+  listModels?: () => Promise<ModelInfo[]>;
+  /** Tamanho das fatias em que o texto é "streamado". */
+  chunkSize?: number;
+  /** Se definido, `streamGenerate` lança este erro após emitir o primeiro fragmento. */
+  failWith?: Error;
+}
+
+export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
+  const replies: string[] = [];
+  const requests: GenerateRequest[] = [];
+  return {
+    requests,
+    queue: (...r) => replies.push(...r),
+    listModels: opts.listModels ?? (async () => SAMPLE_MODELS),
+    async *streamGenerate(req) {
+      requests.push(req);
+      const reply = replies.shift();
+      if (reply === undefined) throw new Error('mockGateway: nenhuma resposta enfileirada');
+      const size = opts.chunkSize ?? 7;
+      for (let i = 0; i < reply.length; i += size) {
+        yield reply.slice(i, i + size);
+        if (opts.failWith && i === 0) throw opts.failWith;
+      }
+    },
+  };
+}
+
+/** JSON de resposta do Narrador. */
+export function narratorJson(
+  text: string,
+  trigger: { activate: boolean; npc_name?: string; dynamic_system_prompt?: string } = { activate: false },
+): string {
+  return JSON.stringify({ narrative_text: text, dialogue_trigger: trigger });
+}
+
+export interface SseEvent {
+  event: string;
+  data: any;
+}
+
+/** Converte o corpo de uma resposta SSE em eventos. */
+export function parseSse(body: string): SseEvent[] {
+  return body
+    .split('\n\n')
+    .map((frame) => frame.trim())
+    .filter((frame) => frame.startsWith('event:'))
+    .map((frame) => {
+      const [eventLine, dataLine] = frame.split('\n');
+      return { event: eventLine!.slice(6).trim(), data: JSON.parse(dataLine!.slice(5).trim()) };
+    });
 }
 
 export interface TestApp {
   app: FastifyInstance;
   repos: Repositories;
+  gateway: MockGateway;
 }
 
 /** App com SQLite em memória e Gemini mockado. */
-export async function makeApp(gateway: GeminiGateway = mockGateway()): Promise<TestApp> {
+export async function makeApp(gateway: MockGateway = mockGateway()): Promise<TestApp> {
   const repos = createRepositories(openDatabase(':memory:'));
   const app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), {
     repos,
     gatewayFactory: () => gateway,
   });
-  return { app, repos };
+  return { app, repos, gateway };
+}
+
+/** Configura uma chave de API fictícia diretamente no banco. */
+export function withKey(t: TestApp): TestApp {
+  t.repos.settings.set('gemini_api_key', FAKE_KEY);
+  return t;
 }

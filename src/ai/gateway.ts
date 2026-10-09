@@ -12,14 +12,37 @@ export interface ModelInfo {
   outputTokenLimit?: number;
 }
 
+export interface GenerateRequest {
+  model: string;
+  systemInstruction?: string;
+  /** Turno único do usuário (texto). */
+  userText: string;
+  /** Se informado, força resposta JSON aderente a este JSON Schema. */
+  responseJsonSchema?: unknown;
+  signal?: AbortSignal;
+}
+
+/** Falha na geração (bloqueio de segurança, limite de tokens de saída, erro da API...). */
+export class GenerationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GenerationError';
+  }
+}
+
 /**
  * Fronteira com a API do Gemini. Toda a lógica de negócio depende desta interface,
  * o que permite testar sem rede (mock) e concentrar o uso do SDK em um só lugar.
- * Será ampliada nas fases seguintes (geração estruturada, contagem de tokens...).
+ * Será ampliada nas fases seguintes (contagem de tokens...).
  */
 export interface GeminiGateway {
   /** Lista modelos que suportam `generateContent`, sem filtrar por tipo de saída. */
   listModels(): Promise<ModelInfo[]>;
+  /**
+   * Gera conteúdo em streaming, devolvendo os fragmentos de texto na ordem em que chegam.
+   * Lança `GenerationError` se a geração terminar de forma anormal.
+   */
+  streamGenerate(req: GenerateRequest): AsyncIterable<string>;
 }
 
 export type GatewayProvider = () => GeminiGateway;
@@ -53,7 +76,37 @@ export class GeminiGatewayImpl implements GeminiGateway {
     }
     return result;
   }
+
+  async *streamGenerate(req: GenerateRequest): AsyncIterable<string> {
+    const stream = await this.ai.models.generateContentStream({
+      model: req.model,
+      contents: req.userText,
+      config: {
+        systemInstruction: req.systemInstruction,
+        abortSignal: req.signal,
+        ...(req.responseJsonSchema !== undefined
+          ? { responseMimeType: 'application/json', responseJsonSchema: req.responseJsonSchema }
+          : {}),
+      },
+    });
+
+    let finishReason: string | undefined;
+    let blockReason: string | undefined;
+    for await (const chunk of stream) {
+      blockReason = chunk.promptFeedback?.blockReason ?? blockReason;
+      finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
+      const text = chunk.text;
+      if (text) yield text;
+    }
+    if (blockReason) {
+      throw new GenerationError(`A solicitação foi bloqueada pela API (${blockReason}).`);
+    }
+    if (finishReason && finishReason !== 'STOP') {
+      throw new GenerationError(`A geração terminou de forma anormal (${finishReason}).`);
+    }
+  }
 }
+
 
 export type GatewayFactory = (apiKey: string) => GeminiGateway;
 

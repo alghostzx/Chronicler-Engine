@@ -444,3 +444,13 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * `DELETE /api/sessions/:id` exclui a sessão (cascata nas tabelas filhas).
 * Temas válidos de `active_theme`: `medieval`, `cyberpunk`, `pos-apocaliptico`, `contemporaneo`.
 * Campos desconhecidos no corpo das requisições geram 400 (o Ajv não descarta em silêncio).
+
+### 11.12 Ciclo narrativo implementado (§2, §6, §8.2)
+* **Payload:** `system instruction` = `sessions.system_rules`; um único turno de usuário com as seções `# CONTEXTO DO MUNDO`, `# CORPUS NARRATIVO` e `# AÇÃO / ESBOÇO DO JOGADOR PARA A PRÓXIMA CENA`, nessa ordem (função pura em [`src/ai/contextBuilder.ts`](src/ai/contextBuilder.ts)). O corpus contém **apenas** `generated_text`; nenhum `player_instruction` passado é enviado.
+* **Saída estruturada:** usa `responseMimeType: application/json` + `responseJsonSchema` com o esquema do §2.4, acrescido de `propertyOrdering: ["narrative_text", "dialogue_trigger"]` para que a prosa chegue primeiro e o streaming comece imediatamente. Um `dialogue_trigger` com `activate: true` mas sem `npc_name` ou `dynamic_system_prompt` é tratado como inativo.
+* **SSE** (`POST /api/sessions/:id/narrative/next` e `POST /api/narrative/blocks/:id/regenerate`): eventos `start {model}`, `chunk {text}` (parse incremental de `narrative_text`), `block {block, discarded}` e, se houver, `dialogue_trigger {dialogue_id, npc_name}` (ambos só no fechamento do payload, **após** persistir), `error {message}` e `done`. O `dynamic_system_prompt` não é enviado ao cliente. Erros anteriores ao início do stream (sem chave, sessão inexistente, diálogo ativo, geração concorrente) retornam JSON com status HTTP normal (`409 missing_api_key`, por exemplo).
+* **Falhas e desconexão:** se o JSON final for inválido, a API falhar ou o cliente desconectar, **nada é gravado**.
+* **Concorrência:** uma geração por sessão por vez (`409` se houver outra em andamento). Narrar ou regenerar é recusado (`409`) enquanto houver diálogo ativo.
+* **Edição direta** (`PUT /api/narrative/blocks/:id`): altera só `generated_text`; blocos arquivados não são editáveis (`409`).
+* **Regeneração** (`POST /api/narrative/blocks/:id/regenerate`, corpo `{player_instruction, confirm_truncate?}`): o corpus enviado contém apenas os blocos ativos **anteriores** ao bloco K. Se existirem blocos posteriores e `confirm_truncate` não for `true`, a API responde `409 {code: "truncation_required", blocks_to_discard}` sem tocar em nada. Com a confirmação, o `DELETE ... WHERE order_index > K` e a atualização do bloco K ocorrem numa única transação **após** a geração bem-sucedida.
+* **Modelo usado:** `sessions.model` → padrão global → fallback (§11.2); gravado em `narrative_blocks.model_identifier`.

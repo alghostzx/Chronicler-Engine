@@ -12,6 +12,7 @@ import { ModelService } from './ai/models.js';
 import { loadConfig, type AppConfig } from './config.js';
 import { HttpError, type AppContext } from './context.js';
 import { openRepositories, type Repositories } from './db/index.js';
+import { registerNarrativeRoutes } from './routes/narrative.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 
@@ -64,6 +65,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   app.get('/api/health', async () => ({ status: 'ok' }));
   registerSettingsRoutes(app, ctx);
   registerSessionRoutes(app, ctx);
+  registerNarrativeRoutes(app, ctx);
 
   if (fs.existsSync(config.publicDir)) {
     await app.register(fastifyStatic, { root: config.publicDir });
