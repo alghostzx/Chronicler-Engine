@@ -414,7 +414,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       h(
         'div',
         { class: 'mx-auto max-w-3xl space-y-2' },
-        h('div', { class: 'flex items-center gap-3' }, h('div', { class: 'flex-1' }, hpBar()), compact),
+        h('div', { class: 'flex flex-wrap items-center gap-x-3 gap-y-2' }, h('div', { class: 'min-w-[16rem] flex-1' }, hpBar()), compact),
         dialogueBar,
         h('div', { class: 'flex gap-2' }, ta, send),
       ),

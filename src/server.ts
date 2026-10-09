@@ -88,6 +88,23 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const app = await buildApp(config, { logger: true });
   await app.listen({ port: config.port, host: config.host });
+
+  // Como PID 1 de um contêiner, o Node ignora SIGTERM/SIGINT sem handler: encerra de forma graciosa.
+  let closing = false;
+  const shutdown = (signal: string): void => {
+    if (closing) return;
+    closing = true;
+    app.log.info(`${signal} recebido; encerrando…`);
+    // Conexões SSE abertas podem segurar o close(): garante a saída em poucos segundos.
+    const force = setTimeout(() => process.exit(0), 3000);
+    force.unref();
+    app.close().then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 // Executa apenas quando chamado diretamente (não ao ser importado pelos testes).

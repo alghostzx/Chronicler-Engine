@@ -98,3 +98,10 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Tela inicial sem corte/rolagem horizontal no celular (`grid-cols-1`, `min-w-0`, `.input` com `max-w-full`, lista de crônicas com truncamento)
 - [x] Testes: cabeçalho (rótulos/tooltips), menus de tema/modo e regressão da marcação responsiva; 145 testes passando
 - [ ] Conferência visual em um celular real (não há navegador no ambiente de desenvolvimento)
+
+## Fase 12 — README e capturas de tela ✅
+- [x] README: subir com Docker, Podman+compose e Podman puro (testado), primeiro uso, atualização, backup, solução de problemas, arquitetura
+- [x] `npm run screenshots` (Chromium headless + Gemini simulado) gera 8 capturas em `docs/screenshots/` (desktop e celular; 0 px de rolagem horizontal)
+- [x] Correção encontrada nas capturas: barra de HP no celular
+- [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
+- [ ] Caminho Docker (não Podman) segue sem teste no ambiente de desenvolvimento
