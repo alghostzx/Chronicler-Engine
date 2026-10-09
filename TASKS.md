@@ -90,4 +90,4 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Variações clara/escura para os 4 temas (Automático/Claro/Escuro, sem "flash" na carga)
 - [x] Botão **Salvar .md**: `GET /api/sessions/:id/export` (inclui blocos arquivados; contexto opcional; sem prompts do jogador)
 - [x] Testes: exportação (módulo + rota), temas/modo (jsdom) e UI (download + alternância de modo); 142 testes passando
-- [ ] Subir novamente a imagem no Podman com estas mudanças
+- [x] Imagem reconstruída e contêiner Podman atualizado com estas mudanças (favicon, assets e API respondendo 200)
