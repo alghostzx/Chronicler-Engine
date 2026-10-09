@@ -54,14 +54,17 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Validação da faixa no commit (prefixo dos ativos, preserva o último bloco) e rollback atômico
 - [x] Verificado contra a API real (`scripts/live-compaction.ts`): HP 62,6% → 79,3%
 
-## Fase 7 — Frontend (Vanilla TS + Tailwind, pt-BR)
-- [ ] Layout: Context Drawer, Interactive Tome, Action Dock
-- [ ] Sessões e configuração de API key / modelo
-- [ ] Tome com streaming e ações de bloco
-- [ ] Barra de HP + botão Compactar Crônica
-- [ ] UI do Modo Diálogo
-- [ ] Modal de revisão da sinopse
-- [ ] Temas (4) com fontes locais em `public/fonts/`
+## Fase 7 — Frontend (Vanilla TS + Tailwind, pt-BR) ✅
+- [x] `POST /api/narrative/blocks/:id/branch` (ramificar) + testes
+- [x] Fontes locais empacotadas (`npm run fonts` → `public/fonts/`), sem CDN
+- [x] Temas (4) via variáveis CSS + classe na raiz, persistidos em `localStorage` e na sessão
+- [x] Tela inicial: chave da API (validada), modelo padrão (lista real da API), criar/listar/excluir sessões
+- [x] Layout: Gaveta de Contexto (Mundo/Regras/Modelo+limite/Crônica), Tome Interativo, Doca de Ação
+- [x] Tome com streaming (bloco fantasma), editar, ver prompt/re-gerar com aviso de descarte, ramificar
+- [x] Barra de HP (verde/amarelo/vermelho) recalculada só por eventos + botão Compactar Crônica pulsante
+- [x] UI do Modo Diálogo (transcrição, encerrar/descartar, reconexão pós-reload)
+- [x] Modal de revisão da sinopse (minuta editável → consolidar)
+- [x] Testes: parser SSE do cliente, serviço estático, e integração da UI em jsdom contra o servidor real (7 cenários)
 
 ## Fase 8 — Docker
 - [ ] Dockerfile multi-stage + `.dockerignore`

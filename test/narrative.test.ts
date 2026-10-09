@@ -275,3 +275,44 @@ describe('POST /narrative/blocks/:id/regenerate', () => {
     expect((await regen(c!.id, { player_instruction: 'a' })).statusCode).toBe(409);
   });
 });
+
+describe('POST /narrative/blocks/:id/branch (ramificar a partir daqui)', () => {
+  const seed = () =>
+    [1, 2, 3].map((n) => t.repos.blocks.append(sessionId, { player_instruction: `i${n}`, generated_text: `texto${n}` }));
+  const branch = (id: string, body: Record<string, unknown> = {}) =>
+    t.app.inject({ method: 'POST', url: `/api/narrative/blocks/${id}/branch`, payload: body });
+
+  it('sem confirmação: 409 truncation_required e nada muda', async () => {
+    const [a] = seed();
+    const res = await branch(a!.id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'truncation_required', blocks_to_discard: 2 });
+    expect(t.repos.blocks.listAll(sessionId)).toHaveLength(3);
+  });
+
+  it('com confirmação: descarta os posteriores sem chamar a IA e mantém o bloco K intacto', async () => {
+    const [, b] = seed();
+    const res = await branch(b!.id, { confirm_truncate: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ discarded: 1, last_block_id: b!.id });
+    expect(t.gateway.requests).toHaveLength(0);
+    expect(t.repos.blocks.listAll(sessionId).map((x) => x.generated_text)).toEqual(['texto1', 'texto2']);
+    expect(t.repos.blocks.get(b!.id)!.player_instruction).toBe('i2');
+  });
+
+  it('no último bloco não há o que descartar (200, sem confirmação)', async () => {
+    const [, , c] = seed();
+    const res = await branch(c!.id);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().discarded).toBe(0);
+  });
+
+  it('404 / 409 (arquivado) / 409 (diálogo ativo)', async () => {
+    expect((await branch('x')).statusCode).toBe(404);
+    const [a, , c] = seed();
+    t.repos.blocks.archiveRange(sessionId, 1, 1);
+    expect((await branch(a!.id, { confirm_truncate: true })).statusCode).toBe(409);
+    t.repos.dialogues.create(sessionId, 'Elena', 'p');
+    expect((await branch(c!.id)).statusCode).toBe(409);
+  });
+});

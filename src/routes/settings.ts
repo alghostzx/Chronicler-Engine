@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { API_KEY_SETTING } from '../ai/gateway.js';
 import { DEFAULT_MODEL_SETTING, pickEffectiveModel } from '../ai/models.js';
 import { HttpError, type AppContext } from '../context.js';
+import { DEFAULT_SYSTEM_RULES } from '../prompts/narrator.js';
 
 export function registerSettingsRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos, models } = ctx;
@@ -9,6 +10,7 @@ export function registerSettingsRoutes(app: FastifyInstance, ctx: AppContext): v
   app.get('/api/settings', async () => ({
     api_key_configured: repos.settings.get(API_KEY_SETTING) !== undefined,
     default_model: models.configuredDefault(),
+    default_system_rules: DEFAULT_SYSTEM_RULES,
   }));
 
   app.post<{ Body: { api_key: string } }>(

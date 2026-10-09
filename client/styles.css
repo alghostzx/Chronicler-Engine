@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Motor de temas (design document §7.2): classes de escopo raiz em <html>.
+   ============================================================================ */
+:root,
+.theme-medieval {
+  --bg-main: #f4ecd8; /* pergaminho */
+  --bg-panel: #ebe0c4;
+  --text-main: #2c221e; /* tinta sépia */
+  --text-muted: #6b5a4d;
+  --text-strong: #2c221e;
+  --font-reading: 'Merriweather', 'Cinzel', serif;
+  --font-display: 'Cinzel', 'Merriweather', serif;
+  --accent: #8b4513; /* couro envelhecido */
+  --border: #cdb98f;
+  --hp-ok: #2e7d32;
+  --hp-warn: #f9a825;
+  --hp-low: #c62828;
+}
+
+.theme-cyberpunk {
+  --bg-main: #0d1117; /* preto profundo */
+  --bg-panel: #161b22;
+  --text-main: #e6edf3;
+  --text-muted: #8b949e;
+  --text-strong: #00ffcc;
+  --font-reading: 'JetBrains Mono', monospace;
+  --font-display: 'JetBrains Mono', monospace;
+  --accent: #ff0055; /* neon magenta */
+  --border: #30363d;
+  --hp-ok: #00e5ff;
+  --hp-warn: #ffea00;
+  --hp-low: #ff1744;
+}
+
+.theme-pos-apocaliptico {
+  --bg-main: #1c1a17; /* cinza terra */
+  --bg-panel: #26231f;
+  --text-main: #d4c5b9; /* desbotado */
+  --text-muted: #948677;
+  --text-strong: #e8dccf;
+  --font-reading: 'Special Elite', monospace;
+  --font-display: 'Special Elite', monospace;
+  --accent: #c86432; /* ferrugem */
+  --border: #3d3832;
+  --hp-ok: #558b2f;
+  --hp-warn: #e0a030;
+  --hp-low: #bf360c;
+}
+
+.theme-contemporaneo {
+  --bg-main: #ffffff;
+  --bg-panel: #f9fafb;
+  --text-main: #111827; /* cinza escuro */
+  --text-muted: #6b7280;
+  --text-strong: #111827;
+  --font-reading: 'Lora', 'Inter', serif;
+  --font-display: 'Inter', 'Lora', sans-serif;
+  --accent: #2563eb; /* azul cobalto */
+  --border: #e5e7eb;
+  --hp-ok: #10b981;
+  --hp-warn: #f59e0b;
+  --hp-low: #ef4444;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  html.theme-cyberpunk,
+  html.theme-pos-apocaliptico {
+    color-scheme: dark;
+  }
+  body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--bg-main);
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1 rounded border border-line bg-panel px-3 py-1.5 font-display text-sm text-ink transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-main hover:bg-accent hover:text-main hover:opacity-90;
+  }
+  .btn-danger {
+    @apply hover:border-hp-low hover:text-hp-low;
+  }
+  .input {
+    @apply w-full rounded border border-line bg-main px-3 py-2 text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent;
+  }
+  .card {
+    @apply rounded-lg border border-line bg-panel p-4;
+  }
+  .label {
+    @apply mb-1 block font-display text-xs uppercase tracking-wider text-muted;
+  }
+
+  /* Prosa do Tome: página contínua de livro, sem balões de chat. */
+  .prose-tome p {
+    @apply mb-4 leading-8;
+    text-indent: 1.5em;
+  }
+  .prose-tome.drop-cap p:first-child {
+    text-indent: 0;
+  }
+  .prose-tome.drop-cap p:first-child::first-letter {
+    @apply font-display text-5xl font-bold float-left mr-2 leading-[0.9] text-accent;
+  }
+
+  /* Botão "Compactar Crônica" pulsa quando o HP está em exaustão (< 20%). */
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--hp-low) 70%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 8px color-mix(in srgb, var(--hp-low) 0%, transparent);
+    }
+  }
+  .btn-pulse {
+    animation: pulse-glow 1.4s ease-in-out infinite;
+    border-color: var(--hp-low);
+    color: var(--hp-low);
+    font-weight: 700;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn-pulse {
+      animation: none;
+    }
+  }
+
+  .cursor-blink::after {
+    content: '▍';
+    animation: blink 1s steps(2, start) infinite;
+    color: var(--accent);
+  }
+  @keyframes blink {
+    to {
+      visibility: hidden;
+    }
+  }
+}

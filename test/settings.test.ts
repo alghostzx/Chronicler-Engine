@@ -11,7 +11,9 @@ beforeEach(async () => {
 describe('settings', () => {
   it('informa que não há chave e o modelo padrão', async () => {
     const res = await t.app.inject({ method: 'GET', url: '/api/settings' });
-    expect(res.json()).toEqual({ api_key_configured: false, default_model: 'gemini-3.8-flash' });
+    expect(res.json()).toMatchObject({ api_key_configured: false, default_model: 'gemini-3.8-flash' });
+    expect(res.json().default_system_rules).toEqual(expect.any(String));
+    expect(res.json().default_system_rules.length).toBeGreaterThan(50);
   });
 
   it('valida e grava a chave sem nunca devolvê-la', async () => {

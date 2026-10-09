@@ -155,4 +155,46 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       });
     },
   );
+
+  // --- Ramificar a partir daqui (§7.1) -------------------------------------------------------
+  // Mantém o bloco K como ponto final da história, descartando K+1…N, sem chamar a IA.
+  app.post<{ Params: { id: string }; Body: { confirm_truncate?: boolean } }>(
+    '/api/narrative/blocks/:id/branch',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { confirm_truncate: { type: 'boolean' } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const block = repos.blocks.get(req.params.id);
+      if (!block) throw new HttpError(404, 'Bloco não encontrado.');
+      if (block.is_archived) throw new HttpError(409, 'Blocos arquivados não podem ser ponto de ramificação.');
+      const session = requireSession(block.session_id);
+      assertNoActiveDialogue(session.id);
+      if (turns.isBusy(session.id)) {
+        throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
+      }
+
+      const following = repos.blocks.listActive(session.id).filter((b) => b.order_index > block.order_index);
+      if (following.length > 0 && req.body?.confirm_truncate !== true) {
+        return reply.code(409).send({
+          error: `Ramificar a partir daqui descartará ${following.length} bloco(s) posterior(es). Confirme para continuar.`,
+          code: 'truncation_required',
+          blocks_to_discard: following.length,
+        });
+      }
+      const discarded = repos.transaction(() => {
+        const n = repos.blocks.deleteAfter(session.id, block.order_index);
+        repos.sessions.touch(session.id);
+        return n;
+      });
+      return { discarded, last_block_id: block.id };
+    },
+  );
 }
+

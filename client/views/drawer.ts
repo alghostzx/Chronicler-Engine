@@ -1,0 +1,245 @@
+import { api, type Archive, type ModelsInfo, type Session, type SettingsInfo } from '../api';
+import { formatNumber, h, mount, paragraphs, toast } from '../dom';
+import { modelOptions } from './home';
+
+export interface DrawerHooks {
+  getSession(): Session;
+  getArchives(): Archive[];
+  /** Sessão atualizada pelo servidor (após salvar). */
+  onSessionSaved(session: Session): void;
+}
+
+type Tab = 'mundo' | 'regras' | 'modelo' | 'cronica';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'mundo', label: 'Mundo' },
+  { id: 'regras', label: 'Regras' },
+  { id: 'modelo', label: 'Modelo' },
+  { id: 'cronica', label: 'Crônica' },
+];
+
+/**
+ * Gaveta de Contexto (design §7.1): edição do mundo, regras do Narrador, modelo/limite e leitura
+ * dos volumes arquivados. Salvar dispara `onSessionSaved`, que recalcula o HP (§11).
+ */
+export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): void } {
+  let tab: Tab = 'mundo';
+  let models: ModelsInfo | null = null;
+  let defaultRules: string | null = null;
+
+  const tabsBar = h('div', { class: 'flex border-b border-line', role: 'tablist' });
+  const content = h('div', { class: 'flex-1 overflow-y-auto p-4' });
+  const el = h(
+    'aside',
+    { class: 'flex h-full w-full flex-col border-l border-line bg-panel', 'aria-label': 'Contexto da sessão' },
+    tabsBar,
+    content,
+  );
+
+  async function save(patch: Partial<Session>, okMessage: string): Promise<void> {
+    try {
+      const { session } = await api<{ session: Session }>('PUT', `/api/sessions/${hooks.getSession().id}/context`, patch);
+      hooks.onSessionSaved(session);
+      toast(okMessage, 'success');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }
+
+  function renderTabs() {
+    mount(
+      tabsBar,
+      ...TABS.map((t) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            role: 'tab',
+            'aria-selected': t.id === tab ? 'true' : 'false',
+            class: `flex-1 px-2 py-2 font-display text-sm transition ${t.id === tab ? 'border-b-2 border-accent text-accent' : 'text-muted hover:text-ink'}`,
+            onClick: () => {
+              tab = t.id;
+              renderTabs();
+              renderContent();
+            },
+          },
+          t.label,
+        ),
+      ),
+    );
+  }
+
+  function textareaTab(opts: {
+    label: string;
+    hint: string;
+    value: string;
+    field: 'world_context' | 'system_rules';
+    allowEmpty: boolean;
+    restore?: () => Promise<string | null>;
+  }) {
+    const ta = h('textarea', { class: 'input min-h-[50vh] flex-1 font-reading text-sm leading-6', 'aria-label': opts.label, value: opts.value });
+    const saveBtn = h(
+      'button',
+      {
+        class: 'btn btn-primary',
+        type: 'button',
+        onClick: async () => {
+          if (!opts.allowEmpty && ta.value.trim() === '') {
+            toast('Este campo não pode ficar vazio.', 'error');
+            return;
+          }
+          saveBtn.disabled = true;
+          await save({ [opts.field]: ta.value } as Partial<Session>, 'Contexto salvo.');
+          saveBtn.disabled = false;
+        },
+      },
+      'Salvar',
+    );
+    mount(
+      content,
+      h(
+        'div',
+        { class: 'flex h-full flex-col gap-2' },
+        h('p', { class: 'text-xs text-muted' }, opts.hint),
+        ta,
+        h(
+          'div',
+          { class: 'flex gap-2' },
+          saveBtn,
+          opts.restore
+            ? h(
+                'button',
+                {
+                  class: 'btn',
+                  type: 'button',
+                  onClick: async () => {
+                    const v = await opts.restore!();
+                    if (v !== null) ta.value = v;
+                  },
+                },
+                'Restaurar padrão',
+              )
+            : null,
+        ),
+      ),
+    );
+  }
+
+  async function renderModelTab() {
+    const session = hooks.getSession();
+    mount(content, h('p', { class: 'text-sm text-muted' }, 'Consultando modelos…'));
+    try {
+      models ??= await api<ModelsInfo>('GET', '/api/models');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+    const select = h(
+      'select',
+      { class: 'input', 'aria-label': 'Modelo da sessão' },
+      ...(models ? modelOptions(models, session.model, true) : [h('option', { value: '' }, 'Padrão global')]),
+    );
+    const limit = h('input', { class: 'input', type: 'number', min: '1000', max: '10000000', step: '1000', value: String(session.token_limit), 'aria-label': 'Limite de tokens' });
+    mount(
+      content,
+      h(
+        'div',
+        { class: 'space-y-4' },
+        h('div', null, h('label', { class: 'label' }, 'Modelo desta sessão'), select),
+        h(
+          'div',
+          null,
+          h('label', { class: 'label' }, 'Limite de tokens'),
+          limit,
+          h('p', { class: 'mt-1 text-xs text-muted' }, 'Define o “HP” do contexto. Atual: ' + formatNumber(session.token_limit) + ' tokens.'),
+        ),
+        h(
+          'button',
+          {
+            class: 'btn btn-primary',
+            type: 'button',
+            onClick: () => {
+              const n = Number(limit.value);
+              if (!Number.isInteger(n) || n < 1000) {
+                toast('Informe um limite inteiro de pelo menos 1.000 tokens.', 'error');
+                return;
+              }
+              void save({ model: select.value || null, token_limit: n }, 'Modelo e limite salvos.');
+            },
+          },
+          'Salvar',
+        ),
+        h('p', { class: 'text-xs text-muted' }, 'A chave da API e o modelo padrão global ficam na tela inicial.'),
+      ),
+    );
+  }
+
+  function renderArchiveTab() {
+    const archives = hooks.getArchives();
+    if (archives.length === 0) {
+      mount(content, h('p', { class: 'text-sm text-muted' }, 'Nenhum volume arquivado ainda. Ao compactar a crônica, as sinopses aparecem aqui.'));
+      return;
+    }
+    mount(
+      content,
+      h(
+        'div',
+        { class: 'space-y-4' },
+        ...archives.map((a) =>
+          h(
+            'details',
+            { class: 'rounded border border-line bg-main p-3', open: archives.length === 1 },
+            h('summary', { class: 'cursor-pointer font-display text-strong' }, `Volume ${a.volume_number} — blocos ${a.covered_block_start_index} a ${a.covered_block_end_index}`),
+            h('div', { class: 'mt-3 space-y-2 text-sm leading-6' }, ...paragraphs(a.summary_text).map((p) => h('p', null, p))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  async function ensureDefaultRules(): Promise<string | null> {
+    if (defaultRules !== null) return defaultRules;
+    try {
+      defaultRules = (await api<SettingsInfo>('GET', '/api/settings')).default_system_rules;
+      return defaultRules;
+    } catch (err) {
+      toast((err as Error).message, 'error');
+      return null;
+    }
+  }
+
+  function renderContent() {
+    const session = hooks.getSession();
+    if (tab === 'mundo') {
+      textareaTab({
+        label: 'Contexto do mundo',
+        hint: 'Mundo, personagens e regras do universo. Os volumes compactados da crônica são anexados aqui, sob “Crônica — Volume N”.',
+        value: session.world_context,
+        field: 'world_context',
+        allowEmpty: true,
+      });
+    } else if (tab === 'regras') {
+      textareaTab({
+        label: 'Regras do Narrador',
+        hint: 'Instruções permanentes de sistema enviadas ao Narrador em todo turno.',
+        value: session.system_rules,
+        field: 'system_rules',
+        allowEmpty: false,
+        restore: ensureDefaultRules,
+      });
+    } else if (tab === 'modelo') {
+      void renderModelTab();
+    } else {
+      renderArchiveTab();
+    }
+  }
+
+  renderTabs();
+  renderContent();
+  return {
+    el,
+    refresh() {
+      renderTabs();
+      renderContent();
+    },
+  };
+}

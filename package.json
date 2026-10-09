@@ -14,7 +14,9 @@
     "build:client": "node scripts/build-client.mjs",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
+    "fonts": "node scripts/copy-fonts.mjs"
   },
   "license": "UNLICENSED",
   "dependencies": {
@@ -24,9 +26,17 @@
     "fastify": "^5.12.5"
   },
   "devDependencies": {
+    "@fontsource/cinzel": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/lora": "^5.3.0",
+    "@fontsource/merriweather": "^5.3.0",
+    "@fontsource/special-elite": "^5.3.0",
     "@types/better-sqlite3": "^9.6.0",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.4",
     "esbuild": "^0.28.2",
+    "jsdom": "^30.1.2",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
