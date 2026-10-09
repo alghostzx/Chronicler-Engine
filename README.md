@@ -53,10 +53,12 @@ cd chronicler-engine
 docker compose up -d --build
 ```
 
-Abra <http://localhost:3000>. Pronto: o contêiner reinicia sozinho (`restart: unless-stopped`) e os dados ficam em `./data`.
+Abra <http://localhost:3000>. Pronto: o contêiner reinicia sozinho (`restart: unless-stopped`) e os dados ficam em `./data`. O primeiro *build* leva ~2 minutos (baixa a imagem base e compila as dependências); os seguintes usam cache.
 
 > [!NOTE]
-> O Docker não estava disponível na máquina de desenvolvimento, então este caminho usa o mesmo `Dockerfile` validado com Podman, mas **não foi executado com o Docker propriamente dito**. Se encontrar algum problema, abra uma *issue*.
+> Se o Docker acusar `permission denied ... docker.sock`, o seu usuário não está no grupo `docker`: rode `sudo usermod -aG docker $USER` e abra uma nova sessão (ou use `newgrp docker`). Se disser que não consegue conectar à API, o serviço está parado: `sudo systemctl enable --now docker`.
+
+Validado com Docker 29 + Compose 5 (Fedora 44): *build*, subida com o volume criado pelo próprio Docker (o *entrypoint* acerta a posse e o servidor roda **sem root**), `healthcheck` *healthy*, dados persistindo após `restart` e parada em < 1 s.
 
 ## Subindo com Podman
 
@@ -122,6 +124,7 @@ Por que o `docker-compose.podman.yml` e esses parâmetros? Em modo rootless, o "
 | `attempt to write a readonly database` / `EACCES` em `./data` | Permissão do volume. No Podman use o `docker-compose.podman.yml` (ou `--userns=keep-id --user …`); com UID diferente de 1000, ajuste `user:` no arquivo. No Docker o *entrypoint* corrige a posse sozinho. |
 | Lista de modelos vazia / "Não foi possível consultar" | Chave inválida, sem internet no contêiner ou cota esgotada. Clique em *Atualizar* depois de resolver. |
 | Atualizei mas a interface não mudou | Veja a dica de `--force-recreate` acima e o *hard refresh*. |
+| `permission denied` em `/var/run/docker.sock` | Usuário fora do grupo `docker`: `sudo usermod -aG docker $USER` e nova sessão de login. |
 | `docker compose` não existe | Instale o plugin Compose v2 (ou use `docker-compose`), ou siga o caminho Podman (B), que não precisa de compose. |
 
 ## Capturas de tela

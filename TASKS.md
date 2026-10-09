@@ -72,7 +72,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] README em pt-BR
 - [x] Validado sem Docker: build, `npm ci --omit=dev` isolado e servidor de produção respondendo (Docker indisponível no ambiente)
 - [x] Subida real com **Podman rootless** (`podman-compose` + `docker-compose.podman.yml`): build da imagem OK, contêiner responde em `127.0.0.1:3000` (`/api/health`, `/`, `/assets/*`, `/fonts/*` = 200) e `./data` permanece do usuário
-- [ ] Teste com Docker propriamente dito — não disponível no ambiente (o Dockerfile é o mesmo)
+- [x] Teste com Docker propriamente dito (Docker 29.7 + Compose 5.5, Fedora 44) — ver Fase 12
 
 ## Fase 9 — Verificação final ✅
 - [x] Checklist da seção 10 do design document (5/5, com evidências no próprio documento)
@@ -80,7 +80,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Teste ponta a ponta com chave real (`scripts/live-*.ts`, modelo `gemini-3.8-flash`)
 
 ### Pendências conhecidas / riscos
-- A imagem foi construída e executada com Podman rootless; `docker compose up --build` com Docker propriamente dito não foi testado (Docker ausente no ambiente).
+- A imagem foi construída e executada com Podman rootless **e** com Docker (Fase 12).
 - A UI foi validada em jsdom (sem navegador real): vale uma passada visual nos 4 temas.
 - Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/modo JSON não foram testados com eles.
 - `npm audit` acusa 7 vulnerabilidades, todas em dependências de desenvolvimento (a instalação de produção tem 0).
@@ -104,4 +104,4 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] `npm run screenshots` (Chromium headless + Gemini simulado) gera 8 capturas em `docs/screenshots/` (desktop e celular; 0 px de rolagem horizontal)
 - [x] Correção encontrada nas capturas: barra de HP no celular
 - [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
-- [ ] Caminho Docker (não Podman) segue sem teste no ambiente de desenvolvimento
+- [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
