@@ -81,7 +81,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 
 ### Pendências conhecidas / riscos
 - A imagem foi construída e executada com Podman rootless **e** com Docker (Fase 12).
-- A UI foi validada em jsdom (sem navegador real): vale uma passada visual nos 4 temas.
+- A UI foi validada visualmente nos 4 temas e em viewport mobile via Chromium headless (`scripts/screenshots.ts`).
 - Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/modo JSON não foram testados com eles.
 - `npm audit` acusa 7 vulnerabilidades, todas em dependências de desenvolvimento (a instalação de produção tem 0).
 
@@ -97,7 +97,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Tema e modo claro/escuro como menus de ícone (Esc, clique fora, setas), também na tela inicial
 - [x] Tela inicial sem corte/rolagem horizontal no celular (`grid-cols-1`, `min-w-0`, `.input` com `max-w-full`, lista de crônicas com truncamento)
 - [x] Testes: cabeçalho (rótulos/tooltips), menus de tema/modo e regressão da marcação responsiva; 145 testes passando
-- [ ] Conferência visual em um celular real (não há navegador no ambiente de desenvolvimento)
+- [x] Conferência visual em viewport mobile via Chromium headless (`npm run screenshots`, 0 px de rolagem horizontal)
 
 ## Fase 12 — README e capturas de tela ✅
 - [x] README: subir com Docker, Podman+compose e Podman puro (testado), primeiro uso, atualização, backup, solução de problemas, arquitetura
