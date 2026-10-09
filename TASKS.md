@@ -32,9 +32,11 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Trava de concorrência por sessão e bloqueio durante diálogo ativo
 - [x] Verificado contra a API real (`scripts/live-narrative.ts`, `gemini-3.8-flash`): streaming e `dialogue_trigger` OK
 
-## Fase 4 — Token count e HP
-- [ ] `GET /api/sessions/:id/token-count` (`countTokens`)
-- [ ] Estados verde/amarelo/vermelho
+## Fase 4 — Token count e HP ✅
+- [x] `GET /api/sessions/:id/token-count` com `countTokens` real sobre o payload (regras + mundo + corpus ativo)
+- [x] `computeHp` com estados verde/amarelo/vermelho (limiares exatos testados)
+- [x] Cache por hash do conteúdo (sem polling, sem valores obsoletos)
+- [x] Verificado contra a API real (`scripts/live-tokens.ts`); descoberta: `systemInstruction` não é aceito em `countTokens` na Developer API → regras contadas junto ao conteúdo
 
 ## Fase 5 — Modo Diálogo
 - [ ] Ativação via `dialogue_trigger`, um diálogo ativo por sessão

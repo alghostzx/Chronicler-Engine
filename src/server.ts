@@ -9,12 +9,14 @@ import {
   type GatewayFactory,
 } from './ai/gateway.js';
 import { ModelService } from './ai/models.js';
+import { TokenCounter } from './ai/tokens.js';
 import { loadConfig, type AppConfig } from './config.js';
 import { HttpError, type AppContext } from './context.js';
 import { openRepositories, type Repositories } from './db/index.js';
 import { registerNarrativeRoutes } from './routes/narrative.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerSettingsRoutes } from './routes/settings.js';
+import { registerTokenRoutes } from './routes/tokens.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -39,6 +41,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
     gatewayProvider,
     gatewayFactory,
     models: new ModelService(gatewayProvider, repos.settings),
+    tokens: new TokenCounter(gatewayProvider),
   };
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {
@@ -66,6 +69,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   registerSettingsRoutes(app, ctx);
   registerSessionRoutes(app, ctx);
   registerNarrativeRoutes(app, ctx);
+  registerTokenRoutes(app, ctx);
 
   if (fs.existsSync(config.publicDir)) {
     await app.register(fastifyStatic, { root: config.publicDir });

@@ -43,6 +43,8 @@ export interface GeminiGateway {
    * Lança `GenerationError` se a geração terminar de forma anormal.
    */
   streamGenerate(req: GenerateRequest): AsyncIterable<string>;
+  /** Conta com precisão os tokens do payload (`ai.models.countTokens`). */
+  countTokens(req: Pick<GenerateRequest, 'model' | 'systemInstruction' | 'userText'>): Promise<number>;
 }
 
 export type GatewayProvider = () => GeminiGateway;
@@ -104,6 +106,21 @@ export class GeminiGatewayImpl implements GeminiGateway {
     if (finishReason && finishReason !== 'STOP') {
       throw new GenerationError(`A geração terminou de forma anormal (${finishReason}).`);
     }
+  }
+
+  /**
+   * A Gemini Developer API rejeita `systemInstruction` em `countTokens` (só existe no modo
+   * Vertex/Enterprise). Como o texto das regras entra no prompt de qualquer forma, ele é
+   * contado junto com o conteúdo — a diferença para a contagem interna é de poucos tokens
+   * de moldura, irrelevante para uma barra de HP em escala de centenas de milhares.
+   */
+  async countTokens(req: Pick<GenerateRequest, 'model' | 'systemInstruction' | 'userText'>): Promise<number> {
+    const text = req.systemInstruction ? `${req.systemInstruction}\n\n${req.userText}` : req.userText;
+    const res = await this.ai.models.countTokens({ model: req.model, contents: text });
+    if (typeof res.totalTokens !== 'number') {
+      throw new GenerationError('A API não retornou a contagem de tokens.');
+    }
+    return res.totalTokens;
   }
 }
 

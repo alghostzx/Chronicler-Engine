@@ -454,3 +454,10 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * **Edição direta** (`PUT /api/narrative/blocks/:id`): altera só `generated_text`; blocos arquivados não são editáveis (`409`).
 * **Regeneração** (`POST /api/narrative/blocks/:id/regenerate`, corpo `{player_instruction, confirm_truncate?}`): o corpus enviado contém apenas os blocos ativos **anteriores** ao bloco K. Se existirem blocos posteriores e `confirm_truncate` não for `true`, a API responde `409 {code: "truncation_required", blocks_to_discard}` sem tocar em nada. Com a confirmação, o `DELETE ... WHERE order_index > K` e a atualização do bloco K ocorrem numa única transação **após** a geração bem-sucedida.
 * **Modelo usado:** `sessions.model` → padrão global → fallback (§11.2); gravado em `narrative_blocks.model_identifier`.
+
+### 11.13 HP do Narrador implementado (§4, §8.2)
+* `GET /api/sessions/:id/token-count` → `{ tokens_used, token_limit, model, hp_percent, state }`, com `state` em `green` (≥ 50%), `yellow` (≥ 20% e < 50%) ou `red` (< 20%). `hp_percent` é limitado a [0, 100], com uma casa decimal, e calculado como `100 × (limite − usados) / limite` (equivalente à fórmula do §4.1, sem imprecisão de ponto flutuante nos limiares).
+* Mede o payload real que seria enviado ao Narrador: regras + contexto do mundo + corpus ativo (blocos arquivados ficam de fora), sem input pendente do jogador.
+* **Limitação da API:** a Gemini Developer API **rejeita `systemInstruction` em `countTokens`**. As regras de narração são, portanto, contadas como texto somado ao conteúdo; a diferença é de poucos tokens de moldura.
+* **Cache:** a contagem é guardada em memória por hash (modelo + regras + conteúdo). Reabrir uma sessão sem alterações não chama a API; qualquer alteração de bloco, contexto ou regras muda o hash e força nova contagem. Não há polling nem recálculo por tecla (§11.7) — o frontend consulta o endpoint nos eventos definidos.
+* Erros: `404` (sessão), `409 missing_api_key` (sem chave), `502` (falha da API de contagem).

@@ -1,5 +1,6 @@
 import type { GatewayFactory, GatewayProvider } from './ai/gateway.js';
 import type { ModelService } from './ai/models.js';
+import type { TokenCounter } from './ai/tokens.js';
 import type { Repositories } from './db/index.js';
 
 /** Dependências compartilhadas pelas rotas. */
@@ -9,6 +10,7 @@ export interface AppContext {
   /** Cria um gateway para uma chave arbitrária (usado para validar uma chave nova). */
   gatewayFactory: GatewayFactory;
   models: ModelService;
+  tokens: TokenCounter;
 }
 
 /** Erro de domínio com status HTTP associado. */

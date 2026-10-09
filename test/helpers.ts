@@ -18,6 +18,8 @@ export const SAMPLE_MODELS: ModelInfo[] = [
 export interface MockGateway extends GeminiGateway {
   /** Todas as requisições de geração recebidas, em ordem. */
   requests: GenerateRequest[];
+  /** Todas as requisições de contagem de tokens recebidas, em ordem. */
+  countRequests: Parameters<GeminiGateway['countTokens']>[0][];
   /** Enfileira respostas (texto bruto) para as próximas chamadas de `streamGenerate`. */
   queue(...replies: string[]): void;
 }
@@ -28,13 +30,18 @@ export interface MockGatewayOptions {
   chunkSize?: number;
   /** Se definido, `streamGenerate` lança este erro após emitir o primeiro fragmento. */
   failWith?: Error;
+  /** Contagem de tokens fictícia (padrão: ~1 token a cada 4 caracteres). */
+  countTokens?: (req: Parameters<GeminiGateway['countTokens']>[0]) => number;
+  countTokensFails?: boolean;
 }
 
 export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
   const replies: string[] = [];
   const requests: GenerateRequest[] = [];
+  const countRequests: MockGateway['countRequests'] = [];
   return {
     requests,
+    countRequests,
     queue: (...r) => replies.push(...r),
     listModels: opts.listModels ?? (async () => SAMPLE_MODELS),
     async *streamGenerate(req) {
@@ -46,6 +53,11 @@ export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
         yield reply.slice(i, i + size);
         if (opts.failWith && i === 0) throw opts.failWith;
       }
+    },
+    async countTokens(req) {
+      countRequests.push(req);
+      if (opts.countTokensFails) throw new Error('countTokens indisponível');
+      return opts.countTokens ? opts.countTokens(req) : Math.ceil(((req.systemInstruction ?? '') + req.userText).length / 4);
     },
   };
 }
