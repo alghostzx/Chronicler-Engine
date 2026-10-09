@@ -48,13 +48,27 @@ Em qualquer máquina com Linux, macOS ou Windows (WSL2) que rode contêineres, o
 
 ## Subindo com Docker
 
+Você pode rodar diretamente puxando a imagem pré-compilada pelo GitHub Actions (não precisa compilar nada no servidor):
+
+```bash
+docker run -d --name chronicler-engine --restart unless-stopped \
+  -p 127.0.0.1:3000:3000 \
+  -v ./data:/data \
+  ghcr.io/alghostzx/chronicler-engine:latest
+```
+
+Ou usando o repositório com Docker Compose:
+
 ```bash
 git clone https://github.com/alghostzx/Chronicler-Engine.git chronicler-engine
 cd chronicler-engine
+# Puxa a imagem pronta do GHCR (instantâneo):
+docker compose up -d
+# Ou, se preferir compilar localmente:
 docker compose up -d --build
 ```
 
-Abra <http://localhost:3000>. Pronto: o contêiner reinicia sozinho (`restart: unless-stopped`) e os dados ficam em `./data`. O primeiro *build* leva ~2 minutos (baixa a imagem base e compila as dependências); os seguintes usam cache.
+Abra <http://localhost:3000>. Pronto: o contêiner reinicia sozinho (`restart: unless-stopped`) e os dados ficam em `./data`.
 
 > [!NOTE]
 > Se o Docker acusar `permission denied ... docker.sock`, o seu usuário não está no grupo `docker`: rode `sudo usermod -aG docker $USER` e abra uma nova sessão (ou use `newgrp docker`). Se disser que não consegue conectar à API, o serviço está parado: `sudo systemctl enable --now docker`.

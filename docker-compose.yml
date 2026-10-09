@@ -1,7 +1,7 @@
 services:
   chronicler:
     build: .
-    image: chronicler-engine:latest
+    image: ghcr.io/alghostzx/chronicler-engine:latest
     container_name: chronicler-engine
     restart: unless-stopped
     ports:
