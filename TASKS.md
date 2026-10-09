@@ -73,6 +73,13 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Validado sem Docker: build, `npm ci --omit=dev` isolado e servidor de produção respondendo (Docker indisponível no ambiente)
 - [ ] `docker compose up --build` real — **pendente na máquina do usuário**
 
-## Fase 9 — Verificação final
-- [ ] Checklist da seção 10 do design document
-- [ ] Teste ponta a ponta com chave real
+## Fase 9 — Verificação final ✅
+- [x] Checklist da seção 10 do design document (5/5, com evidências no próprio documento)
+- [x] Suíte completa: 128 testes passando; `typecheck` do servidor e do cliente limpos
+- [x] Teste ponta a ponta com chave real (`scripts/live-*.ts`, modelo `gemini-3.8-flash`)
+
+### Pendências conhecidas / riscos
+- `docker compose up --build` ainda não foi executado de verdade (Docker ausente no ambiente de desenvolvimento).
+- A UI foi validada em jsdom (sem navegador real): vale uma passada visual nos 4 temas.
+- Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/modo JSON não foram testados com eles.
+- `npm audit` acusa 7 vulnerabilidades, todas em dependências de desenvolvimento (a instalação de produção tem 0).

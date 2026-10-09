@@ -380,11 +380,11 @@ services:
 
 Ao alimentar este documento no Antigravity, garanta que as seguintes premissas sejam implementadas estritamente:
 
-1. [ ] **Nunca enviar prompts de jogador passados** no payload de geração de novos blocos narrativos.
-2. [ ] Garantir que o endpoint de geração force o modelo a responder com o `responseSchema` JSON exigido.
-3. [ ] Confirmar truncamento via `DELETE ... WHERE order_index > ?` quando o usuário re-gerar um bloco passado.
-4. [ ] Implementar a chamada de contagem de tokens (`ai.models.countTokens`) para cálculo real da barra de HP.
-5. [ ] Garantir que a sub-sessão de diálogo não altere os blocos da história até que o endpoint de conclusão (`/conclude`) sintetize as falas em prosa pelo Narrador.
+1. [x] **Nunca enviar prompts de jogador passados** no payload de geração de novos blocos narrativos. *(`test/contextBuilder.test.ts`, `test/narrative.test.ts`)*
+2. [x] Garantir que o endpoint de geração force o modelo a responder com o `responseSchema` JSON exigido. *(`responseJsonSchema` em `src/ai/narrator.ts`; `test/narrative.test.ts`; verificado ao vivo)*
+3. [x] Confirmar truncamento via `DELETE ... WHERE order_index > ?` quando o usuário re-gerar um bloco passado. *(`src/db/repositories/blocks.ts`; `test/narrative.test.ts`, `test/ui.test.ts`)*
+4. [x] Implementar a chamada de contagem de tokens (`ai.models.countTokens`) para cálculo real da barra de HP. *(`src/ai/gateway.ts`, `src/ai/tokens.ts`; verificado ao vivo)*
+5. [x] Garantir que a sub-sessão de diálogo não altere os blocos da história até que o endpoint de conclusão (`/conclude`) sintetize as falas em prosa pelo Narrador. *(`test/dialogue.test.ts`)*
 
 ---
 
