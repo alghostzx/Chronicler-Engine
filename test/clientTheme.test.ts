@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { filenameFromDisposition } from '../client/download';
-import { applyTheme, createModeSelect, initTheme, resolveMode, savedMode, setModePref } from '../client/theme';
+import { createModeControl } from '../client/controls';
+import { applyTheme, initTheme, resolveMode, savedMode, setModePref } from '../client/theme';
 
 function stubSystemDark(dark: boolean) {
   const listeners: Array<() => void> = [];
@@ -77,12 +78,18 @@ describe('temas claro/escuro', () => {
 
   it('o seletor de modo reflete e altera a preferência', () => {
     setModePref('dark');
-    const select = createModeSelect();
-    expect(select.value).toBe('dark');
-    select.value = 'light';
-    select.dispatchEvent(new Event('change'));
+    const el = createModeControl();
+    document.body.appendChild(el);
+    const btn = el.querySelector('button')!;
+    expect(btn.getAttribute('data-tip')).toBe('Modo claro ou escuro: Escuro');
+    btn.click();
+    const light = Array.from(el.querySelectorAll<HTMLElement>('[role="menuitemradio"]')).find((i) => i.textContent === 'Claro')!;
+    expect(light.getAttribute('aria-checked')).toBe('false');
+    light.click();
     expect(savedMode()).toBe('light');
     expect(cls().contains('mode-light')).toBe(true);
+    expect(btn.getAttribute('data-tip')).toBe('Modo claro ou escuro: Claro');
+    el.remove();
   });
 });
 

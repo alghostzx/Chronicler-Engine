@@ -1,5 +1,4 @@
 import { THEMES, type ThemeId } from './api';
-import { h } from './dom';
 
 const THEME_KEY = 'chronicler.theme';
 const MODE_KEY = 'chronicler.mode';
@@ -87,17 +86,4 @@ export function initTheme(): void {
       if (currentPref === 'auto') paint();
     });
   }
-}
-
-/** Seletor de modo claro/escuro, reutilizado na tela inicial e na sessão. */
-export function createModeSelect(): HTMLSelectElement {
-  const select = h(
-    'select',
-    { class: 'input w-auto py-1 text-sm', 'aria-label': 'Modo claro ou escuro', title: 'Modo claro/escuro' },
-    ...MODE_PREFS.map((m) => h('option', { value: m.id, selected: m.id === currentPref }, m.label)),
-  );
-  select.addEventListener('change', () => {
-    if (isModePref(select.value)) setModePref(select.value);
-  });
-  return select;
 }

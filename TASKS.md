@@ -91,3 +91,10 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Botão **Salvar .md**: `GET /api/sessions/:id/export` (inclui blocos arquivados; contexto opcional; sem prompts do jogador)
 - [x] Testes: exportação (módulo + rota), temas/modo (jsdom) e UI (download + alternância de modo); 142 testes passando
 - [x] Imagem reconstruída e contêiner Podman atualizado com estas mudanças (favicon, assets e API respondendo 200)
+
+## Fase 11 — Interface: ícones e responsividade ✅
+- [x] Cabeçalho da sessão só com ícones (Biblioteca, Tema, Modo, Salvar .md, Contexto) com tooltip no hover/foco e `aria-label`
+- [x] Tema e modo claro/escuro como menus de ícone (Esc, clique fora, setas), também na tela inicial
+- [x] Tela inicial sem corte/rolagem horizontal no celular (`grid-cols-1`, `min-w-0`, `.input` com `max-w-full`, lista de crônicas com truncamento)
+- [x] Testes: cabeçalho (rótulos/tooltips), menus de tema/modo e regressão da marcação responsiva; 145 testes passando
+- [ ] Conferência visual em um celular real (não há navegador no ambiente de desenvolvimento)

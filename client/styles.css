@@ -156,13 +156,84 @@
     @apply hover:border-hp-low hover:text-hp-low;
   }
   .input {
-    @apply w-full rounded border border-line bg-main px-3 py-2 text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent;
+    @apply w-full min-w-0 max-w-full rounded border border-line bg-main px-3 py-2 text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent;
   }
   .card {
     @apply rounded-lg border border-line bg-panel p-4;
   }
   .label {
     @apply mb-1 block font-display text-xs uppercase tracking-wider text-muted;
+  }
+
+  /* Botão só com ícone (quadrado, não encolhe). */
+  .btn-icon {
+    @apply h-9 w-9 shrink-0 p-0 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent;
+  }
+
+  /* Tooltip CSS: texto em data-tip; aparece no hover e no foco do teclado. */
+  .tip {
+    position: relative;
+  }
+  .tip::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    width: max-content;
+    max-width: min(16rem, 70vw);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    background: var(--bg-panel);
+    color: var(--text-main);
+    font-size: 0.75rem;
+    line-height: 1.25;
+    text-align: left;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  .tip.tip-start::after {
+    left: 0;
+    transform: none;
+  }
+  .tip.tip-end::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  .tip:hover::after,
+  .tip:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0.25s;
+  }
+  .tip[aria-haspopup][aria-expanded='true']::after {
+    display: none;
+  }
+
+  /* Menu suspenso de opções exclusivas (tema, modo). */
+  .menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    z-index: 55;
+    min-width: 11rem;
+    max-width: 80vw;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg-panel);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  }
+  .menu-item {
+    @apply flex w-full items-center gap-2 rounded px-2 py-1.5 font-display text-sm text-ink hover:bg-main hover:text-accent focus-visible:bg-main focus-visible:text-accent focus-visible:outline-none;
+  }
+  .menu-item[aria-checked='true'] {
+    @apply text-accent;
   }
 
   /* Prosa do Tome: página contínua de livro, sem balões de chat. */

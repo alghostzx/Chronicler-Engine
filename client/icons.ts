@@ -1,0 +1,83 @@
+/** Ícones SVG inline (traço de 24×24). Sem dependências externas e sem innerHTML. */
+
+type Shape = [tag: 'path' | 'circle' | 'rect' | 'polyline' | 'line', attrs: Record<string, string>];
+
+const ICONS = {
+  /** Biblioteca de crônicas. */
+  library: [
+    ['path', { d: 'm16 6 4 14' }],
+    ['path', { d: 'M12 6v14' }],
+    ['path', { d: 'M8 8v12' }],
+    ['path', { d: 'M4 4v16' }],
+  ],
+  /** Salvar/baixar arquivo. */
+  download: [
+    ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
+    ['polyline', { points: '7 10 12 15 17 10' }],
+    ['line', { x1: '12', y1: '15', x2: '12', y2: '3' }],
+  ],
+  /** Painel lateral de contexto. */
+  panel: [
+    ['rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }],
+    ['path', { d: 'M15 3v18' }],
+  ],
+  palette: [
+    ['circle', { cx: '13.5', cy: '6.5', r: '0.5' }],
+    ['circle', { cx: '17.5', cy: '10.5', r: '0.5' }],
+    ['circle', { cx: '8.5', cy: '7.5', r: '0.5' }],
+    ['circle', { cx: '6.5', cy: '12.5', r: '0.5' }],
+    [
+      'path',
+      {
+        d: 'M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z',
+      },
+    ],
+  ],
+  sun: [
+    ['circle', { cx: '12', cy: '12', r: '4' }],
+    ['path', { d: 'M12 2v2' }],
+    ['path', { d: 'M12 20v2' }],
+    ['path', { d: 'm4.93 4.93 1.41 1.41' }],
+    ['path', { d: 'm17.66 17.66 1.41 1.41' }],
+    ['path', { d: 'M2 12h2' }],
+    ['path', { d: 'M20 12h2' }],
+    ['path', { d: 'm6.34 17.66-1.41 1.41' }],
+    ['path', { d: 'm19.07 4.93-1.41 1.41' }],
+  ],
+  moon: [['path', { d: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z' }]],
+  monitor: [
+    ['rect', { x: '2', y: '3', width: '20', height: '14', rx: '2' }],
+    ['path', { d: 'M8 21h8' }],
+    ['path', { d: 'M12 17v4' }],
+  ],
+  check: [['polyline', { points: '20 6 9 17 4 12' }]],
+} satisfies Record<string, Shape[]>;
+
+export type IconName = keyof typeof ICONS;
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Cria um ícone decorativo (aria-hidden); o rótulo fica no botão que o contém. */
+export function icon(name: IconName, size = 18): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  const attrs: Record<string, string> = {
+    viewBox: '0 0 24 24',
+    width: String(size),
+    height: String(size),
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': '2',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'aria-hidden': 'true',
+    focusable: 'false',
+    class: 'shrink-0',
+  };
+  for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, v);
+  for (const [tag, a] of ICONS[name] as Shape[]) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(a)) node.setAttribute(k, v);
+    svg.appendChild(node);
+  }
+  return svg;
+}

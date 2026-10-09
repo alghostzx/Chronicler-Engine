@@ -8,7 +8,8 @@ import {
   type ThemeId,
 } from '../api';
 import { formatNumber, h, mount, toast, confirmModal } from '../dom';
-import { applyTheme, createModeSelect } from '../theme';
+import { applyTheme } from '../theme';
+import { createModeControl } from '../controls';
 
 const DEFAULT_LIMIT = 1_000_000;
 
@@ -165,9 +166,9 @@ export async function renderHome(root: HTMLElement): Promise<void> {
       h('label', { class: 'label' }, 'Modelo padrão'),
       h(
         'div',
-        { class: 'flex gap-2' },
+        { class: 'flex min-w-0 gap-2' },
         select,
-        h('button', { class: 'btn', type: 'button', title: 'Consultar novamente a API', onClick: async () => { await loadModels(true); renderDefaultModel(); toast('Lista de modelos atualizada.', 'success'); } }, 'Atualizar'),
+        h('button', { class: 'btn shrink-0', type: 'button', title: 'Consultar novamente a API', onClick: async () => { await loadModels(true); renderDefaultModel(); toast('Lista de modelos atualizada.', 'success'); } }, 'Atualizar'),
       ),
       !models.available ? h('p', { class: 'mt-1 text-xs text-hp-warn' }, 'Não foi possível consultar a lista de modelos agora.') : null,
     );
@@ -212,9 +213,9 @@ export async function renderHome(root: HTMLElement): Promise<void> {
     h('div', null, h('label', { class: 'label' }, 'Título'), titleInput),
     h(
       'div',
-      { class: 'grid gap-3 sm:grid-cols-2' },
-      h('div', null, h('label', { class: 'label' }, 'Tema visual'), themeSelect),
-      h('div', null, h('label', { class: 'label' }, 'Limite de tokens (contexto)'), limitInput),
+      { class: 'grid grid-cols-1 gap-3 sm:grid-cols-2' },
+      h('div', { class: 'min-w-0' }, h('label', { class: 'label' }, 'Tema visual'), themeSelect),
+      h('div', { class: 'min-w-0' }, h('label', { class: 'label' }, 'Limite de tokens (contexto)'), limitInput),
     ),
     h('div', null, h('label', { class: 'label' }, 'Modelo'), modelHost),
     h('div', null, h('label', { class: 'label' }, 'Mundo e personagens'), worldInput),
@@ -232,17 +233,17 @@ export async function renderHome(root: HTMLElement): Promise<void> {
       ...sessions.map((s) =>
         h(
           'div',
-          { class: 'flex items-center justify-between gap-2 rounded border border-line bg-main px-3 py-2' },
+          { class: 'flex min-w-0 items-center justify-between gap-2 rounded border border-line bg-main px-3 py-2' },
           h(
-            'a',
-            { href: `#/s/${s.id}`, class: 'min-w-0 flex-1 truncate font-display text-strong hover:text-accent' },
-            s.title,
-            h('span', { class: 'ml-2 text-xs text-muted' }, new Date(s.updated_at).toLocaleString('pt-BR')),
+            'div',
+            { class: 'min-w-0 flex-1' },
+            h('a', { href: `#/s/${s.id}`, class: 'block truncate font-display text-strong hover:text-accent' }, s.title),
+            h('p', { class: 'truncate text-xs text-muted' }, new Date(s.updated_at).toLocaleString('pt-BR')),
           ),
           h(
             'button',
             {
-              class: 'btn btn-danger',
+              class: 'btn btn-danger shrink-0',
               type: 'button',
               'aria-label': `Excluir ${s.title}`,
               onClick: async () => {
@@ -267,26 +268,26 @@ export async function renderHome(root: HTMLElement): Promise<void> {
     root,
     h(
       'main',
-      { class: 'mx-auto max-w-5xl space-y-6 p-4 sm:p-8' },
+      { class: 'mx-auto w-full min-w-0 max-w-5xl space-y-6 p-4 sm:p-8' },
       h(
         'header',
         { class: 'text-center' },
-        h('div', { class: 'mb-2 flex justify-end' }, createModeSelect()),
+        h('div', { class: 'mb-2 flex justify-end' }, createModeControl()),
         h('h1', { class: 'font-display text-4xl font-bold text-strong' }, 'Chronicler Engine'),
         h('p', { class: 'mt-1 text-muted' }, 'Escreva a sua crônica com um Narrador de IA.'),
       ),
       h(
         'section',
-        { class: 'card space-y-4' },
+        { class: 'card min-w-0 space-y-4' },
         h('h2', { class: 'font-display text-lg text-strong' }, 'Conexão com o Gemini'),
         keyBox,
         defaultSelectHost,
       ),
       h(
         'div',
-        { class: 'grid gap-6 md:grid-cols-2' },
-        h('section', { class: 'card' }, h('h2', { class: 'mb-3 font-display text-lg text-strong' }, 'Nova crônica'), createForm),
-        h('section', { class: 'card' }, h('h2', { class: 'mb-3 font-display text-lg text-strong' }, 'Suas crônicas'), listBox),
+        { class: 'grid grid-cols-1 gap-6 md:grid-cols-2' },
+        h('section', { class: 'card min-w-0' }, h('h2', { class: 'mb-3 font-display text-lg text-strong' }, 'Nova crônica'), createForm),
+        h('section', { class: 'card min-w-0' }, h('h2', { class: 'mb-3 font-display text-lg text-strong' }, 'Suas crônicas'), listBox),
       ),
     ),
   );

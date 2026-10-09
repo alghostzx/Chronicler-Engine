@@ -2,7 +2,6 @@ import {
   api,
   ApiError,
   streamTurn,
-  THEMES,
   type Block,
   type Dialogue,
   type DialogueMessage,
@@ -13,7 +12,8 @@ import {
 } from '../api';
 import { downloadStoryMarkdown } from '../download';
 import { confirmModal, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
-import { applyTheme, createModeSelect } from '../theme';
+import { applyTheme } from '../theme';
+import { createModeControl, createThemeControl, iconButton } from '../controls';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
 
@@ -95,13 +95,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   });
   drawerWrap.appendChild(drawer.el);
 
-  const themeSelect = h(
-    'select',
-    { class: 'input w-auto py-1 text-sm', 'aria-label': 'Tema visual' },
-    ...THEMES.map((t) => h('option', { value: t.id, selected: t.id === session().active_theme }, t.label)),
-  );
-  themeSelect.addEventListener('change', async () => {
-    const theme = themeSelect.value as ThemeId;
+  const themeControl = createThemeControl(session().active_theme, async (theme) => {
     applyTheme(theme);
     try {
       const { session: s } = await api<{ session: Session }>('PUT', `/api/sessions/${sessionId}/context`, { active_theme: theme });
@@ -111,8 +105,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     }
   });
 
-  const drawerBtn = h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', onClick: () => toggleDrawer() }, 'Contexto');
-  const exportBtn = h('button', { class: 'btn', type: 'button', title: 'Baixar a crônica como arquivo Markdown', onClick: () => openExport() }, 'Salvar .md');
+  const drawerBtn = iconButton({ icon: 'panel', label: 'Contexto da sessão', tip: 'Mostrar ou ocultar o contexto (mundo, personagens e crônica)', align: 'end', onClick: () => toggleDrawer() });
+  drawerBtn.setAttribute('aria-expanded', 'false');
+  const exportBtn = iconButton({ icon: 'download', label: 'Salvar em Markdown', tip: 'Salvar a crônica como arquivo Markdown (.md)', align: 'end', onClick: () => openExport() });
 
   function openExport(): void {
     const withContext = h('input', { type: 'checkbox', id: 'export-context', class: 'mr-2' });
@@ -154,11 +149,11 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       { class: 'flex h-screen flex-col' },
       h(
         'header',
-        { class: 'flex flex-wrap items-center gap-2 border-b border-line bg-panel px-4 py-2 sm:gap-3' },
-        h('a', { href: '#/', class: 'btn', 'aria-label': 'Voltar à biblioteca' }, '← Biblioteca'),
+        { class: 'flex items-center gap-2 border-b border-line bg-panel px-3 py-2' },
+        iconButton({ icon: 'library', label: 'Voltar à biblioteca', tip: 'Voltar à biblioteca de crônicas', align: 'start', href: '#/' }),
         titleEl,
-        themeSelect,
-        createModeSelect(),
+        themeControl.el,
+        createModeControl(),
         exportBtn,
         drawerBtn,
       ),

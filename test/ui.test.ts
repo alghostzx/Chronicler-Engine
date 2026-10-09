@@ -31,6 +31,14 @@ async function waitFor<T>(fn: () => T | null | undefined | false, what: string, 
 const buttons = () => Array.from(document.querySelectorAll('button'));
 const button = (label: string | RegExp) =>
   buttons().find((b) => (typeof label === 'string' ? b.textContent === label : label.test(b.textContent ?? '')));
+const byLabel = (label: string) => document.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+/** Abre um menu de ícone (tema/modo) e escolhe uma opção pelo texto. */
+function chooseOption(control: string, option: string): void {
+  click(byLabel(control)!);
+  const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')).find((i) => i.textContent === option);
+  if (!item) throw new Error(`Opção não encontrada: ${option}`);
+  click(item);
+}
 const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 const text = () => document.body.textContent ?? '';
 
@@ -68,6 +76,20 @@ afterEach(async () => {
 });
 
 describe('UI — tela inicial', () => {
+  it('não gera rolagem horizontal no celular: grades de 1 coluna e filhos com min-w-0', async () => {
+    await boot({ withKey: true });
+    await waitFor(() => document.querySelector('input[aria-label="Título da crônica"]'), 'home');
+    // Sem `grid-cols-*` explícito a coluna implícita é `auto` e cresce com a <option> mais longa.
+    const grids = Array.from(document.querySelectorAll('main .grid'));
+    expect(grids.length).toBeGreaterThanOrEqual(2);
+    for (const g of grids) expect(g.className).toMatch(/\bgrid-cols-1\b/);
+    for (const g of grids) for (const child of Array.from(g.children)) expect(child.className).toMatch(/\bmin-w-0\b/);
+    for (const f of Array.from(document.querySelectorAll('main select, main input:not([type=checkbox]), main textarea'))) {
+      expect(f.className).toMatch(/\binput\b/); // `.input` aplica w-full min-w-0 max-w-full
+    }
+    expect(document.querySelector('main')!.className).toMatch(/\bmin-w-0\b/);
+  });
+
   it('pede a chave, valida, lista só modelos de texto e cria uma sessão', async () => {
     await boot({ withKey: false });
     const input = await waitFor(() => document.querySelector<HTMLInputElement>('input[type=password]'), 'campo da chave');
@@ -186,7 +208,7 @@ describe('UI — sessão', () => {
     await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'blocos arquivados somem do tome');
     expect(text()).toContain('Terceiro capítulo.');
 
-    click(button('Contexto')!);
+    click(byLabel('Contexto da sessão')!);
     click(await waitFor(() => button('Crônica'), 'aba Crônica'));
     await waitFor(() => text().includes('Volume 1'), 'volume listado');
     click(document.querySelector('summary')!);
@@ -226,7 +248,7 @@ describe('UI — sessão', () => {
         r.readAsText(b);
       });
 
-    click(button('Salvar .md')!);
+    click(byLabel('Salvar em Markdown')!);
     click(await waitFor(() => button('Baixar arquivo .md'), 'modal de exportação'));
     await waitFor(() => downloads.length === 1, 'download disparado');
     expect(downloads[0]).toBe('Teste.md');
@@ -241,7 +263,7 @@ describe('UI — sessão', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ world_context: 'Reino de Valdoria.' }),
     });
-    click(button('Salvar .md')!);
+    click(byLabel('Salvar em Markdown')!);
     const box = await waitFor(() => document.querySelector<HTMLInputElement>('#export-context'), 'checkbox de contexto');
     box.checked = true;
     click(button('Baixar arquivo .md')!);
@@ -255,15 +277,48 @@ describe('UI — sessão', () => {
 
   it('alterna entre modo claro e escuro mantendo o tema da sessão', async () => {
     await openNewSession();
-    const select = document.querySelector<HTMLSelectElement>('select[aria-label="Modo claro ou escuro"]')!;
-    select.value = 'dark';
-    select.dispatchEvent(new Event('change'));
+    chooseOption('Modo claro ou escuro', 'Escuro');
     expect(document.documentElement.classList.contains('mode-dark')).toBe(true);
     expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
-    select.value = 'light';
-    select.dispatchEvent(new Event('change'));
+    chooseOption('Modo claro ou escuro', 'Claro');
     expect(document.documentElement.classList.contains('mode-light')).toBe(true);
     expect(localStorage.getItem('chronicler.mode')).toBe('light');
+  });
+
+  it('o cabeçalho da sessão usa só ícones, cada um com rótulo acessível e tooltip', async () => {
+    await openNewSession();
+    const header = document.querySelector('header')!;
+    const controls = Array.from(header.querySelectorAll<HTMLElement>('a.btn, button.btn'));
+    expect(controls.map((c) => c.getAttribute('aria-label'))).toEqual([
+      'Voltar à biblioteca',
+      'Tema visual',
+      'Modo claro ou escuro',
+      'Salvar em Markdown',
+      'Contexto da sessão',
+    ]);
+    for (const c of controls) {
+      expect(c.textContent).toBe(''); // sem texto visível, apenas o SVG
+      expect(c.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+      expect(c.getAttribute('data-tip')).toBeTruthy();
+      expect(c.classList.contains('tip')).toBe(true);
+    }
+    expect(header.querySelector('select')).toBeNull();
+    expect(byLabel('Tema visual')!.getAttribute('data-tip')).toBe('Tema visual: Cyberpunk (Neon)');
+  });
+
+  it('o menu de tema troca o tema, fecha com Esc e com clique fora', async () => {
+    await openNewSession();
+    click(byLabel('Tema visual')!);
+    expect(byLabel('Tema visual')!.getAttribute('aria-expanded')).toBe('true');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(byLabel('Tema visual')!.getAttribute('aria-expanded')).toBe('false');
+    click(byLabel('Tema visual')!);
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(byLabel('Tema visual')!.getAttribute('aria-expanded')).toBe('false');
+
+    chooseOption('Tema visual', 'Medieval (Pergaminho)');
+    expect(document.documentElement.classList.contains('theme-medieval')).toBe(true);
+    expect(byLabel('Tema visual')!.getAttribute('data-tip')).toBe('Tema visual: Medieval (Pergaminho)');
   });
 
   it('mostra erro do Narrador e mantém o texto digitado', async () => {
