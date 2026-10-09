@@ -18,3 +18,12 @@ build/
 
 # SECRETS
 GEMINIKEY.txt
+
+# Dados locais (o banco guarda a chave da API)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Artefatos de build do frontend
+public/assets/

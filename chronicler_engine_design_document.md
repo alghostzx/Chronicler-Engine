@@ -41,7 +41,7 @@ A cada turno em que o Narrador é invocado, o payload enviado à API do Gemini d
 ```
 
 ### 2.2 Isolamento de Meta-Instruções Passadas
-* Cada bloco narrativo no banco de dados armazena o `player_prompt` que lhe deu origem para fins de auditoria e re-geração.
+* Cada bloco narrativo no banco de dados armazena o `player_instruction` que lhe deu origem para fins de auditoria e re-geração.
 * Contudo, ao solicitar a geração do Bloco $N+1$, **apenas o `generated_text` dos blocos $1 \dots N$ é enviado no item 3**. Os prompts anteriores do jogador são omitidos da chamada.
 
 ### 2.3 System Prompt do Narrador (Base Canônica)
@@ -385,3 +385,44 @@ Ao alimentar este documento no Antigravity, garanta que as seguintes premissas s
 3. [ ] Confirmar truncamento via `DELETE ... WHERE order_index > ?` quando o usuário re-gerar um bloco passado.
 4. [ ] Implementar a chamada de contagem de tokens (`ai.models.countTokens`) para cálculo real da barra de HP.
 5. [ ] Garantir que a sub-sessão de diálogo não altere os blocos da história até que o endpoint de conclusão (`/conclude`) sintetize as falas em prosa pelo Narrador.
+
+---
+
+## 11. Decisões de Implementação (homologadas)
+
+Esta seção registra decisões tomadas durante o planejamento e a implementação que complementam ou ajustam as seções anteriores. Em caso de conflito, **esta seção prevalece**. O acompanhamento por fase está em [`TASKS.md`](TASKS.md).
+
+### 11.1 Stack e estrutura
+* Frontend em **Vanilla TypeScript + Tailwind CSS 3** (sem framework), compilado por `esbuild` e Tailwind CLI para `public/assets/` e servido por `@fastify/static`.
+* Backend ESM (`"type": "module"`, `module: NodeNext`), testes com `vitest`, desenvolvimento com `tsx`.
+* Interface em **pt-BR fixo**.
+* Fontes dos temas **empacotadas localmente** em `public/fonts/` (sem CDN).
+
+### 11.2 Modelos e limites
+* Modelo padrão: `gemini-3.8-flash`. O app consulta `models.list` da API do Gemini e oferece, num seletor, todos os modelos com suporte a `generateContent`. Se o padrão não estiver disponível, a UI cai para o primeiro modelo Flash listado e avisa o usuário.
+* `token_limit` é configurável por sessão (padrão 1.000.000).
+
+### 11.3 Nomenclatura
+* O campo do prompt do jogador é sempre `player_instruction` (a menção a `player_prompt` na §2.2 foi corrigida).
+
+### 11.4 Streaming (§8.2)
+* O SSE de `narrative/next` faz **parse incremental** do JSON estruturado: os trechos de `narrative_text` são emitidos em tempo real como eventos `chunk`; `block` e `dialogue_trigger` são emitidos apenas no fechamento do payload.
+
+### 11.5 Regeneração e edição (§6)
+* A regeneração só altera o banco **depois** que a IA responde com sucesso. O `DELETE ... WHERE order_index > ?` e a atualização do bloco ocorrem numa **única transação** SQLite.
+* Edição manual de texto **preserva** os blocos seguintes; apenas regeneração via IA trunca.
+
+### 11.6 Modo Diálogo (§3)
+* Existe **no máximo um diálogo ativo por sessão**. Após recarregar a página, o frontend retoma o diálogo via `GET /api/sessions/:id/dialogue/active`.
+
+### 11.7 HP do Narrador (§4)
+* O HP é recalculado por **eventos** (abertura de sessão, geração/regeneração de bloco, edição de texto ou contexto, commit de crônica), sem polling e sem recálculo a cada tecla.
+
+### 11.8 Compactação (§4.3)
+* A divisão 75/25 é calculada pelo **peso em tokens** (aproximado pelo tamanho do texto), não pela contagem de blocos.
+* Cada volume é anexado ao `world_context` sob o cabeçalho `## Crônica — Volume N`.
+
+### 11.9 Segurança e deploy (§9)
+* O compose publica a porta apenas em loopback: `127.0.0.1:3000:3000`. Não há autenticação; a chave da API fica em texto plano no SQLite (uso local, usuário único).
+* O Dockerfile compila dependências nativas (`better-sqlite3`) no estágio de build e o runtime usa `npm ci --omit=dev`. O campo `version:` do compose é omitido por estar obsoleto.
+* `data/`, `*.db*` e `GEMINIKEY.txt` são ignorados pelo git.
