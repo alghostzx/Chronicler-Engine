@@ -34,7 +34,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 - **4 temas**, cada um em variação clara e escura (Medieval, Cyberpunk, Pós-apocalíptico, Contemporâneo), com fontes empacotadas localmente (nenhum CDN). O modo segue o sistema por padrão.
 - **Salvar em Markdown** (`.md`): baixa a crônica inteira, inclusive os capítulos já compactados, com a opção de incluir mundo e sinopses. Seus prompts nunca vão no arquivo.
 - **Seletor de modelos** alimentado pela própria API do Gemini (só modelos de geração de texto), com padrão global e escolha por sessão.
-- Interface em pt-BR, responsiva (funciona no celular) e acessível por teclado (botões de ícone com tooltip e `aria-label`).
+- Interface em pt-BR, responsiva (funciona no celular com botão de tela cheia/fullscreen) e acessível por teclado (botões de ícone com tooltip e `aria-label`).
 
 ## Requisitos
 
