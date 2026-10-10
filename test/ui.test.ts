@@ -69,6 +69,7 @@ async function boot(opts: { withKey: boolean; hash?: string }): Promise<void> {
 
 beforeEach(() => {
   localStorage.clear();
+  window.scrollTo = vi.fn();
 });
 afterEach(async () => {
   globalThis.fetch = realFetch;
@@ -293,6 +294,7 @@ describe('UI — sessão', () => {
       'Voltar à biblioteca',
       'Tema visual',
       'Modo claro ou escuro',
+      'Tela cheia',
       'Salvar em Markdown',
       'Contexto da sessão',
     ]);
@@ -319,6 +321,17 @@ describe('UI — sessão', () => {
     chooseOption('Tema visual', 'Medieval (Pergaminho)');
     expect(document.documentElement.classList.contains('theme-medieval')).toBe(true);
     expect(byLabel('Tema visual')!.getAttribute('data-tip')).toBe('Tema visual: Medieval (Pergaminho)');
+  });
+
+  it('o botão de tela cheia alterna entre tela cheia e modo normal', async () => {
+    await openNewSession();
+    const btn = byLabel('Tela cheia')!;
+    expect(btn.getAttribute('data-tip')).toBe('Entrar em tela cheia');
+    click(btn);
+    await waitFor(() => byLabel('Sair da tela cheia'), 'modo tela cheia ativado');
+    expect(byLabel('Sair da tela cheia')!.getAttribute('data-tip')).toBe('Sair da tela cheia');
+    click(byLabel('Sair da tela cheia')!);
+    await waitFor(() => byLabel('Tela cheia'), 'modo normal restaurado');
   });
 
   it('mostra erro do Narrador e mantém o texto digitado', async () => {
