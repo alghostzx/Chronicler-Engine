@@ -58,7 +58,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         'div',
         { class: 'p-8 text-center' },
         h('p', { class: 'text-hp-low' }, (err as Error).message),
-        h('a', { href: '#/', class: 'btn mt-4' }, 'Voltar à biblioteca'),
+        h('a', { href: '#/', class: 'btn mt-4' }, 'Voltar ao menu inicial'),
       ),
     );
     return () => {};
@@ -171,7 +171,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       h(
         'header',
         { class: 'flex shrink-0 items-center gap-1.5 border-b border-line bg-panel px-3 py-2 sm:gap-2' },
-        iconButton({ icon: 'library', label: 'Voltar à biblioteca', tip: 'Voltar à biblioteca de crônicas', align: 'start', href: '#/' }),
+        iconButton({ icon: 'library', label: 'Voltar ao menu inicial', tip: 'Voltar ao menu inicial', align: 'start', href: '#/' }),
         titleEl,
         themeControl.el,
         createModeControl(),

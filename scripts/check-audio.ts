@@ -284,8 +284,8 @@ for (const theme of THEMES) {
       if (overflowDrawer > 0) problems.push(`[gaveta/voz] rolagem horizontal ${overflowDrawer}px`);
       if (theme === 'medieval' && mode === 'dark') await shot('gaveta-voz');
 
-      // 4) Tela inicial: cartão “Narração por voz”
-      await open(page, '#/', 'section, .card');
+      // 4) Página Opções: cartão “Narração por voz”
+      await open(page, '#/opcoes', 'section, .card');
       const tts = page.getByLabel('Narração por voz').first();
       await tts.waitFor({ timeout: 5000 });
       await tts.scrollIntoViewIfNeeded();

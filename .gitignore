@@ -31,3 +31,6 @@ public/assets/
 # Capturas do check:mobile no Firefox (verificação local)
 docs/screenshots/mobile-firefox/
 docs/screenshots/audio-firefox/
+docs/screenshots/inicio-firefox/
+# Capturas do check:inicio (muitas e pesadas; só as do README são versionadas)
+docs/screenshots/inicio/
