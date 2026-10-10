@@ -28,7 +28,7 @@ const prose = [
   'Uma ponte caída os obrigou a acampar. À noite, lobos cercaram a carroça; Kael afugentou-os com fogo, mas o cavalo fugiu e a carroça ficou. Seguiram a pé, com o festival a oito dias de distância. ' + 'A fogueira morria devagar, e Piet murmurava orações na escuridão. '.repeat(6),
 ];
 for (const [i, text] of prose.entries()) {
-  repos.blocks.append(session.id, { player_instruction: `META-SECRETA-${i}`, generated_text: text });
+  repos.pages.append(session.id, { player_instruction: `META-SECRETA-${i}`, generated_text: text });
 }
 
 const hp = async () => (await app.inject({ method: 'GET', url: `/api/sessions/${session.id}/token-count` })).json();
@@ -44,11 +44,11 @@ const commit = await app.inject({
   url: `/api/sessions/${session.id}/compact/commit`,
   payload: {
     summary_text: pv.summary_text,
-    covered_block_start_index: pv.covered_block_start_index,
-    covered_block_end_index: pv.covered_block_end_index,
+    covered_page_start_index: pv.covered_page_start_index,
+    covered_page_end_index: pv.covered_page_end_index,
   },
 });
-console.log('\ncommit:', commit.statusCode, 'arquivados:', commit.json().archived_blocks);
+console.log('\ncommit:', commit.statusCode, 'arquivados:', commit.json().archived_pages);
 console.log('\nworld_context agora:\n' + repos.sessions.get(session.id)!.world_context);
 const after = await hp();
 console.log('\nHP depois:', after);

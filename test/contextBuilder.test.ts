@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { buildCorpus, buildNarratorRequest } from '../src/ai/contextBuilder.js';
 
-const blocks = [
+const pages = [
   { order_index: 2, generated_text: 'Segundo.', player_instruction: 'INSTRUCAO-SECRETA-2' },
   { order_index: 1, generated_text: 'Primeiro.\n', player_instruction: 'INSTRUCAO-SECRETA-1' },
 ];
 
 describe('contextBuilder', () => {
   it('concatena o corpus em ordem cronológica, sem espaços sobrando', () => {
-    expect(buildCorpus(blocks)).toBe('Primeiro.\n\nSegundo.');
+    expect(buildCorpus(pages)).toBe('Primeiro.\n\nSegundo.');
   });
 
   it('NUNCA inclui instruções passadas do jogador no payload (checklist §10 nº 1)', () => {
     const req = buildNarratorRequest({
       session: { system_rules: 'REGRAS', world_context: 'MUNDO' },
-      precedingBlocks: blocks,
+      precedingPages: pages,
       playerInstruction: 'Abro a porta.',
     });
     const everything = req.systemInstruction + req.userText;
@@ -24,7 +24,7 @@ describe('contextBuilder', () => {
   it('segue a ordem do pipeline: regras → mundo → corpus → input atual', () => {
     const req = buildNarratorRequest({
       session: { system_rules: 'REGRAS', world_context: 'MUNDO' },
-      precedingBlocks: blocks,
+      precedingPages: pages,
       playerInstruction: 'Abro a porta.',
     });
     expect(req.systemInstruction).toBe('REGRAS');
@@ -43,7 +43,7 @@ describe('contextBuilder', () => {
   it('lida com história vazia e contexto vazio', () => {
     const req = buildNarratorRequest({
       session: { system_rules: 'R', world_context: '  ' },
-      precedingBlocks: [],
+      precedingPages: [],
       playerInstruction: 'Começo.',
     });
     expect(req.userText).toContain('a história ainda não começou');

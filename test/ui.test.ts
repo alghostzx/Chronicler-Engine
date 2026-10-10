@@ -133,33 +133,53 @@ describe('UI — sessão', () => {
 
     gateway.queue(narratorJson('A porta rangeu.\n\nUma sombra cruzou o corredor.'));
     await send('Abro a porta');
-    await waitFor(() => document.querySelectorAll('.prose-tome p').length === 2, 'primeiro bloco persistido');
+    await waitFor(() => document.querySelectorAll('.prose-tome p').length === 2, 'primeira página persistida');
     expect(text()).toContain('A porta rangeu.');
     expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
     await waitFor(() => /\d+% — /.test(text()), 'HP calculado');
 
     gateway.queue(narratorJson('O silêncio voltou.'));
     await send('Espero');
-    await waitFor(() => text().includes('O silêncio voltou.'), 'segundo bloco');
-    expect(document.querySelectorAll('section[data-block-id]').length).toBe(2);
+    await waitFor(() => text().includes('O silêncio voltou.'), 'segunda página');
+    expect(document.querySelectorAll('section[data-page-id]').length).toBe(2);
 
-    // Edição manual do primeiro bloco preserva o segundo.
-    click(button('Editar Texto')!);
-    const editor = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-block-id] textarea'), 'editor');
+    // Cada página é um cartão separado, numerado de forma absoluta, com 3 ações só em ícone sempre visíveis.
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card[data-page-id]'));
+    expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
+    for (const card of cards) {
+      const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button'));
+      expect(actions.map((b) => b.getAttribute('aria-label'))).toEqual(['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página']);
+      for (const b of actions) {
+        expect(b.textContent).toBe(''); // só ícone
+        expect(b.querySelectorAll('svg').length).toBe(1); // um único ícone por ação
+        expect(b.getAttribute('data-tip')).toBeTruthy(); // tooltip
+        expect(b.className).not.toMatch(/opacity-0|md:opacity-0|group-hover/); // nunca depende de hover
+      }
+    }
+    const icons = Array.from(cards[0]!.querySelectorAll('.page-card-actions svg')).map((s) => s.innerHTML);
+    expect(new Set(icons).size).toBe(3); // glifos distintos
+    expect(cards[0]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(false);
+    expect(cards[1]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(true); // última página
+    expect(cards[0]!.querySelector('.drop-cap')).not.toBeNull();
+    expect(cards[1]!.querySelector('.drop-cap')).toBeNull();
+
+    // Edição manual da primeira página preserva a segunda.
+    click(byLabel('Editar texto da página')!);
+    const editor = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-page-id] textarea'), 'editor');
     type(editor, 'A porta gemeu.');
     click(await waitFor(() => button('Salvar edição'), 'salvar edição'));
     await waitFor(() => text().includes('A porta gemeu.'), 'texto editado');
     expect(text()).toContain('O silêncio voltou.');
 
-    // Re-geração do primeiro bloco avisa e descarta o segundo.
-    click(button('Ver Prompt de Origem / Re-gerar')!);
+    // Re-geração da primeira página avisa e descarta a segunda.
+    click(byLabel('Editar prompt e re-gerar')!);
     const modalTa = await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'modal');
     expect(modalTa.value).toBe('Abro a porta');
-    expect(text()).toContain('descarta definitivamente os 1 bloco(s)');
+    expect(text()).toContain('descarta definitivamente a página seguinte');
     gateway.queue(narratorJson('A porta explodiu.'));
     click(button(/Re-gerar e descartar 1/)!);
-    await waitFor(() => text().includes('A porta explodiu.') && !text().includes('O silêncio voltou.'), 'bloco regerado e posterior descartado');
-    expect(document.querySelectorAll('section[data-block-id]').length).toBe(1);
+    await waitFor(() => text().includes('A porta explodiu.') && !text().includes('O silêncio voltou.'), 'página regerada e posterior descartada');
+    expect(document.querySelectorAll('section[data-page-id]').length).toBe(1);
   });
 
   it('conduz um diálogo com NPC do gatilho até a costura em prosa', async () => {
@@ -205,7 +225,7 @@ describe('UI — sessão', () => {
     expect(ta.value).toContain('Sinopse');
     type(ta, 'Sinopse editada pelo jogador.');
     click(await waitFor(() => button(/Consolidar Volume 1/), 'botão consolidar'));
-    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'blocos arquivados somem do tome');
+    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'páginas arquivadas somem do tome');
     expect(text()).toContain('Terceiro capítulo.');
 
     click(byLabel('Contexto da sessão')!);
@@ -213,18 +233,39 @@ describe('UI — sessão', () => {
     await waitFor(() => text().includes('Volume 1'), 'volume listado');
     click(document.querySelector('summary')!);
     expect(text()).toContain('Sinopse editada pelo jogador.');
+
+    // As páginas consumidas continuam legíveis: o Tome aponta para o volume e o leitor é uma página própria.
+    expect(document.querySelector('nav[aria-label^="Páginas anteriores"] a')!.getAttribute('href')).toMatch(/\/v\/1$/);
+    const read = Array.from(document.querySelectorAll('a')).find((a) => /^Ler as 2 páginas$/.test(a.textContent ?? ''))!;
+    expect(read.getAttribute('href')).toMatch(/\/v\/1$/);
+    click(read);
+    location.hash = read.getAttribute('href')!;
+    await waitFor(() => text().includes('Primeiro capítulo.'), 'leitor de volume');
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card'));
+    expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
+    expect(text()).toContain('Segundo capítulo.');
+    expect(text()).not.toContain('Terceiro capítulo.');
+    expect(document.querySelectorAll('.page-card-actions').length).toBe(0); // somente leitura
+    expect(document.querySelector('textarea')).toBeNull();
+    expect(byLabel('Salvar volume em Markdown')).not.toBeNull();
+    expect(document.querySelector('a[aria-label="Voltar ao Tome"]')!.getAttribute('href')).toMatch(/^#\/s\//);
+    expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
+
+    // Volume inexistente: mensagem clara em vez de tela vazia.
+    location.hash = `${location.hash.replace(/\/v\/1$/, '')}/v/9`;
+    await waitFor(() => text().includes('O Volume 9 não existe'), 'volume inexistente');
   });
 
-  it('ramifica a partir de um bloco anterior descartando os seguintes', async () => {
+  it('ramifica a partir de uma página anterior descartando as seguintes', async () => {
     await openNewSession();
     for (const msg of ['Cena A.', 'Cena B.']) {
       gateway.queue(narratorJson(msg));
       await send(`Ir para ${msg}`);
       await waitFor(() => text().includes(msg) && !button('Narrando…'), msg);
     }
-    click(button('Ramificar a partir daqui')!);
+    click(byLabel('Ramificar a partir desta página')!);
     click(await waitFor(() => button('Descartar e ramificar'), 'confirmação'));
-    await waitFor(() => !text().includes('Cena B.'), 'bloco B descartado');
+    await waitFor(() => !text().includes('Cena B.'), 'página B descartada');
     expect(text()).toContain('Cena A.');
   });
 
@@ -232,7 +273,7 @@ describe('UI — sessão', () => {
     await openNewSession();
     gateway.queue(narratorJson('A porta rangeu.'));
     await send('Abro a porta');
-    await waitFor(() => text().includes('A porta rangeu.') && !button('Narrando…'), 'bloco');
+    await waitFor(() => text().includes('A porta rangeu.') && !button('Narrando…'), 'página');
 
     const blobs: Blob[] = [];
     const downloads: string[] = [];
@@ -272,6 +313,74 @@ describe('UI — sessão', () => {
     expect(withCtx).toContain('## Mundo e personagens\n\nReino de Valdoria.');
     expect(withCtx).toContain('## Narrativa');
     expect(plain).not.toContain('Valdoria');
+    clickSpy.mockRestore();
+  });
+
+  it('exporta por escopo (completa, Tome, volumes) e salva um volume com ou sem sinopse', async () => {
+    await openNewSession();
+    for (const [i, msg] of ['Primeiro capítulo.', 'Segundo capítulo.', 'Terceiro capítulo.'].entries()) {
+      gateway.queue(narratorJson(msg));
+      await send(`Ação ${i}`);
+      await waitFor(() => text().includes(msg) && !button('Narrando…'), msg);
+    }
+    gateway.queue('Sinopse do primeiro volume.');
+    click(button('Compactar Crônica')!);
+    await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'minuta');
+    click(await waitFor(() => button(/Consolidar Volume 1/), 'consolidar'));
+    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'compactado');
+
+    const blobs: Blob[] = [];
+    const downloads: string[] = [];
+    URL.createObjectURL = ((b: Blob) => (blobs.push(b), 'blob:teste')) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download);
+    });
+    const readBlob = (b: Blob) =>
+      new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.readAsText(b);
+      });
+
+    // Só as páginas dos volumes.
+    click(byLabel('Salvar em Markdown')!);
+    const radios = await waitFor(() => Array.from(document.querySelectorAll<HTMLInputElement>('input[name="export-scope"]')), 'escopos');
+    expect(radios.map((r) => r.value)).toEqual(['all', 'active', 'archived']);
+    expect(radios.every((r) => !r.disabled)).toBe(true);
+    expect(radios[0]!.checked).toBe(true);
+    radios[2]!.checked = true;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 1, 'download dos volumes');
+    expect(downloads[0]).toBe('Teste — volumes.md');
+    const archivedMd = await readBlob(blobs[0]!);
+    expect(archivedMd).toContain('Primeiro capítulo.\n\n---\n\nSegundo capítulo.');
+    expect(archivedMd).not.toContain('Terceiro capítulo.');
+
+    // Só o Tome.
+    click(byLabel('Salvar em Markdown')!);
+    const again = await waitFor(() => Array.from(document.querySelectorAll<HTMLInputElement>('input[name="export-scope"]')), 'escopos 2');
+    again[1]!.checked = true;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 2, 'download do Tome');
+    const activeMd = await readBlob(blobs[1]!);
+    expect(activeMd).toContain('Terceiro capítulo.');
+    expect(activeMd).not.toContain('Primeiro capítulo.');
+
+    // Volume pela gaveta, sem a sinopse.
+    click(byLabel('Contexto da sessão')!);
+    click(await waitFor(() => button('Crônica'), 'aba Crônica'));
+    click(await waitFor(() => byLabel('Salvar Volume 1 em Markdown'), 'ícone de salvar volume'));
+    const box = await waitFor(() => document.querySelector<HTMLInputElement>('#export-summary'), 'checkbox da sinopse');
+    expect(box.checked).toBe(true); // sinopse incluída por padrão
+    box.checked = false;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 3, 'download do volume');
+    expect(downloads[2]).toBe('Teste — Volume 1.md');
+    const volumeMd = await readBlob(blobs[2]!);
+    expect(volumeMd).toContain('# Teste — Volume 1');
+    expect(volumeMd).toContain('Primeiro capítulo.');
+    expect(volumeMd).not.toContain('Sinopse');
     clickSpy.mockRestore();
   });
 
@@ -328,6 +437,6 @@ describe('UI — sessão', () => {
     await waitFor(() => document.querySelector('#toasts div'), 'toast de erro');
     const ta = await waitFor(() => document.querySelector<HTMLTextAreaElement>('footer textarea:not([disabled])'), 'doca liberada');
     expect(ta.value).toBe('Faço algo');
-    expect(document.querySelectorAll('section[data-block-id]').length).toBe(0);
+    expect(document.querySelectorAll('section[data-page-id]').length).toBe(0);
   });
 });

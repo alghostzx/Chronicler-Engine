@@ -3,7 +3,10 @@
 > [!IMPORTANT]
 > **Projeto 100% gerado por IA.** Todo o código, testes, documentação e configuração deste repositório foram produzidos por um agente de IA no **Antigravity**, usando o modelo **Claude Sonnet 5.5 com *thinking* no nível High** (informação fornecida pelo autor do projeto). O papel humano foi o de definir o design document, aprovar as decisões de implementação e revisar o andamento. Trate o código como qualquer código gerado por IA: revise antes de usar em produção.
 
-Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o Gemini atua como **Narrador**, escrevendo a prosa em um *Tome* contínuo (sem balões de chat). Tudo roda localmente, com SQLite — só a geração de texto sai da sua máquina, rumo à API do Gemini.
+Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o Gemini atua como **Narrador**, escrevendo a prosa em um *Tome* (sem balões de chat): cada instrução sua gera uma **página**, e cada página é uma folha separada do livro. Tudo roda localmente, com SQLite — só a geração de texto sai da sua máquina, rumo à API do Gemini.
+
+> [!WARNING]
+> **Pré-pré-alpha: atualizações não são suportadas.** O formato do banco de dados ainda muda entre versões, sem migração. Ao atualizar, **apague a pasta `./data`** (ou copie suas crônicas antes, com *Salvar em Markdown*). Um banco de uma versão anterior é recusado na abertura, com uma mensagem explicando isso.
 
 > Especificação completa e decisões de implementação: [`chronicler_engine_design_document.md`](chronicler_engine_design_document.md) (a seção 11 prevalece em caso de conflito). Andamento: [`TASKS.md`](TASKS.md).
 
@@ -28,11 +31,11 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 
 ## Recursos
 
-- **Tome interativo** com streaming da narrativa, edição direta, re-geração a partir do prompt de origem (descartando os blocos posteriores, com aviso) e ramificação a partir de qualquer bloco.
+- **Tome em páginas**: cada texto gerado por um prompt é uma *página*, numerada (`Página 1`, `Página 2`…, numeração absoluta que não recomeça após compactar) e exibida como uma folha separada. Streaming da narrativa e, no rodapé de cada página, três ações em **ícones sempre visíveis** (com tooltip): ✎ *editar o texto*, 💬 *editar o prompt e re-gerar* (descartando as páginas posteriores, com aviso) e ⑂ *ramificar a partir daquela página*.
 - **Modo Diálogo**: o Narrador pode abrir uma conversa com um NPC (persona isolada, que não conhece o resto da história). Quem encerra é você (`Encerrar Diálogo e Narrar`, que costura a cena em prosa, ou `Descartar`); o NPC apenas *sinaliza* que quer terminar, destacando o botão. Recarregar a página retoma a cena.
-- **HP do Narrador**: barra de contexto (tokens usados × limite configurável por sessão) e **Compactação de Crônica**, que gera uma sinopse revisável por você antes de arquivar os blocos antigos.
-- **4 temas**, cada um em variação clara e escura (Medieval, Cyberpunk, Pós-apocalíptico, Contemporâneo), com fontes empacotadas localmente (nenhum CDN). O modo segue o sistema por padrão.
-- **Salvar em Markdown** (`.md`): baixa a crônica inteira, inclusive os capítulos já compactados, com a opção de incluir mundo e sinopses. Seus prompts nunca vão no arquivo.
+- **HP do Narrador**: barra de contexto (tokens usados × limite configurável por sessão) e **Compactação de Crônica**, que gera uma sinopse revisável por você antes de transformar as páginas antigas em um *volume*. As páginas consumidas saem do contexto da IA, mas **continuam legíveis** (botão *Ler as N páginas*, em uma tela própria) e exportáveis.
+- **4 temas**, cada um em variação clara e escura (Medieval, Cyberpunk, Pós-apocalíptico, Contemporâneo — 8 combinações, todas verificadas em um navegador headless), com fontes empacotadas localmente (nenhum CDN). O modo segue o sistema por padrão.
+- **Salvar em Markdown** (`.md`): as páginas saem separadas por `---`. Escolha entre a crônica completa, só o que está no Tome ou só as páginas já em volumes, com a opção de incluir mundo e sinopses; cada volume também pode ser salvo sozinho. Seus prompts nunca vão no arquivo.
 - **Seletor de modelos** alimentado pela própria API do Gemini (só modelos de geração de texto), com padrão global e escolha por sessão.
 - Interface em pt-BR, responsiva (funciona no celular) e acessível por teclado (botões de ícone com tooltip e `aria-label`).
 
@@ -110,7 +113,7 @@ Por que o `docker-compose.podman.yml` e esses parâmetros? Em modo rootless, o "
 2. Escolha o **modelo padrão** na lista (ela é consultada na API; *Atualizar* consulta de novo). O padrão inicial é `gemini-3.8-flash`.
 3. Em **Nova crônica**, dê um título, escolha o tema visual, o limite de tokens do contexto (padrão: 1.000.000) e, se quiser, descreva o mundo e os personagens.
 4. No Tome, descreva o que o seu personagem faz e envie com `Enviar` ou `Ctrl+Enter`. O Narrador responde em prosa, em tempo real.
-5. Use o painel **Contexto** (ícone à direita no cabeçalho) para editar mundo/personagens e ver os volumes compactados, **Salvar em Markdown** para exportar, e acompanhe o **HP** na barra inferior: perto de zero, o botão *Compactar Crônica* pulsa.
+5. Use o painel **Contexto** (ícone à direita no cabeçalho) para editar mundo/personagens e ler os volumes compactados, **Salvar em Markdown** para exportar, e acompanhe o **HP** na barra inferior: perto de zero, o botão *Compactar Crônica* pulsa.
 
 > [!WARNING]
 > A interface **não tem autenticação** e o banco guarda a chave da API. Por isso a porta é publicada somente em `127.0.0.1`. Para acessar de outra máquina, ponha um proxy reverso com autenticação (ou uma VPN) na frente — não troque o bind para `0.0.0.0` sozinho.
@@ -128,6 +131,7 @@ Por que o `docker-compose.podman.yml` e esses parâmetros? Em modo rootless, o "
 
 - **Backup:** todos os dados (SQLite + chave) estão na pasta `./data`. Pare o contêiner e copie a pasta (`cp -a data data.bak`).
 - **Recomeçar do zero:** pare o contêiner e apague `./data`.
+- **Atualizando de uma versão anterior:** o formato do banco mudou (blocos viraram páginas) e não há migração; pare o contêiner, apague `./data` e suba de novo. Antes, salve as crônicas que quiser guardar com *Salvar em Markdown*.
 - **Outra porta:** mude `127.0.0.1:3000:3000` no `docker-compose.yml` (ex.: `127.0.0.1:8080:3000`).
 
 ## Solução de problemas
@@ -152,8 +156,25 @@ As imagens abaixo são geradas por script (veja [Desenvolvimento local](#desenvo
 | **Biblioteca**: chave, modelo padrão, nova crônica e lista | **Cyberpunk (escuro)** com a barra de HP |
 | ![Painel de contexto no tema Contemporâneo claro](docs/screenshots/04-contexto-contemporaneo.png) | ![Menu de temas](docs/screenshots/05-tema-menu.png) |
 | **Contemporâneo (claro)** com o painel de Contexto aberto | **Menu de tema** (o de modo claro/escuro funciona igual) |
-| ![Tooltip de um botão de ícone](docs/screenshots/06-tooltip.png) | |
-| **Tooltips** em todos os botões de ícone | |
+| ![Tooltip de um botão de ícone](docs/screenshots/06-tooltip.png) | ![Gaveta com um volume, e o Tome continuando na página 4](docs/screenshots/paginas/volumes-gaveta.png) |
+| **Tooltips** em todos os botões de ícone | **Volumes**: a numeração das páginas continua (aqui, Página 4 e 5) e o volume pode ser lido ou salvo |
+
+**As páginas nos 8 temas** (4 temas × claro e escuro; gerado por `npm run check:paginas`):
+
+| | Claro | Escuro |
+| --- | --- | --- |
+| **Medieval** | ![Medieval claro](docs/screenshots/paginas/medieval-light.png) | ![Medieval escuro](docs/screenshots/paginas/medieval-dark.png) |
+| **Cyberpunk** | ![Cyberpunk claro](docs/screenshots/paginas/cyberpunk-light.png) | ![Cyberpunk escuro](docs/screenshots/paginas/cyberpunk-dark.png) |
+| **Pós-apocalíptico** | ![Pós-apocalíptico claro](docs/screenshots/paginas/pos-apocaliptico-light.png) | ![Pós-apocalíptico escuro](docs/screenshots/paginas/pos-apocaliptico-dark.png) |
+| **Contemporâneo** | ![Contemporâneo claro](docs/screenshots/paginas/contemporaneo-light.png) | ![Contemporâneo escuro](docs/screenshots/paginas/contemporaneo-dark.png) |
+
+**Leitor de volume** (páginas já consumidas pela crônica, somente leitura):
+
+<p>
+  <img src="docs/screenshots/paginas/volume-cyberpunk-dark.png" alt="Leitor de volume no tema Cyberpunk escuro" width="560">
+  &nbsp;
+  <img src="docs/screenshots/paginas/volume-medieval-light-celular.png" alt="Leitor de volume no celular, tema Medieval claro" width="170">
+</p>
 
 **No celular** (sem rolagem horizontal):
 
@@ -174,7 +195,7 @@ flowchart LR
 
 - **Backend:** Fastify + `better-sqlite3`; o Narrador responde em JSON estruturado (`narrative_text` + gatilho opcional de diálogo), e o texto é enviado ao navegador em tempo real por SSE.
 - **Frontend:** TypeScript puro + Tailwind (sem framework), empacotado com esbuild e servido pelo próprio Fastify (`@fastify/static`).
-- **Contexto do Narrador:** mundo e sinopses compactadas como instrução de sistema + o corpus de blocos ativos; só o texto gerado e as suas instruções entram, nunca metadados.
+- **Contexto do Narrador:** mundo e sinopses compactadas como instrução de sistema + o corpus de páginas ativas; só o texto gerado entra (os seus prompts passados e as páginas já consumidas por volumes ficam de fora), nunca metadados.
 - **Imagem de contêiner:** *build* multi-stage (Node 22 Alpine); o runtime leva apenas dependências de produção, sem toolchain.
 
 Detalhes, modelo de dados e API: [design document](chronicler_engine_design_document.md).
@@ -196,6 +217,7 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | `npm run build` | Compila o servidor (`dist/`) e o cliente (`public/assets/`) |
 | `npm start` | Executa o build de produção |
 | `npm run fonts` | Reempacota as fontes de `@fontsource/*` em `public/fonts/` |
+| `npm run check:paginas` | Verifica o cartão de página nos 8 temas (claro/escuro × desktop/celular) em um Chromium headless — ações visíveis, contraste, sem rolagem horizontal — e grava capturas em `docs/screenshots/paginas/` |
 | `npm run screenshots` | Regenera `docs/screenshots/` com um Chromium headless (Gemini simulado; use `CHROME_PATH=…` se não houver um navegador do Playwright) |
 
 ### Variáveis de ambiente

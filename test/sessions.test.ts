@@ -29,18 +29,18 @@ describe('sessões', () => {
     expect((await create({ title: 'x', token_limit: 5 })).statusCode).toBe(400);
   });
 
-  it('lista sessões e retorna detalhes com blocos ativos', async () => {
+  it('lista sessões e retorna detalhes com páginas ativas', async () => {
     const { session } = (await create()).json();
-    t.repos.blocks.append(session.id, { player_instruction: 'i', generated_text: 'a' });
-    t.repos.blocks.append(session.id, { player_instruction: 'i', generated_text: 'b' });
-    t.repos.blocks.archiveRange(session.id, 1, 1);
+    t.repos.pages.append(session.id, { player_instruction: 'i', generated_text: 'a' });
+    t.repos.pages.append(session.id, { player_instruction: 'i', generated_text: 'b' });
+    t.repos.pages.archiveRange(session.id, 1, 1);
 
     const list = await t.app.inject({ method: 'GET', url: '/api/sessions' });
     expect(list.json().sessions).toHaveLength(1);
 
     const detail = (await t.app.inject({ method: 'GET', url: `/api/sessions/${session.id}` })).json();
     expect(detail.session.id).toBe(session.id);
-    expect(detail.blocks.map((b: { generated_text: string }) => b.generated_text)).toEqual(['b']);
+    expect(detail.pages.map((b: { generated_text: string }) => b.generated_text)).toEqual(['b']);
     expect(detail.active_dialogue).toBeNull();
   });
 

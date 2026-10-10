@@ -2,7 +2,7 @@ import {
   api,
   ApiError,
   streamTurn,
-  type Block,
+  type Page,
   type Dialogue,
   type DialogueMessage,
   type SessionDetail,
@@ -10,10 +10,12 @@ import {
   type TokenInfo,
   type Session,
 } from '../api';
-import { downloadStoryMarkdown } from '../download';
-import { confirmModal, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
+import { downloadStoryMarkdown, type ExportScope } from '../download';
+import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
+import { icon } from '../icons';
 import { applyTheme } from '../theme';
 import { createModeControl, createThemeControl, iconButton } from '../controls';
+import { pageCard, pageHeader } from '../pageCard';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
 
@@ -28,7 +30,7 @@ interface DialogueState {
 
 interface Ghost {
   text: string;
-  /** Bloco sendo regenerado (o fantasma ocupa o seu lugar); undefined = novo bloco no fim. */
+  /** Página sendo regenerada (o fantasma ocupa o seu lugar); undefined = nova página no fim. */
   replaceId?: string;
 }
 
@@ -39,7 +41,7 @@ const HP_COLORS: Record<TokenInfo['state'], string> = {
 };
 
 /**
- * Tela da sessão: Tome Interativo (prosa contínua), Gaveta de Contexto e Doca de Ação
+ * Tela da sessão: Tome Interativo (uma folha por página), Gaveta de Contexto e Doca de Ação
  * (design §7.1). Retorna a função de limpeza chamada pelo roteador ao sair da tela.
  */
 export async function renderSession(root: HTMLElement, sessionId: string): Promise<() => void> {
@@ -78,7 +80,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   // --- Elementos fixos --------------------------------------------------------------------------
   const tomeScroll = h('div', { class: 'flex-1 overflow-y-auto', id: 'tome-scroll' });
-  const tomePage = h('article', { class: 'mx-auto max-w-3xl px-5 py-8 font-reading text-lg text-ink prose-tome-host' });
+  const tomePage = h('article', { class: 'mx-auto max-w-3xl space-y-6 px-3 py-6 font-reading text-lg text-ink sm:px-5 sm:py-8 prose-tome-host' });
   tomeScroll.appendChild(tomePage);
   const dock = h('footer', { class: 'border-t border-line bg-panel px-4 py-3' });
   const titleEl = h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, session().title);
@@ -110,6 +112,21 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   const exportBtn = iconButton({ icon: 'download', label: 'Salvar em Markdown', tip: 'Salvar a crônica como arquivo Markdown (.md)', align: 'end', onClick: () => openExport() });
 
   function openExport(): void {
+    const archived = detail.archives.reduce((n, x) => n + (x.covered_page_end_index - x.covered_page_start_index + 1), 0);
+    const active = detail.pages.length;
+    const scopes: { id: ExportScope; label: string; hint: string; disabled?: boolean }[] = [
+      { id: 'all', label: 'Crônica completa', hint: `${countPages(active + archived)} (Tome e volumes)` },
+      { id: 'active', label: 'Só o que está no Tome', hint: countPages(active) },
+      { id: 'archived', label: 'Só as páginas já em volumes', hint: archived > 0 ? countPages(archived) : 'nenhum volume ainda', disabled: archived === 0 },
+    ];
+    const radios = scopes.map((s) =>
+      h(
+        'label',
+        { class: `flex items-center text-sm ${s.disabled ? 'text-muted' : 'text-ink'}` },
+        h('input', { type: 'radio', name: 'export-scope', value: s.id, class: 'mr-2', checked: s.id === 'all', disabled: s.disabled }),
+        h('span', null, s.label, h('span', { class: 'ml-2 text-xs text-muted' }, s.hint)),
+      ),
+    );
     const withContext = h('input', { type: 'checkbox', id: 'export-context', class: 'mr-2' });
     const go = h('button', { class: 'btn btn-primary', type: 'button' }, 'Baixar arquivo .md');
     const modal = openModal(
@@ -117,7 +134,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       h(
         'div',
         { class: 'space-y-3' },
-        h('p', { class: 'text-sm text-muted' }, 'O arquivo contém o título e toda a prosa da crônica, inclusive os capítulos já compactados. Suas instruções (prompts) não são incluídas.'),
+        h('p', { class: 'text-sm text-muted' }, 'O arquivo contém o título e a prosa das páginas, separadas por “---”. As páginas já resumidas em volumes continuam disponíveis. Suas instruções (prompts) não são incluídas.'),
+        h('fieldset', { class: 'space-y-1' }, h('legend', { class: 'label' }, 'O que salvar'), ...radios),
         h('label', { class: 'flex items-center text-sm text-ink', for: 'export-context' }, withContext, 'Incluir o mundo, os personagens e as sinopses dos volumes'),
         h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'), go),
       ),
@@ -125,7 +143,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     go.addEventListener('click', async () => {
       go.disabled = true;
       try {
-        const name = await downloadStoryMarkdown(sessionId, withContext.checked);
+        const chosen = modal.body.querySelector<HTMLInputElement>('input[name="export-scope"]:checked');
+        const scope = (chosen?.value ?? 'all') as ExportScope;
+        const name = await downloadStoryMarkdown(sessionId, { includeContext: withContext.checked, scope });
         toast(`Arquivo “${name}” gerado.`, 'success');
         modal.close();
       } catch (err) {
@@ -162,7 +182,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   );
 
   // --- Dados ---------------------------------------------------------------------------------------
-  /** Recalcula o HP. Chamado apenas por eventos (abrir, bloco gerado/regenerado, edição, contexto, compactação). */
+  /** Recalcula o HP. Chamado apenas por eventos (abrir, página gerada/regenerada, edição, contexto, compactação). */
   async function refreshTokens(): Promise<void> {
     try {
       tokens = await api<TokenInfo>('GET', `/api/sessions/${sessionId}/token-count`);
@@ -203,50 +223,49 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   let ghostTextEl: HTMLElement | null = null;
 
+  /** Número da próxima página (absoluto): considera também as páginas já consumidas pelos volumes. */
+  function nextPageIndex(): number {
+    const active = detail.pages.reduce((m, x) => Math.max(m, x.order_index), 0);
+    const archived = detail.archives.reduce((m, x) => Math.max(m, x.covered_page_end_index), 0);
+    return Math.max(active, archived) + 1;
+  }
+
   function ghostArticle(): HTMLElement {
+    const replaced = ghost?.replaceId ? detail.pages.find((x) => x.id === ghost!.replaceId) : undefined;
     ghostTextEl = h('div', { class: 'cursor-blink whitespace-pre-wrap leading-8', 'aria-live': 'polite' }, ghost?.text ?? '');
-    return h('section', { class: 'mb-6' }, ghostTextEl);
+    return h('section', { class: 'page-card is-ghost', 'aria-label': 'Página sendo escrita' }, pageHeader(replaced?.order_index ?? nextPageIndex()), h('div', { class: 'page-card-body' }, ghostTextEl));
   }
 
-  function blockArticle(b: Block, dimmed: boolean): HTMLElement {
+  function pageArticle(b: Page, dimmed: boolean): HTMLElement {
     if (editingId === b.id) return editArticle(b);
-    const laterCount = detail.blocks.filter((x) => x.order_index > b.order_index).length;
-    const actionBtn = (label: string, onClick: () => void, title?: string) =>
-      h('button', { class: 'btn px-2 py-1 text-xs', type: 'button', disabled: busy || !!dlg, title, onClick }, label);
-
-    return h(
-      'section',
-      { class: `group relative mb-6 ${dimmed ? 'opacity-40' : ''}`, 'data-block-id': b.id },
-      h('div', { class: `prose-tome ${detail.blocks[0]?.id === b.id ? 'drop-cap' : ''}` }, ...paragraphs(b.generated_text).map((p) => h('p', null, p))),
-      h(
-        'div',
-        { class: 'mt-1 flex flex-wrap gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100' },
-        actionBtn('Editar Texto', () => {
-          editingId = b.id;
-          renderTome(false);
-        }),
-        actionBtn('Ver Prompt de Origem / Re-gerar', () => openRegenerate(b)),
-        actionBtn(
-          'Ramificar a partir daqui',
-          () => void branchFrom(b, laterCount),
-          laterCount === 0 ? 'Este já é o último bloco.' : undefined,
-        ),
-      ),
-    );
+    const laterCount = detail.pages.filter((x) => x.order_index > b.order_index).length;
+    return pageCard({
+      page: b,
+      dimmed,
+      dropCap: b.order_index === 1,
+      busy: busy || !!dlg,
+      laterCount,
+      onEditText: () => {
+        editingId = b.id;
+        renderTome(false);
+      },
+      onEditPrompt: () => openRegenerate(b),
+      onBranch: () => void branchFrom(b, laterCount),
+    });
   }
 
-  function editArticle(b: Block): HTMLElement {
-    const ta = h('textarea', { class: 'input min-h-[12rem] font-reading text-base leading-7', 'aria-label': 'Editar bloco', value: b.generated_text });
+  function editArticle(b: Page): HTMLElement {
+    const ta = h('textarea', { class: 'input min-h-[12rem] font-reading text-base leading-7', 'aria-label': 'Editar página', value: b.generated_text });
     const saveBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Salvar edição');
     saveBtn.addEventListener('click', async () => {
       if (ta.value.trim() === '') {
-        toast('O texto do bloco não pode ficar vazio.', 'error');
+        toast('O texto da página não pode ficar vazio.', 'error');
         return;
       }
       saveBtn.disabled = true;
       try {
-        const { block } = await api<{ block: Block }>('PUT', `/api/narrative/blocks/${b.id}`, { generated_text: ta.value });
-        detail = { ...detail, blocks: detail.blocks.map((x) => (x.id === block.id ? block : x)) };
+        const { page } = await api<{ page: Page }>('PUT', `/api/narrative/pages/${b.id}`, { generated_text: ta.value });
+        detail = { ...detail, pages: detail.pages.map((x) => (x.id === page.id ? page : x)) };
         editingId = null;
         renderTome(false);
         void refreshTokens(); // evento: edição
@@ -258,11 +277,12 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     queueMicrotask(() => ta.focus());
     return h(
       'section',
-      { class: 'mb-6 space-y-2', 'data-block-id': b.id },
-      ta,
+      { class: 'page-card is-editing', 'data-page-id': b.id, 'data-page-index': String(b.order_index) },
+      pageHeader(b.order_index),
+      h('div', { class: 'page-card-body' }, ta),
       h(
-        'div',
-        { class: 'flex gap-2' },
+        'footer',
+        { class: 'page-card-actions flex-wrap justify-start' },
         saveBtn,
         h(
           'button',
@@ -276,7 +296,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           },
           'Cancelar',
         ),
-        h('p', { class: 'self-center text-xs text-muted' }, 'A edição manual preserva os blocos seguintes.'),
+        h('p', { class: 'self-center text-xs text-muted' }, 'A edição manual preserva as páginas seguintes.'),
       ),
     );
   }
@@ -286,7 +306,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const d = dlg;
     return h(
       'section',
-      { class: 'card mb-6 border-accent font-sans text-base', 'aria-label': `Diálogo com ${d.dialogue.npc_name}` },
+      { class: 'card border-accent font-sans text-base', 'aria-label': `Diálogo com ${d.dialogue.npc_name}` },
       h('h3', { class: 'mb-3 font-display text-sm uppercase tracking-wider text-accent' }, `Diálogo — ${d.dialogue.npc_name}`),
       d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} para começar a conversa.`) : null,
       h(
@@ -308,10 +328,10 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   /** Reconstrói o Tome. `stick` força a rolagem ao fim (novo conteúdo). */
   function renderTome(stick: boolean): void {
     const follow = stick || nearBottom();
-    const target = ghost?.replaceId ? detail.blocks.find((b) => b.id === ghost!.replaceId) : undefined;
+    const target = ghost?.replaceId ? detail.pages.find((b) => b.id === ghost!.replaceId) : undefined;
     const items: (HTMLElement | null)[] = [];
 
-    if (detail.blocks.length === 0 && !ghost && !dlg) {
+    if (detail.pages.length === 0 && !ghost && !dlg) {
       items.push(
         h(
           'div',
@@ -321,9 +341,22 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         ),
       );
     }
-    for (const b of detail.blocks) {
+    if (detail.archives.length > 0) {
+      items.push(
+        h(
+          'nav',
+          { class: 'flex flex-wrap items-center gap-2 font-sans text-sm text-muted', 'aria-label': 'Páginas anteriores, resumidas em volumes' },
+          icon('book', 16),
+          h('span', null, 'Páginas já resumidas em volumes:'),
+          ...detail.archives.map((a) =>
+            h('a', { href: `#/s/${sessionId}/v/${a.volume_number}`, class: 'rounded border border-line px-2 py-0.5 text-ink hover:border-accent hover:text-accent' }, `Volume ${a.volume_number} · páginas ${a.covered_page_start_index} a ${a.covered_page_end_index}`),
+          ),
+        ),
+      );
+    }
+    for (const b of detail.pages) {
       if (ghost && ghost.replaceId === b.id) items.push(ghostArticle());
-      else items.push(blockArticle(b, !!target && b.order_index > target.order_index));
+      else items.push(pageArticle(b, !!target && b.order_index > target.order_index));
     }
     if (ghost && !ghost.replaceId) items.push(ghostArticle());
     items.push(dialogueCard());
@@ -430,7 +463,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   // --- Ações ----------------------------------------------------------------------------------------
-  /** Executa um turno narrativo (SSE). Retorna true se um bloco foi persistido. */
+  /** Executa um turno narrativo (SSE). Retorna true se uma página foi persistida. */
   async function runTurn(url: string, body: unknown, replaceId?: string): Promise<boolean> {
     if (busy) return false;
     controller = new AbortController();
@@ -439,7 +472,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     setBusy(true);
     renderTome(true);
 
-    let gotBlock = false;
+    let gotPage = false;
     let newDialogue = false;
     try {
       await streamTurn(
@@ -453,8 +486,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
             if (ghostTextEl) ghostTextEl.textContent = ghost.text;
             if (follow) scrollToEnd();
           },
-          onBlock: () => {
-            gotBlock = true;
+          onPage: () => {
+            gotPage = true;
           },
           onDialogueTrigger: () => {
             newDialogue = true;
@@ -467,11 +500,11 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       toast(err instanceof ApiError ? (err.code === 'missing_api_key' ? 'Configure a chave da API na tela inicial.' : err.message) : 'Falha inesperada.', 'error');
     }
     controller = null;
-    if (disposed) return gotBlock;
+    if (disposed) return gotPage;
 
     ghost = null;
     try {
-      if (gotBlock) {
+      if (gotPage) {
         await reloadDetail();
         if (newDialogue || dlg) await loadDialogue();
       }
@@ -479,10 +512,10 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       toast((err as Error).message, 'error');
     }
     busy = false;
-    renderTome(gotBlock);
+    renderTome(gotPage);
     renderDock();
-    if (gotBlock) void refreshTokens(); // evento: bloco gerado/regenerado
-    return gotBlock;
+    if (gotPage) void refreshTokens(); // evento: página gerada/regenerada
+    return gotPage;
   }
 
   async function submit(): Promise<void> {
@@ -499,27 +532,27 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     }
   }
 
-  function openRegenerate(b: Block): void {
-    const later = detail.blocks.filter((x) => x.order_index > b.order_index).length;
+  function openRegenerate(b: Page): void {
+    const later = detail.pages.filter((x) => x.order_index > b.order_index).length;
     const ta = h('textarea', {
       class: 'input min-h-[8rem]',
       'aria-label': 'Instrução do jogador',
       value: b.player_instruction ?? '',
       placeholder: 'Descreva o que deve acontecer neste trecho…',
     });
-    const go = h('button', { class: `btn btn-primary ${later > 0 ? 'btn-danger' : ''}`, type: 'button' }, later > 0 ? `Re-gerar e descartar ${later} bloco(s)` : 'Re-gerar');
+    const go = h('button', { class: `btn btn-primary ${later > 0 ? 'btn-danger' : ''}`, type: 'button' }, later > 0 ? `Re-gerar e descartar ${countPages(later)}` : 'Re-gerar');
     const modal = openModal(
       'Prompt de Origem',
       h(
         'div',
         { class: 'space-y-3' },
-        h('p', { class: 'text-sm text-muted' }, 'Esta é a instrução que originou o bloco. Edite-a (se quiser) e peça ao Narrador para reescrevê-lo.'),
+        h('p', { class: 'text-sm text-muted' }, 'Esta é a instrução que originou a página. Edite-a (se quiser) e peça ao Narrador para reescrevê-la.'),
         ta,
         later > 0
           ? h(
               'p',
               { class: 'rounded border border-hp-low p-2 text-sm text-hp-low' },
-              `Atenção: re-gerar este bloco descarta definitivamente os ${later} bloco(s) seguinte(s), pois a história posterior deixaria de fazer sentido. O texto atual só é substituído se a geração der certo.`,
+              `Atenção: re-gerar esta página descarta definitivamente ${later === 1 ? 'a página seguinte' : `as ${countPages(later)} seguintes`}, pois a história posterior deixaria de fazer sentido. O texto atual só é substituído se a geração der certo.`,
             )
           : null,
         h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'), go),
@@ -532,27 +565,27 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         return;
       }
       modal.close();
-      void runTurn(`/api/narrative/blocks/${b.id}/regenerate`, { player_instruction: instruction, confirm_truncate: later > 0 }, b.id);
+      void runTurn(`/api/narrative/pages/${b.id}/regenerate`, { player_instruction: instruction, confirm_truncate: later > 0 }, b.id);
     });
   }
 
-  async function branchFrom(b: Block, later: number): Promise<void> {
+  async function branchFrom(b: Page, later: number): Promise<void> {
     if (later === 0) {
-      toast('Este já é o último bloco; continue a história na Doca.', 'info');
+      toast('Esta já é a última página; continue a história na Doca.', 'info');
       return;
     }
     const ok = await confirmModal(
       'Ramificar a partir daqui',
-      `A história volta a este ponto e os ${later} bloco(s) seguinte(s) serão descartados definitivamente. Deseja continuar?`,
+      `A história volta a este ponto e ${later === 1 ? 'a página seguinte será descartada' : `as ${countPages(later)} seguintes serão descartadas`} definitivamente. Deseja continuar?`,
       { danger: true, confirmLabel: 'Descartar e ramificar' },
     );
     if (!ok) return;
     try {
-      await api('POST', `/api/narrative/blocks/${b.id}/branch`, { confirm_truncate: true });
+      await api('POST', `/api/narrative/pages/${b.id}/branch`, { confirm_truncate: true });
       await reloadDetail();
       renderTome(true);
       void refreshTokens();
-      toast('Ramificação criada. Continue a história a partir deste bloco.', 'success');
+      toast('Ramificação criada. Continue a história a partir desta página.', 'success');
     } catch (err) {
       toast((err as Error).message, 'error');
     }

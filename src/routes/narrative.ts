@@ -31,7 +31,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     }
   };
 
-  // --- Próximo bloco -------------------------------------------------------------------
+  // --- Próxima página -------------------------------------------------------------------
   app.post<{ Params: { id: string }; Body: { player_instruction: string } }>(
     '/api/sessions/:id/narrative/next',
     { schema: { params: idParams, body: instructionBody } },
@@ -45,19 +45,19 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
         session,
         request: buildNarratorRequest({
           session,
-          precedingBlocks: repos.blocks.listActive(session.id),
+          precedingPages: repos.pages.listActive(session.id),
           playerInstruction: instruction,
         }),
         persist: (result, model) =>
           repos.transaction(() => {
-            const block = repos.blocks.append(session.id, {
+            const page = repos.pages.append(session.id, {
               player_instruction: instruction,
               generated_text: result.narrative_text,
               model_identifier: model,
             });
             const dialogue = turns.maybeCreateDialogue(session.id, result);
             repos.sessions.touch(session.id);
-            return { block, discarded: 0, dialogue };
+            return { page, discarded: 0, dialogue };
           }),
       });
     },
@@ -65,7 +65,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
 
   // --- Edição direta (§6.1) --------------------------------------------------------------
   app.put<{ Params: { id: string }; Body: { generated_text: string } }>(
-    '/api/narrative/blocks/:id',
+    '/api/narrative/pages/:id',
     {
       schema: {
         params: idParams,
@@ -78,15 +78,15 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req) => {
-      const block = repos.blocks.get(req.params.id);
-      if (!block) throw new HttpError(404, 'Bloco não encontrado.');
-      if (block.is_archived) throw new HttpError(409, 'Blocos arquivados não podem ser editados.');
-      if (turns.isBusy(block.session_id)) {
+      const page = repos.pages.get(req.params.id);
+      if (!page) throw new HttpError(404, 'Página não encontrada.');
+      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser editadas.');
+      if (turns.isBusy(page.session_id)) {
         throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
       }
-      const updated = repos.blocks.updateText(block.id, req.body.generated_text);
-      repos.sessions.touch(block.session_id);
-      return { block: updated };
+      const updated = repos.pages.updateText(page.id, req.body.generated_text);
+      repos.sessions.touch(page.session_id);
+      return { page: updated };
     },
   );
 
@@ -95,7 +95,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     Params: { id: string };
     Body: { player_instruction: string; confirm_truncate?: boolean };
   }>(
-    '/api/narrative/blocks/:id/regenerate',
+    '/api/narrative/pages/:id/regenerate',
     {
       schema: {
         params: idParams,
@@ -111,20 +111,20 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req, reply) => {
-      const block = repos.blocks.get(req.params.id);
-      if (!block) throw new HttpError(404, 'Bloco não encontrado.');
-      if (block.is_archived) throw new HttpError(409, 'Blocos arquivados não podem ser regenerados.');
-      const session = requireSession(block.session_id);
+      const page = repos.pages.get(req.params.id);
+      if (!page) throw new HttpError(404, 'Página não encontrada.');
+      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser regeneradas.');
+      const session = requireSession(page.session_id);
       assertNoActiveDialogue(session.id);
 
-      const active = repos.blocks.listActive(session.id);
-      const following = active.filter((b) => b.order_index > block.order_index);
+      const active = repos.pages.listActive(session.id);
+      const following = active.filter((b) => b.order_index > page.order_index);
       if (following.length > 0 && req.body.confirm_truncate !== true) {
         // Regra de ramificação (§6.2): a API só descarta o futuro com confirmação explícita.
         return reply.code(409).send({
-          error: `Alterar este bloco descartará ${following.length} bloco(s) posterior(es). Confirme para continuar.`,
+          error: `Alterar esta página descartará ${following.length} ${following.length === 1 ? 'página posterior' : 'páginas posteriores'}. Confirme para continuar.`,
           code: 'truncation_required',
-          blocks_to_discard: following.length,
+          pages_to_discard: following.length,
         });
       }
       turns.claim(session.id);
@@ -132,34 +132,34 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
 
       await turns.run(req, reply, {
         session,
-        // O corpus de regeneração contém apenas os blocos ativos ANTERIORES a K.
+        // O corpus de regeneração contém apenas as páginas ativas ANTERIORES a K.
         request: buildNarratorRequest({
           session,
-          precedingBlocks: active.filter((b) => b.order_index < block.order_index),
+          precedingPages: active.filter((b) => b.order_index < page.order_index),
           playerInstruction: instruction,
         }),
         // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem
         // numa única transação, então uma falha de geração nunca apaga dados (§11.5).
         persist: (result, model) =>
           repos.transaction(() => {
-            const discarded = repos.blocks.deleteAfter(session.id, block.order_index);
-            const updated = repos.blocks.replaceGeneration(block.id, {
+            const discarded = repos.pages.deleteAfter(session.id, page.order_index);
+            const updated = repos.pages.replaceGeneration(page.id, {
               player_instruction: instruction,
               generated_text: result.narrative_text,
               model_identifier: model,
             })!;
             const dialogue = turns.maybeCreateDialogue(session.id, result);
             repos.sessions.touch(session.id);
-            return { block: updated, discarded, dialogue };
+            return { page: updated, discarded, dialogue };
           }),
       });
     },
   );
 
   // --- Ramificar a partir daqui (§7.1) -------------------------------------------------------
-  // Mantém o bloco K como ponto final da história, descartando K+1…N, sem chamar a IA.
+  // Mantém a página K como ponto final da história, descartando K+1…N, sem chamar a IA.
   app.post<{ Params: { id: string }; Body: { confirm_truncate?: boolean } }>(
-    '/api/narrative/blocks/:id/branch',
+    '/api/narrative/pages/:id/branch',
     {
       schema: {
         params: idParams,
@@ -171,29 +171,29 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req, reply) => {
-      const block = repos.blocks.get(req.params.id);
-      if (!block) throw new HttpError(404, 'Bloco não encontrado.');
-      if (block.is_archived) throw new HttpError(409, 'Blocos arquivados não podem ser ponto de ramificação.');
-      const session = requireSession(block.session_id);
+      const page = repos.pages.get(req.params.id);
+      if (!page) throw new HttpError(404, 'Página não encontrada.');
+      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser ponto de ramificação.');
+      const session = requireSession(page.session_id);
       assertNoActiveDialogue(session.id);
       if (turns.isBusy(session.id)) {
         throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
       }
 
-      const following = repos.blocks.listActive(session.id).filter((b) => b.order_index > block.order_index);
+      const following = repos.pages.listActive(session.id).filter((b) => b.order_index > page.order_index);
       if (following.length > 0 && req.body?.confirm_truncate !== true) {
         return reply.code(409).send({
-          error: `Ramificar a partir daqui descartará ${following.length} bloco(s) posterior(es). Confirme para continuar.`,
+          error: `Ramificar a partir daqui descartará ${following.length} ${following.length === 1 ? 'página posterior' : 'páginas posteriores'}. Confirme para continuar.`,
           code: 'truncation_required',
-          blocks_to_discard: following.length,
+          pages_to_discard: following.length,
         });
       }
       const discarded = repos.transaction(() => {
-        const n = repos.blocks.deleteAfter(session.id, block.order_index);
+        const n = repos.pages.deleteAfter(session.id, page.order_index);
         repos.sessions.touch(session.id);
         return n;
       });
-      return { discarded, last_block_id: block.id };
+      return { discarded, last_page_id: page.id };
     },
   );
 }

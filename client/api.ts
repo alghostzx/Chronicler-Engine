@@ -24,7 +24,7 @@ export interface Session {
   updated_at: string;
 }
 
-export interface Block {
+export interface Page {
   id: string;
   session_id: string;
   order_index: number;
@@ -41,8 +41,8 @@ export interface Archive {
   session_id: string;
   volume_number: number;
   summary_text: string;
-  covered_block_start_index: number;
-  covered_block_end_index: number;
+  covered_page_start_index: number;
+  covered_page_end_index: number;
   created_at: string;
 }
 
@@ -95,17 +95,17 @@ export interface TokenInfo {
 
 export interface SessionDetail {
   session: Session;
-  blocks: Block[];
+  pages: Page[];
   archives: Archive[];
   active_dialogue: Dialogue | null;
 }
 
 export interface CompactionPreview {
   summary_text: string;
-  covered_block_start_index: number;
-  covered_block_end_index: number;
-  blocks_to_archive: number;
-  blocks_to_keep: number;
+  covered_page_start_index: number;
+  covered_page_end_index: number;
+  pages_to_archive: number;
+  pages_to_keep: number;
   next_volume_number: number;
   model: string;
 }
@@ -157,7 +157,7 @@ export async function api<T>(method: string, url: string, body?: unknown): Promi
 export interface TurnHandlers {
   onStart?(model: string): void;
   onChunk?(text: string): void;
-  onBlock?(block: Block, discarded: number): void;
+  onPage?(page: Page, discarded: number): void;
   onDialogueTrigger?(dialogue: { dialogue_id: string; npc_name: string }): void;
   onError?(message: string): void;
 }
@@ -202,8 +202,8 @@ export async function streamTurn(
       case 'chunk':
         handlers.onChunk?.(String(d.text ?? ''));
         break;
-      case 'block':
-        handlers.onBlock?.(d.block as Block, Number(d.discarded ?? 0));
+      case 'page':
+        handlers.onPage?.(d.page as Page, Number(d.discarded ?? 0));
         break;
       case 'dialogue_trigger':
         handlers.onDialogueTrigger?.({ dialogue_id: String(d.dialogue_id), npc_name: String(d.npc_name) });

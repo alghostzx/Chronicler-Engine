@@ -17,11 +17,13 @@ export function filenameFromDisposition(header: string | null, fallback: string)
   return fallback;
 }
 
-/** Baixa a história da sessão como .md (via fetch + blob, para tratar erros normalmente). */
-export async function downloadStoryMarkdown(sessionId: string, includeContext: boolean): Promise<string> {
+export type ExportScope = 'all' | 'active' | 'archived';
+
+/** Baixa um endpoint de exportação como .md (via fetch + blob, para tratar erros normalmente). */
+export async function downloadMarkdown(url: string, fallbackName = 'cronica.md'): Promise<string> {
   let res: Response;
   try {
-    res = await fetch(`/api/sessions/${sessionId}/export${includeContext ? '?include_context=true' : ''}`);
+    res = await fetch(url);
   } catch {
     throw new ApiError('Não foi possível contatar o servidor.', 0);
   }
@@ -35,15 +37,27 @@ export async function downloadStoryMarkdown(sessionId: string, includeContext: b
     }
     throw new ApiError(message, res.status);
   }
-  const name = filenameFromDisposition(res.headers.get('Content-Disposition'), 'cronica.md');
+  const name = filenameFromDisposition(res.headers.get('Content-Disposition'), fallbackName);
   const blob = new Blob([await res.text()], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
+  const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
+  a.href = href;
   a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
   return name;
+}
+
+/** Baixa a história da sessão (escopo: crônica completa, só o Tome ou só as páginas já em volumes). */
+export function downloadStoryMarkdown(sessionId: string, opts: { includeContext: boolean; scope: ExportScope }): Promise<string> {
+  const params = new URLSearchParams({ scope: opts.scope });
+  if (opts.includeContext) params.set('include_context', 'true');
+  return downloadMarkdown(`/api/sessions/${sessionId}/export?${params}`);
+}
+
+/** Baixa um volume (sinopse opcional + as páginas que ele consumiu). */
+export function downloadVolumeMarkdown(archiveId: string, includeSummary: boolean): Promise<string> {
+  return downloadMarkdown(`/api/archives/${archiveId}/export?include_summary=${includeSummary}`, 'volume.md');
 }

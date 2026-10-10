@@ -42,7 +42,7 @@ describe('GET /api/sessions/:id/token-count', () => {
   const get = (id = sessionId) => t.app.inject({ method: 'GET', url: `/api/sessions/${id}/token-count` });
 
   it('usa countTokens real sobre o payload e devolve o HP', async () => {
-    t.repos.blocks.append(sessionId, { player_instruction: 'INSTR-META', generated_text: 'Prosa do bloco um.' });
+    t.repos.pages.append(sessionId, { player_instruction: 'INSTR-META', generated_text: 'Prosa da página um.' });
     const res = await get();
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
@@ -58,14 +58,14 @@ describe('GET /api/sessions/:id/token-count', () => {
     expect(measured.model).toBe('gemini-2.5-flash');
     expect(measured.systemInstruction).toBe('REGRAS');
     expect(measured.userText).toContain('MUNDO');
-    expect(measured.userText).toContain('Prosa do bloco um.');
+    expect(measured.userText).toContain('Prosa da página um.');
     expect(measured.userText).not.toContain('INSTR-META');
   });
 
-  it('não conta blocos arquivados', async () => {
-    t.repos.blocks.append(sessionId, { player_instruction: null, generated_text: 'ANTIGO-ARQUIVADO' });
-    t.repos.blocks.append(sessionId, { player_instruction: null, generated_text: 'RECENTE' });
-    t.repos.blocks.archiveRange(sessionId, 1, 1);
+  it('não conta páginas arquivadas', async () => {
+    t.repos.pages.append(sessionId, { player_instruction: null, generated_text: 'ANTIGO-ARQUIVADO' });
+    t.repos.pages.append(sessionId, { player_instruction: null, generated_text: 'RECENTE' });
+    t.repos.pages.archiveRange(sessionId, 1, 1);
     await get();
     const measured = t.gateway.countRequests[0]!;
     expect(measured.userText).toContain('RECENTE');
@@ -81,12 +81,12 @@ describe('GET /api/sessions/:id/token-count', () => {
     await get();
     await get();
     expect(t.gateway.countRequests).toHaveLength(1);
-    t.repos.blocks.append(sessionId, { player_instruction: null, generated_text: 'novo bloco' });
+    t.repos.pages.append(sessionId, { player_instruction: null, generated_text: 'nova página' });
     await get();
     expect(t.gateway.countRequests).toHaveLength(2);
     // editar o texto também muda o payload
-    const last = t.repos.blocks.last(sessionId)!;
-    t.repos.blocks.updateText(last.id, 'bloco editado');
+    const last = t.repos.pages.last(sessionId)!;
+    t.repos.pages.updateText(last.id, 'página editada');
     await get();
     expect(t.gateway.countRequests).toHaveLength(3);
   });

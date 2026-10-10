@@ -22,7 +22,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
     "fonts": "node scripts/copy-fonts.mjs",
-    "screenshots": "tsx scripts/screenshots.ts"
+    "screenshots": "tsx scripts/screenshots.ts",
+    "check:paginas": "tsx scripts/check-pages.ts"
   },
   "license": "MIT",
   "dependencies": {

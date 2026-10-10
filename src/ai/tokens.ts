@@ -30,7 +30,7 @@ const MAX_CACHE_ENTRIES = 64;
 /**
  * Contagem real de tokens via `countTokens`, com cache em memória por conteúdo.
  *
- * O HP é recalculado por eventos (abertura de sessão, bloco gerado/regenerado, edição,
+ * O HP é recalculado por eventos (abertura de sessão, página gerada/regenerada, edição,
  * commit de crônica — §11.7). O cache evita chamadas repetidas à API quando o payload
  * não mudou (ex.: reabrir a mesma sessão), sem nunca devolver um valor desatualizado:
  * a chave é o hash do próprio conteúdo.

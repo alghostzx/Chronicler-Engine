@@ -20,7 +20,7 @@ export function registerTokenRoutes(app: FastifyInstance, ctx: AppContext): void
       const model = await ctx.models.resolve(session);
       const payload = buildNarratorRequest({
         session,
-        precedingBlocks: repos.blocks.listActive(session.id),
+        precedingPages: repos.pages.listActive(session.id),
         playerInstruction: '',
       });
 

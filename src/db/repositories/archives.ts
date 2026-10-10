@@ -8,7 +8,7 @@ export class ArchivesRepository {
   /** Cria o próximo volume da crônica (numeração incremental por sessão). */
   create(
     sessionId: string,
-    input: { summary_text: string; covered_block_start_index: number; covered_block_end_index: number },
+    input: { summary_text: string; covered_page_start_index: number; covered_page_end_index: number },
   ): ChronicleArchive {
     const id = randomUUID();
     const row = this.db
@@ -17,7 +17,7 @@ export class ArchivesRepository {
     this.db
       .prepare(
         `INSERT INTO chronicle_archives
-           (id, session_id, volume_number, summary_text, covered_block_start_index, covered_block_end_index)
+           (id, session_id, volume_number, summary_text, covered_page_start_index, covered_page_end_index)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
@@ -25,10 +25,14 @@ export class ArchivesRepository {
         sessionId,
         row.max + 1,
         input.summary_text,
-        input.covered_block_start_index,
-        input.covered_block_end_index,
+        input.covered_page_start_index,
+        input.covered_page_end_index,
       );
     return this.db.prepare('SELECT * FROM chronicle_archives WHERE id = ?').get(id) as ChronicleArchive;
+  }
+
+  get(id: string): ChronicleArchive | undefined {
+    return this.db.prepare('SELECT * FROM chronicle_archives WHERE id = ?').get(id) as ChronicleArchive | undefined;
   }
 
   list(sessionId: string): ChronicleArchive[] {

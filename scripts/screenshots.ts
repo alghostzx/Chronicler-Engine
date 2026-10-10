@@ -5,31 +5,17 @@
 // Requer um navegador do Playwright (`npx playwright-core install chromium-headless-shell`) ou
 // `CHROME_PATH=/caminho/do/chrome`.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { loadConfig } from '../src/config.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
+import { findChrome } from './chrome.js';
 import { FAKE_KEY, SAMPLE_MODELS, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
 
 const OUT = 'docs/screenshots';
 fs.mkdirSync(OUT, { recursive: true });
-
-function findChrome(): string | undefined {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  const root = path.join(os.homedir(), '.cache', 'ms-playwright');
-  if (!fs.existsSync(root)) return undefined;
-  for (const dir of fs.readdirSync(root).sort().reverse()) {
-    if (!dir.startsWith('chromium')) continue;
-    for (const sub of ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/chrome', 'chrome-linux64/chrome']) {
-      const p = path.join(root, dir, sub);
-      if (fs.existsSync(p)) return p;
-    }
-  }
-  return undefined;
-}
 
 // --- Dados de exemplo --------------------------------------------------------------------------
 const gateway = mockGateway({
@@ -56,7 +42,7 @@ async function turn(id: string, instruction: string, text: string, trigger?: { n
     narratorJson(text, trigger ? { activate: true, npc_name: trigger.npc, dynamic_system_prompt: trigger.prompt } : { activate: false }),
   );
   const r = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: instruction } });
-  if (!r.body.includes('event: block')) throw new Error(`Turno falhou: ${r.body.slice(0, 300)}`);
+  if (!r.body.includes('event: page')) throw new Error(`Turno falhou: ${r.body.slice(0, 300)}`);
 }
 
 const medieval = await createSession(
@@ -150,12 +136,12 @@ async function shoot(
 }
 
 await shoot('01-biblioteca.png', { hash: '#/', mode: 'dark', ready: 'input[aria-label="Título da crônica"]' });
-await shoot('02-tome-medieval.png', { hash: `#/s/${medieval}`, mode: 'dark', ready: 'section[data-block-id]' });
-await shoot('03-tome-cyberpunk.png', { hash: `#/s/${cyber}`, mode: 'dark', ready: 'section[data-block-id]' });
+await shoot('02-tome-medieval.png', { hash: `#/s/${medieval}`, mode: 'dark', ready: 'section[data-page-id]' });
+await shoot('03-tome-cyberpunk.png', { hash: `#/s/${cyber}`, mode: 'dark', ready: 'section[data-page-id]' });
 await shoot('04-contexto-contemporaneo.png', {
   hash: `#/s/${modern}`,
   mode: 'light',
-  ready: 'section[data-block-id]',
+  ready: 'section[data-page-id]',
   act: async (p) => {
     await p.click('[aria-label="Contexto da sessão"]');
     await p.mouse.move(600, 400); // tira o mouse de cima do botão (sem tooltip na captura)
@@ -165,7 +151,7 @@ await shoot('04-contexto-contemporaneo.png', {
 await shoot('05-tema-menu.png', {
   hash: `#/s/${modern}`,
   mode: 'light',
-  ready: 'section[data-block-id]',
+  ready: 'section[data-page-id]',
   act: async (p) => {
     await p.click('[aria-label="Tema visual"]');
     await p.waitForTimeout(200);
@@ -174,14 +160,14 @@ await shoot('05-tema-menu.png', {
 await shoot('06-tooltip.png', {
   hash: `#/s/${cyber}`,
   mode: 'dark',
-  ready: 'section[data-block-id]',
+  ready: 'section[data-page-id]',
   act: async (p) => {
     await p.hover('[aria-label="Salvar em Markdown"]');
     await p.waitForTimeout(600);
   },
 });
 await shoot('07-celular-biblioteca.png', { hash: '#/', mode: 'dark', mobile: true, ready: 'input[aria-label="Título da crônica"]', fullPage: true });
-await shoot('08-celular-tome.png', { hash: `#/s/${medieval}`, mode: 'light', mobile: true, ready: 'section[data-block-id]' });
+await shoot('08-celular-tome.png', { hash: `#/s/${medieval}`, mode: 'light', mobile: true, ready: 'section[data-page-id]' });
 
 await browser.close();
 await app.close();

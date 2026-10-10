@@ -1,7 +1,7 @@
 import type { NarratorRequestParts } from './contextBuilder.js';
 import { buildCorpus, buildStoryPrefix } from './contextBuilder.js';
 import type { ChatTurn, GenerateRequest } from './gateway.js';
-import type { DialogueMessage, DialogueSession, NarrativeBlock, Session } from '../db/types.js';
+import type { DialogueMessage, DialogueSession, Page, Session } from '../db/types.js';
 
 /** Esquema de resposta do NPC: a fala e o sinal de fim de conversa (§3.1, passo 4). */
 export const NPC_RESPONSE_SCHEMA = {
@@ -91,11 +91,11 @@ export function formatTranscript(npcName: string, messages: Pick<DialogueMessage
  */
 export function buildBridgeRequest(input: {
   session: Pick<Session, 'system_rules' | 'world_context'>;
-  precedingBlocks: Pick<NarrativeBlock, 'generated_text' | 'order_index'>[];
+  precedingPages: Pick<Page, 'generated_text' | 'order_index'>[];
   npcName: string;
   messages: Pick<DialogueMessage, 'sender' | 'content'>[];
 }): NarratorRequestParts {
-  const prefix = buildStoryPrefix(input.session, buildCorpus(input.precedingBlocks));
+  const prefix = buildStoryPrefix(input.session, buildCorpus(input.precedingPages));
   const transcript = formatTranscript(input.npcName, input.messages);
   return {
     systemInstruction: input.session.system_rules,
@@ -103,13 +103,13 @@ export function buildBridgeRequest(input: {
       `${prefix}\n\n# DIÁLOGO CONCLUÍDO\n` +
       `A cena de diálogo entre o protagonista e ${input.npcName} se encerrou. ` +
       `A transcrição literal da conversa segue abaixo:\n\n${transcript}\n\n` +
-      `Escreva agora o bloco narrativo subsequente em prosa, incorporando os acontecimentos, ` +
+      `Escreva agora a página narrativa subsequente em prosa, incorporando os acontecimentos, ` +
       `a linguagem corporal dos interlocutores, o ambiente ao redor e a resolução dramática da conversa.`,
   };
 }
 
 /**
- * Texto guardado em `player_instruction` do bloco de costura: a "origem" do bloco é a
+ * Texto guardado em `player_instruction` da página de costura: a "origem" da página é a
  * própria conversa (útil para auditoria e para regenerar a cena).
  */
 export function bridgeInstruction(npcName: string, messages: Pick<DialogueMessage, 'sender' | 'content'>[]): string {

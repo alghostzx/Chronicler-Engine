@@ -1,6 +1,9 @@
 import { api, type Archive, type ModelsInfo, type Session, type SettingsInfo } from '../api';
+import { iconButton } from '../controls';
+import { icon } from '../icons';
 import { formatNumber, h, mount, paragraphs, toast } from '../dom';
 import { modelOptions } from './home';
+import { openVolumeExport } from './volumeExport';
 
 export interface DrawerHooks {
   getSession(): Session;
@@ -8,6 +11,8 @@ export interface DrawerHooks {
   /** Sessão atualizada pelo servidor (após salvar). */
   onSessionSaved(session: Session): void;
 }
+
+const readLabel = (n: number): string => (n === 1 ? 'Ler a página' : `Ler as ${formatNumber(n)} páginas`);
 
 type Tab = 'mundo' | 'regras' | 'modelo' | 'cronica';
 
@@ -188,8 +193,14 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
           h(
             'details',
             { class: 'rounded border border-line bg-main p-3', open: archives.length === 1 },
-            h('summary', { class: 'cursor-pointer font-display text-strong' }, `Volume ${a.volume_number} — blocos ${a.covered_block_start_index} a ${a.covered_block_end_index}`),
+            h('summary', { class: 'cursor-pointer font-display text-strong' }, `Volume ${a.volume_number} — páginas ${a.covered_page_start_index} a ${a.covered_page_end_index}`),
             h('div', { class: 'mt-3 space-y-2 text-sm leading-6' }, ...paragraphs(a.summary_text).map((p) => h('p', null, p))),
+            h(
+              'div',
+              { class: 'mt-3 flex items-center gap-2' },
+              h('a', { class: 'btn', href: `#/s/${a.session_id}/v/${a.volume_number}` }, icon('book', 16), readLabel(a.covered_page_end_index - a.covered_page_start_index + 1)),
+              iconButton({ icon: 'download', label: `Salvar Volume ${a.volume_number} em Markdown`, tip: 'Salvar este volume como arquivo Markdown (.md)', align: 'start', up: true, onClick: () => openVolumeExport(a) }),
+            ),
           ),
         ),
       ),

@@ -14,7 +14,7 @@ O **Chronicler Engine** é uma plataforma web de escrita e RPG narrativo colabor
 
 ### 1.2 Princípios Fundamentais
 1. **Soberania do Autor:** A IA é uma ferramenta de prosa; ela não toma decisões executivas sobre o destino dos personagens a menos que explicitamente instruída a fazê-lo.
-2. **Contexto sem Ruído (Clean Corpus):** As meta-instruções do jogador (*"deixe mais sombrio"*, *"descreva o quarto"*) são usadas exclusivamente para gerar o bloco da vez e **nunca** são reinjetadas no histórico global, preservando a pureza literária da história.
+2. **Contexto sem Ruído (Clean Corpus):** As meta-instruções do jogador (*"deixe mais sombrio"*, *"descreva o quarto"*) são usadas exclusivamente para gerar a página da vez e **nunca** são reinjetadas no histórico global, preservando a pureza literária da história.
 3. **Curadoria e Plasticidade:** Todo o texto gerado, o contexto base e as regras de narração são editáveis na unha ou via novas instruções. Editar um ponto do passado descarta o futuro subsequente para criar uma nova linha temporal contínua.
 4. **Visibilidade de Recursos (HP do Narrador):** O consumo da janela de contexto é exposto como um elemento gamificado (Barra de Vida/Mana do Narrador), com um fluxo nativo de compactação editorial assistida.
 5. **Autonomia Local:** Operação em servidor próprio via Docker, sem telas de login/senhas, com persistência direta em banco local SQLite montado em volume.
@@ -33,7 +33,7 @@ A cada turno em que o Narrador é invocado, o payload enviado à API do Gemini d
 │ 2. WORLD CONTEXT (Cenário, Personagens, Sinopse Base)       │
 ├─────────────────────────────────────────────────────────────┤
 │ 3. CORPUS NARRATIVO CONSOLIDADO                             │
-│    (Concatenação em ordem cronológica de todos os blocos    │
+│    (Concatenação em ordem cronológica de todas as páginas    │
 │     ativos como um texto contínuo de prosa)                 │
 ├─────────────────────────────────────────────────────────────┤
 │ 4. INPUT DO JOGADOR (Ação / Esboço da Próxima Cena)         │
@@ -41,8 +41,8 @@ A cada turno em que o Narrador é invocado, o payload enviado à API do Gemini d
 ```
 
 ### 2.2 Isolamento de Meta-Instruções Passadas
-* Cada bloco narrativo no banco de dados armazena o `player_instruction` que lhe deu origem para fins de auditoria e re-geração.
-* Contudo, ao solicitar a geração do Bloco $N+1$, **apenas o `generated_text` dos blocos $1 \dots N$ é enviado no item 3**. Os prompts anteriores do jogador são omitidos da chamada.
+* Cada página narrativa no banco de dados armazena o `player_instruction` que lhe deu origem para fins de auditoria e re-geração.
+* Contudo, ao solicitar a geração da Página $N+1$, **apenas o `generated_text` das páginas $1 \dots N$ é enviado no item 3**. Os prompts anteriores do jogador são omitidos da chamada.
 
 ### 2.3 System Prompt do Narrador (Base Canônica)
 ```markdown
@@ -123,9 +123,9 @@ Produzido pelo próprio Narrador durante a ativação, contendo:
 Quando a conversa termina, o backend submete ao Gemini (com a persona do Narrador):
 > *"A cena de diálogo entre o protagonista e [Nome do NPC] se encerrou. A transcrição literal da conversa segue abaixo:*  
 > *[Mensagens trocadas]*  
-> *Escreva agora o bloco narrativo subsequente em prosa, incorporando os acontecimentos, a linguagem corporal dos interlocutores, o ambiente ao redor e a resolução dramática da conversa."*
+> *Escreva agora a página narrativa subsequente em prosa, incorporando os acontecimentos, a linguagem corporal dos interlocutores, o ambiente ao redor e a resolução dramática da conversa."*
 
-O texto gerado torna-se o próximo `NarrativeBlock` padrão, e a sub-sessão é encerrada.
+O texto gerado torna-se a próxima `Page` padrão, e a sub-sessão é encerrada.
 
 ---
 
@@ -144,15 +144,15 @@ $$\text{HP Restante (\%)} = 100 \times \left(1 - \frac{\text{Tokens Usados}}{\te
 
 ### 4.3 Fluxo de Compactação ("O Livro de Crônicas")
 Quando o jogador aciona a compactação:
-1. **Cisão de Blocos:** O sistema separa os blocos narrativos da sessão em:
+1. **Cisão de Páginas:** O sistema separa as páginas narrativas da sessão em:
    * **Corpus Passado (75% mais antigos):** Candidatos a virarem crônica histórica.
    * **Corpus Ativo (25% mais recentes):** Mantidos intactos em prosa literal detalhada.
 2. **Geração de Sinopse Editorial:** O Gemini recebe o Corpus Passado com uma instrução de sumarização factual densa (eventos decisivos, alianças, itens ganhos/perdidos, mortes, mudanças de cenário).
 3. **Revisão Humana Obrigatória:** Um modal exibe a sinopse gerada. O usuário pode editar o texto diretamente na unha, garantindo que nenhum detalhe vital seja perdido ou alucinado.
 4. **Consolidação:**
    * A sinopse validada é salva na tabela `chronicle_archives` e anexada ao campo `world_context` como "Crônica do Volume Anterior".
-   * Os blocos do Corpus Passado são marcados como `archived = true` (não são mais injetados nas chamadas de geração subsequentes).
-   * O HP do Narrador recupera o espaço ocupado por esses blocos antigos.
+   * As páginas do Corpus Passado são marcadas como `archived = true` (não são mais injetadas nas chamadas de geração subsequentes).
+   * O HP do Narrador recupera o espaço ocupado por essas páginas antigas.
 
 ---
 
@@ -180,8 +180,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Blocos Narrativos
-CREATE TABLE IF NOT EXISTS narrative_blocks (
+-- Páginas Narrativas
+CREATE TABLE IF NOT EXISTS narrative_pages (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     order_index INTEGER NOT NULL,
@@ -200,8 +200,8 @@ CREATE TABLE IF NOT EXISTS chronicle_archives (
     session_id TEXT NOT NULL,
     volume_number INTEGER NOT NULL,
     summary_text TEXT NOT NULL,
-    covered_block_start_index INTEGER NOT NULL,
-    covered_block_end_index INTEGER NOT NULL,
+    covered_page_start_index INTEGER NOT NULL,
+    covered_page_end_index INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS dialogue_messages (
     FOREIGN KEY (dialogue_session_id) REFERENCES dialogue_sessions(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_narrative_order ON narrative_blocks(session_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_pages_order ON narrative_pages(session_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_dialogue_msgs ON dialogue_messages(dialogue_session_id, created_at);
 ```
 
@@ -236,21 +236,21 @@ CREATE INDEX IF NOT EXISTS idx_dialogue_msgs ON dialogue_messages(dialogue_sessi
 ## 6. Regras de Edição, Truncamento e Re-geração
 
 ### 6.1 Edição Direta ("Na Unha")
-* O usuário pode clicar sobre qualquer bloco de narrativa e editar diretamente o `generated_text`.
+* O usuário pode clicar sobre qualquer página de narrativa e editar diretamente o `generated_text`.
 * O salvamento atualiza o registro no banco de dados imediatamente.
-* Não há impacto destrutivo nos blocos subsequentes se a edição for apenas textual e mantiver a linha temporal coerente.
+* Não há impacto destrutivo nas páginas subsequentes se a edição for apenas textual e mantiver a linha temporal coerente.
 
 ### 6.2 Edição do Prompt & Re-geração com Truncamento
-* Se o usuário desejar alterar a `player_instruction` de um bloco $K$ e re-gerá-lo via IA:
-  1. Se $K$ for o **último bloco**, o texto gerado anterior é substituído pelo novo retorno da API.
-  2. Se $K$ for um **bloco intermediário** ($K < \text{total}$):
-     * A interface exibe aviso de ramificação: *"Alterar este bloco descartará todos os blocos posteriores ($K+1 \dots N$). Deseja continuar?"*
+* Se o usuário desejar alterar a `player_instruction` de uma página $K$ e re-gerá-la via IA:
+  1. Se $K$ for a **última página**, o texto gerado anterior é substituído pelo novo retorno da API.
+  2. Se $K$ for uma **página intermediária** ($K < \text{total}$):
+     * A interface exibe aviso de ramificação: *"Alterar esta página descartará todas as páginas posteriores ($K+1 \dots N$). Deseja continuar?"*
      * Ao confirmar, a API executa:
        ```sql
-       DELETE FROM narrative_blocks 
+       DELETE FROM narrative_pages 
        WHERE session_id = ? AND order_index > ?;
        ```
-     * O bloco $K$ é regenerado com o novo prompt, tornando-se o novo nó ativo final da história.
+     * A página $K$ é regenerada com o novo prompt, tornando-se o novo nó ativo final da história.
 
 ---
 
@@ -263,7 +263,7 @@ O layout é dividido em três áreas principais:
    * Visualizador da Crônica (resumos consolidados de volumes passados).
 2. **Interactive Tome (Área Central de Leitura):**
    * Renderizado como uma página contínua de livro/documento, evitando o formato "balões de chat".
-   * Cada bloco possui botões de utilidade discretos revelados ao passar o mouse (*hover*):
+   * Cada página possui botões de utilidade discretos revelados ao passar o mouse (*hover*) — *substituído pelo §11.22: cartão separado por página, com três ações em ícones sempre visíveis*:
      * `[Editar Texto]`
      * `[Ver Prompt de Origem / Re-gerar]`
      * `[Ramificar a partir daqui]`
@@ -292,18 +292,18 @@ Os temas são implementados via classes de escopo raiz no elemento `<html>` ou `
 * `POST /api/settings/key` — Salva ou atualiza a chave da API Gemini no banco local.
 * `GET /api/sessions` — Lista todas as histórias salvas.
 * `POST /api/sessions` — Cria uma nova sessão com regras e contexto inicial.
-* `GET /api/sessions/:id` — Retorna metadados da sessão, contexto e os blocos ativos.
+* `GET /api/sessions/:id` — Retorna metadados da sessão, contexto e as páginas ativas.
 * `PUT /api/sessions/:id/context` — Atualiza o contexto base ou as regras de narração da sessão.
 
 ### 8.2 Ciclo Narrativo e Streaming
 * `POST /api/sessions/:id/narrative/next`  
   * Recebe: `{ "player_instruction": string }`
   * Processamento: Coleta o corpus ativo, chama o Gemini com o esquema estruturado e faz stream de texto via Server-Sent Events (SSE).
-  * Retorno: Gravação do novo bloco no banco de dados e notificação de eventual `dialogue_trigger`.
-* `PUT /api/narrative/blocks/:id`  
+  * Retorno: Gravação da nova página no banco de dados e notificação de eventual `dialogue_trigger`.
+* `PUT /api/narrative/pages/:id`  
   * Recebe: `{ "generated_text": string }` (Edição direta na unha).
-* `POST /api/narrative/blocks/:id/regenerate`  
-  * Recebe: `{ "player_instruction": string }` (Regenera e trunca blocos posteriores se necessário).
+* `POST /api/narrative/pages/:id/regenerate`  
+  * Recebe: `{ "player_instruction": string }` (Regenera e trunca páginas posteriores se necessário).
 * `GET /api/sessions/:id/token-count`  
   * Retorna contagem precisa de tokens do contexto atual e percentual de HP restante.
 
@@ -312,13 +312,13 @@ Os temas são implementados via classes de escopo raiz no elemento `<html>` ou `
   * Recebe: `{ "message": string }`
   * Processamento: Executa chamada rápida ao Gemini com a persona do NPC e retorna a resposta imediata em primeira pessoa.
 * `POST /api/dialogue/:dialogueId/conclude`  
-  * Processamento: Aciona o Narrador para transcrever o diálogo acumulado em um novo bloco narrativo e encerra a sub-sessão.
+  * Processamento: Aciona o Narrador para transcrever o diálogo acumulado em uma nova página narrativa e encerra a sub-sessão.
 
 ### 8.4 Compactação de Memória
 * `POST /api/sessions/:id/compact/preview`  
-  * Gera a minuta de sinopse dos primeiros 75% dos blocos para aprovação do jogador.
+  * Gera a minuta de sinopse dos primeiros 75% das páginas para aprovação do jogador.
 * `POST /api/sessions/:id/compact/commit`  
-  * Recebe a sinopse editada/aprovada pelo jogador, arquiva os blocos antigos e atualiza o contexto consolidado da sessão.
+  * Recebe a sinopse editada/aprovada pelo jogador, arquiva as páginas antigas e atualiza o contexto consolidado da sessão.
 
 ---
 
@@ -380,11 +380,11 @@ services:
 
 Ao alimentar este documento no Antigravity, garanta que as seguintes premissas sejam implementadas estritamente:
 
-1. [x] **Nunca enviar prompts de jogador passados** no payload de geração de novos blocos narrativos. *(`test/contextBuilder.test.ts`, `test/narrative.test.ts`)*
+1. [x] **Nunca enviar prompts de jogador passados** no payload de geração de novas páginas narrativas. *(`test/contextBuilder.test.ts`, `test/narrative.test.ts`)*
 2. [x] Garantir que o endpoint de geração force o modelo a responder com o `responseSchema` JSON exigido. *(`responseJsonSchema` em `src/ai/narrator.ts`; `test/narrative.test.ts`; verificado ao vivo)*
-3. [x] Confirmar truncamento via `DELETE ... WHERE order_index > ?` quando o usuário re-gerar um bloco passado. *(`src/db/repositories/blocks.ts`; `test/narrative.test.ts`, `test/ui.test.ts`)*
+3. [x] Confirmar truncamento via `DELETE ... WHERE order_index > ?` quando o usuário re-gerar uma página passada. *(`src/db/repositories/pages.ts`; `test/narrative.test.ts`, `test/ui.test.ts`)*
 4. [x] Implementar a chamada de contagem de tokens (`ai.models.countTokens`) para cálculo real da barra de HP. *(`src/ai/gateway.ts`, `src/ai/tokens.ts`; verificado ao vivo)*
-5. [x] Garantir que a sub-sessão de diálogo não altere os blocos da história até que o endpoint de conclusão (`/conclude`) sintetize as falas em prosa pelo Narrador. *(`test/dialogue.test.ts`)*
+5. [x] Garantir que a sub-sessão de diálogo não altere as páginas da história até que o endpoint de conclusão (`/conclude`) sintetize as falas em prosa pelo Narrador. *(`test/dialogue.test.ts`)*
 
 ---
 
@@ -404,22 +404,23 @@ Esta seção registra decisões tomadas durante o planejamento e a implementaç�
 
 ### 11.3 Nomenclatura
 * O campo do prompt do jogador é sempre `player_instruction` (a menção a `player_prompt` na §2.2 foi corrigida).
+* O texto gerado por cada prompt chama-se **página** (antes "bloco"): tabela `narrative_pages`, campos `covered_page_*`, rotas `/api/narrative/pages/…` e evento SSE `page`. Ver §11.22.
 
 ### 11.4 Streaming (§8.2)
-* O SSE de `narrative/next` faz **parse incremental** do JSON estruturado: os trechos de `narrative_text` são emitidos em tempo real como eventos `chunk`; `block` e `dialogue_trigger` são emitidos apenas no fechamento do payload.
+* O SSE de `narrative/next` faz **parse incremental** do JSON estruturado: os trechos de `narrative_text` são emitidos em tempo real como eventos `chunk`; `page` e `dialogue_trigger` são emitidos apenas no fechamento do payload.
 
 ### 11.5 Regeneração e edição (§6)
-* A regeneração só altera o banco **depois** que a IA responde com sucesso. O `DELETE ... WHERE order_index > ?` e a atualização do bloco ocorrem numa **única transação** SQLite.
-* Edição manual de texto **preserva** os blocos seguintes; apenas regeneração via IA trunca.
+* A regeneração só altera o banco **depois** que a IA responde com sucesso. O `DELETE ... WHERE order_index > ?` e a atualização da página ocorrem numa **única transação** SQLite.
+* Edição manual de texto **preserva** as páginas seguintes; apenas regeneração via IA trunca.
 
 ### 11.6 Modo Diálogo (§3)
 * Existe **no máximo um diálogo ativo por sessão**. Após recarregar a página, o frontend retoma o diálogo via `GET /api/sessions/:id/dialogue/active`.
 
 ### 11.7 HP do Narrador (§4)
-* O HP é recalculado por **eventos** (abertura de sessão, geração/regeneração de bloco, edição de texto ou contexto, commit de crônica), sem polling e sem recálculo a cada tecla.
+* O HP é recalculado por **eventos** (abertura de sessão, geração/regeneração de página, edição de texto ou contexto, commit de crônica), sem polling e sem recálculo a cada tecla.
 
 ### 11.8 Compactação (§4.3)
-* A divisão 75/25 é calculada pelo **peso em tokens** (aproximado pelo tamanho do texto), não pela contagem de blocos.
+* A divisão 75/25 é calculada pelo **peso em tokens** (aproximado pelo tamanho do texto), não pela contagem de páginas.
 * Cada volume é anexado ao `world_context` sob o cabeçalho `## Crônica — Volume N`.
 
 ### 11.9 Segurança e deploy (§9)
@@ -430,9 +431,9 @@ Esta seção registra decisões tomadas durante o planejamento e a implementaç�
 ### 11.10 Ajustes no schema SQL (§5)
 O schema implementado em [`src/db/schema.ts`](src/db/schema.ts) acrescenta ao §5:
 * `sessions.model TEXT` — modelo Gemini da sessão (`NULL` = padrão global).
-* `UNIQUE (session_id, order_index)` em `narrative_blocks` e `UNIQUE (session_id, volume_number)` em `chronicle_archives`.
+* `UNIQUE (session_id, order_index)` em `narrative_pages` e `UNIQUE (session_id, volume_number)` em `chronicle_archives`.
 * Índice único parcial `idx_one_active_dialogue` em `dialogue_sessions(session_id) WHERE status = 'active'`, que impõe no banco a regra de um diálogo ativo por sessão.
-* O `order_index` considera blocos arquivados e nunca é reutilizado após uma compactação.
+* O `order_index` considera páginas arquivadas e nunca é reutilizado após uma compactação.
 * O controle de versão do schema usa `PRAGMA user_version`.
 
 ### 11.11 API de configurações e modelos (§8.1)
@@ -448,46 +449,46 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 ### 11.12 Ciclo narrativo implementado (§2, §6, §8.2)
 * **Payload:** `system instruction` = `sessions.system_rules`; um único turno de usuário com as seções `# CONTEXTO DO MUNDO`, `# CORPUS NARRATIVO` e `# AÇÃO / ESBOÇO DO JOGADOR PARA A PRÓXIMA CENA`, nessa ordem (função pura em [`src/ai/contextBuilder.ts`](src/ai/contextBuilder.ts)). O corpus contém **apenas** `generated_text`; nenhum `player_instruction` passado é enviado.
 * **Saída estruturada:** usa `responseMimeType: application/json` + `responseJsonSchema` com o esquema do §2.4, acrescido de `propertyOrdering: ["narrative_text", "dialogue_trigger"]` para que a prosa chegue primeiro e o streaming comece imediatamente. Um `dialogue_trigger` com `activate: true` mas sem `npc_name` ou `dynamic_system_prompt` é tratado como inativo.
-* **SSE** (`POST /api/sessions/:id/narrative/next` e `POST /api/narrative/blocks/:id/regenerate`): eventos `start {model}`, `chunk {text}` (parse incremental de `narrative_text`), `block {block, discarded}` e, se houver, `dialogue_trigger {dialogue_id, npc_name}` (ambos só no fechamento do payload, **após** persistir), `error {message}` e `done`. O `dynamic_system_prompt` não é enviado ao cliente. Erros anteriores ao início do stream (sem chave, sessão inexistente, diálogo ativo, geração concorrente) retornam JSON com status HTTP normal (`409 missing_api_key`, por exemplo).
+* **SSE** (`POST /api/sessions/:id/narrative/next` e `POST /api/narrative/pages/:id/regenerate`): eventos `start {model}`, `chunk {text}` (parse incremental de `narrative_text`), `page {page, discarded}` e, se houver, `dialogue_trigger {dialogue_id, npc_name}` (ambos só no fechamento do payload, **após** persistir), `error {message}` e `done`. O `dynamic_system_prompt` não é enviado ao cliente. Erros anteriores ao início do stream (sem chave, sessão inexistente, diálogo ativo, geração concorrente) retornam JSON com status HTTP normal (`409 missing_api_key`, por exemplo).
 * **Falhas e desconexão:** se o JSON final for inválido, a API falhar ou o cliente desconectar, **nada é gravado**.
 * **Concorrência:** uma geração por sessão por vez (`409` se houver outra em andamento). Narrar ou regenerar é recusado (`409`) enquanto houver diálogo ativo.
-* **Edição direta** (`PUT /api/narrative/blocks/:id`): altera só `generated_text`; blocos arquivados não são editáveis (`409`).
-* **Regeneração** (`POST /api/narrative/blocks/:id/regenerate`, corpo `{player_instruction, confirm_truncate?}`): o corpus enviado contém apenas os blocos ativos **anteriores** ao bloco K. Se existirem blocos posteriores e `confirm_truncate` não for `true`, a API responde `409 {code: "truncation_required", blocks_to_discard}` sem tocar em nada. Com a confirmação, o `DELETE ... WHERE order_index > K` e a atualização do bloco K ocorrem numa única transação **após** a geração bem-sucedida.
-* **Modelo usado:** `sessions.model` → padrão global → fallback (§11.2); gravado em `narrative_blocks.model_identifier`.
+* **Edição direta** (`PUT /api/narrative/pages/:id`): altera só `generated_text`; páginas arquivadas não são editáveis (`409`).
+* **Regeneração** (`POST /api/narrative/pages/:id/regenerate`, corpo `{player_instruction, confirm_truncate?}`): o corpus enviado contém apenas as páginas ativas **anteriores** à página K. Se existirem páginas posteriores e `confirm_truncate` não for `true`, a API responde `409 {code: "truncation_required", pages_to_discard}` sem tocar em nada. Com a confirmação, o `DELETE ... WHERE order_index > K` e a atualização da página K ocorrem numa única transação **após** a geração bem-sucedida.
+* **Modelo usado:** `sessions.model` → padrão global → fallback (§11.2); gravado em `narrative_pages.model_identifier`.
 
 ### 11.13 HP do Narrador implementado (§4, §8.2)
 * `GET /api/sessions/:id/token-count` → `{ tokens_used, token_limit, model, hp_percent, state }`, com `state` em `green` (≥ 50%), `yellow` (≥ 20% e < 50%) ou `red` (< 20%). `hp_percent` é limitado a [0, 100], com uma casa decimal, e calculado como `100 × (limite − usados) / limite` (equivalente à fórmula do §4.1, sem imprecisão de ponto flutuante nos limiares).
-* Mede o payload real que seria enviado ao Narrador: regras + contexto do mundo + corpus ativo (blocos arquivados ficam de fora), sem input pendente do jogador.
+* Mede o payload real que seria enviado ao Narrador: regras + contexto do mundo + corpus ativo (páginas arquivadas ficam de fora), sem input pendente do jogador.
 * **Limitação da API:** a Gemini Developer API **rejeita `systemInstruction` em `countTokens`**. As regras de narração são, portanto, contadas como texto somado ao conteúdo; a diferença é de poucos tokens de moldura.
-* **Cache:** a contagem é guardada em memória por hash (modelo + regras + conteúdo). Reabrir uma sessão sem alterações não chama a API; qualquer alteração de bloco, contexto ou regras muda o hash e força nova contagem. Não há polling nem recálculo por tecla (§11.7) — o frontend consulta o endpoint nos eventos definidos.
+* **Cache:** a contagem é guardada em memória por hash (modelo + regras + conteúdo). Reabrir uma sessão sem alterações não chama a API; qualquer alteração de página, contexto ou regras muda o hash e força nova contagem. Não há polling nem recálculo por tecla (§11.7) — o frontend consulta o endpoint nos eventos definidos.
 * Erros: `404` (sessão), `409 missing_api_key` (sem chave), `502` (falha da API de contagem).
 
 ### 11.14 Modo Diálogo implementado (§3, §8.3)
 * **Ativação:** só pelo `dialogue_trigger` do Narrador (§11.12). Cria `dialogue_sessions` com status `active`; o índice único parcial garante um diálogo ativo por sessão. Enquanto houver diálogo ativo, `narrative/next` e `regenerate` respondem `409`.
 * **Sigilo do NPC:** o `dynamic_system_prompt` (que pode conter segredos do NPC) **nunca** é devolvido pela API e **não** é enviado ao Narrador na costura. Os endpoints expõem apenas `{id, session_id, npc_name, status, created_at}`.
 * `POST /api/dialogue/:id/message` `{message}` → `{player_message, npc_message, npc_wants_to_end}`. Chamada ao Gemini com o prompt dinâmico + regras fixas de interpretação como `systemInstruction` e **somente** as falas da cena como histórico multi-turno (`user` = protagonista, `model` = NPC); nem o corpus nem meta-instruções do Narrador entram. A resposta usa JSON estruturado `{reply, end_conversation}`; `end_conversation` vira o sinal `npc_wants_to_end`, que a UI usa apenas para destacar o botão `[Encerrar Diálogo e Narrar]` (a decisão continua sendo do autor). As duas falas só são gravadas juntas, após sucesso, mantendo o histórico sempre alternado. Uma mensagem por vez por diálogo (`409` caso contrário).
-* `POST /api/dialogue/:id/conclude` (SSE, mesmos eventos do §11.12): envia ao Narrador regras + mundo + corpus ativo + o texto do §3.3 com a transcrição literal (`Protagonista: …` / `<NPC>: …`). Numa única transação, grava o bloco de costura e marca o diálogo como `concluded` — **este é o único ponto em que o diálogo altera `narrative_blocks`** (checklist §10 nº 5). O `player_instruction` do bloco guarda `[Diálogo com <NPC>]` + transcrição, preservando a origem para auditoria. Se a costura falhar, nada é gravado e o diálogo continua ativo. O Narrador pode encadear um novo diálogo no mesmo turno.
+* `POST /api/dialogue/:id/conclude` (SSE, mesmos eventos do §11.12): envia ao Narrador regras + mundo + corpus ativo + o texto do §3.3 com a transcrição literal (`Protagonista: …` / `<NPC>: …`). Numa única transação, grava a página de costura e marca o diálogo como `concluded` — **este é o único ponto em que o diálogo altera `narrative_pages`** (checklist §10 nº 5). O `player_instruction` da página guarda `[Diálogo com <NPC>]` + transcrição, preservando a origem para auditoria. Se a costura falhar, nada é gravado e o diálogo continua ativo. O Narrador pode encadear um novo diálogo no mesmo turno.
 * `POST /api/dialogue/:id/cancel` *(extensão do design)*: descarta o diálogo e suas mensagens sem narrar, para o caso de um gatilho indesejado deixar a sessão "presa". Concluir sem nenhuma fala trocada retorna `409` sugerindo o cancelamento.
 * `GET /api/sessions/:id/dialogue/active` → `{dialogue, messages}` para reconexão após reload (§11.6); `GET /api/sessions/:id` também inclui `active_dialogue` (sem o prompt).
 
 ### 11.15 Compactação implementada (§4.3, §8.4)
-* **Cisão 75/25 por peso** ([`src/ai/compaction.ts`](src/ai/compaction.ts)): o Corpus Passado é o maior prefixo cronológico dos blocos ativos cujo peso acumulado (tamanho do texto) não excede 75% do total; o restante é o Corpus Ativo. Sempre fica ao menos 1 bloco de cada lado; com menos de 2 blocos ativos a API responde `409`.
-* `POST /api/sessions/:id/compact/preview` → `{summary_text, covered_block_start_index, covered_block_end_index, blocks_to_archive, blocks_to_keep, next_volume_number, model}`. Envia ao modelo (texto livre, sem JSON) apenas o Corpus Passado + o contexto do mundo (como referência de grafia) sob o prompt do "Arquivista Editorial" (sinopse factual densa, ~1/8 do original). **Não grava nada.** Meta-instruções do jogador não são enviadas.
-* `POST /api/sessions/:id/compact/commit` `{summary_text, covered_block_start_index, covered_block_end_index}` (a sinopse já revisada/editada pelo usuário): valida que a faixa é exatamente um prefixo dos blocos ativos e que o último bloco é preservado (senão `409`: "gere uma nova minuta"). Numa única transação: cria o volume em `chronicle_archives`, marca os blocos como `is_archived` e anexa ao `world_context` o trecho `## Crônica — Volume N` + sinopse. Qualquer falha desfaz tudo.
+* **Cisão 75/25 por peso** ([`src/ai/compaction.ts`](src/ai/compaction.ts)): o Corpus Passado é o maior prefixo cronológico das páginas ativas cujo peso acumulado (tamanho do texto) não excede 75% do total; o restante é o Corpus Ativo. Sempre fica ao menos 1 página de cada lado; com menos de 2 páginas ativas a API responde `409`.
+* `POST /api/sessions/:id/compact/preview` → `{summary_text, covered_page_start_index, covered_page_end_index, pages_to_archive, pages_to_keep, next_volume_number, model}`. Envia ao modelo (texto livre, sem JSON) apenas o Corpus Passado + o contexto do mundo (como referência de grafia) sob o prompt do "Arquivista Editorial" (sinopse factual densa, ~1/8 do original). **Não grava nada.** Meta-instruções do jogador não são enviadas.
+* `POST /api/sessions/:id/compact/commit` `{summary_text, covered_page_start_index, covered_page_end_index}` (a sinopse já revisada/editada pelo usuário): valida que a faixa é exatamente um prefixo das páginas ativas e que a última página é preservada (senão `409`: "gere uma nova minuta"). Numa única transação: cria o volume em `chronicle_archives`, marca as páginas como `is_archived` e anexa ao `world_context` o trecho `## Crônica — Volume N` + sinopse. Qualquer falha desfaz tudo.
 * Preview e commit exigem a trava da sessão (sem geração concorrente) e ausência de diálogo ativo.
-* O HP volta a subir porque os blocos arquivados saem do corpus e a sinopse (bem menor) entra no `world_context`; o frontend reconsulta `token-count` após o commit (§11.7).
+* O HP volta a subir porque as páginas arquivadas saem do corpus e a sinopse (bem menor) entra no `world_context`; o frontend reconsulta `token-count` após o commit (§11.7).
 
 ### 11.16 Ramificação implementada (§6.2)
-* `POST /api/narrative/blocks/:id/branch` `{confirm_truncate?}` *(extensão do design)*: "Ramificar a partir daqui" — descarta os blocos ativos posteriores ao bloco `:id` (sem gerar nada) para o autor continuar a história a partir dele. Se houver blocos posteriores e `confirm_truncate` não for `true`, responde `409 {code: "truncation_required", blocks_to_discard}`. Retorna `{discarded, last_block_id}`. Recusado com diálogo ativo ou geração concorrente.
+* `POST /api/narrative/pages/:id/branch` `{confirm_truncate?}` *(extensão do design)*: "Ramificar a partir daqui" — descarta as páginas ativas posteriores à página `:id` (sem gerar nada) para o autor continuar a história a partir dela. Se houver páginas posteriores e `confirm_truncate` não for `true`, responde `409 {code: "truncation_required", pages_to_discard}`. Retorna `{discarded, last_page_id}`. Recusado com diálogo ativo ou geração concorrente.
 * `GET /api/settings` passou a incluir `default_system_rules` (texto padrão das regras do Narrador) para o botão "Restaurar padrão" da gaveta.
 
 ### 11.17 Frontend implementado (§7)
 * **Código** em [`client/`](client/) (TypeScript sem framework, bundle esbuild → `public/assets/app.js`; Tailwind 3 → `public/assets/app.css`; `npm run build:client`). Roteamento por hash: `#/` (biblioteca) e `#/s/<id>` (sessão). Módulos: `api.ts` (tipos, `fetch`, `streamTurn` para POST+SSE), `sse.ts` (parser incremental puro), `dom.ts` (helper `h()`, toasts, modais), `theme.ts`, `views/{home,session,drawer,compaction}.ts`.
 * **Tema:** as variáveis CSS do §7.2 vivem em classes `theme-*` na raiz `<html>`; a escolha é gravada na sessão (`active_theme`) e em `localStorage` (usada na tela inicial). Cores semânticas do Tailwind (`main`, `panel`, `ink`, `accent`, `hp-*`…) apontam para essas variáveis.
 * **Fontes** empacotadas por [`scripts/copy-fonts.mjs`](scripts/copy-fonts.mjs) (subconjunto latino, `woff2` + licenças OFL em `public/fonts/`); nenhuma requisição a CDN.
-* **Tome:** prosa contínua (parágrafos recuados; capitular só no primeiro bloco). Durante o streaming um "bloco fantasma" recebe os `chunk` (texto + cursor piscante); no evento `block`/`done` a sessão é recarregada do servidor (única fonte da verdade, inclusive após truncamento). Em re-geração o fantasma ocupa o lugar do bloco e os posteriores aparecem esmaecidos. Se a geração falhar, o texto digitado na Doca é preservado.
-* **Ações de bloco** (visíveis no hover em telas largas e sempre em telas estreitas): `[Editar Texto]` (preserva os blocos seguintes), `[Ver Prompt de Origem / Re-gerar]` (modal pré-preenchido com `player_instruction`; avisa quantos blocos serão descartados e envia `confirm_truncate`), `[Ramificar a partir daqui]` (§11.16).
-* **HP:** a Doca consulta `token-count` apenas nos eventos de §11.7 (abrir sessão, bloco gerado/regenerado, edição, contexto salvo, compactação, ramificação). "Compactar Crônica" pulsa quando `state = red`.
+* **Tome:** *(layout substituído pelo §11.22: uma folha por página)* prosa em parágrafos recuados; capitular só na primeira página. Durante o streaming uma "página fantasma" recebe os `chunk` (texto + cursor piscante); no evento `page`/`done` a sessão é recarregada do servidor (única fonte da verdade, inclusive após truncamento). Em re-geração o fantasma ocupa o lugar da página e as posteriores aparecem esmaecidas. Se a geração falhar, o texto digitado na Doca é preservado.
+* **Ações de página** *(hoje ícones sempre visíveis, §11.22; descrição original:)* visíveis no hover em telas largas e sempre em telas estreitas: `[Editar Texto]` (preserva as páginas seguintes), `[Ver Prompt de Origem / Re-gerar]` (modal pré-preenchido com `player_instruction`; avisa quantas páginas serão descartadas e envia `confirm_truncate`), `[Ramificar a partir daqui]` (§11.16).
+* **HP:** a Doca consulta `token-count` apenas nos eventos de §11.7 (abrir sessão, página gerada/regenerada, edição, contexto salvo, compactação, ramificação). "Compactar Crônica" pulsa quando `state = red`.
 * **Modo Diálogo:** a Doca troca para "Falando com: NPC"; a transcrição aparece num cartão no fim do Tome; `[Encerrar Diálogo e Narrar]` ganha destaque quando `npc_wants_to_end`; `[Descartar]` chama `cancel`. Ao recarregar, `dialogue/active` restaura a cena. Compactar fica desabilitado durante o diálogo.
 * **Testes:** `test/clientSse.test.ts` (parser), `test/static.test.ts` (index/fontes/sem CDN) e `test/ui.test.ts` (jsdom executa o bundle real do cliente contra o servidor Fastify numa porta de loopback com Gemini mockado: chave → sessão → narrar → editar → re-gerar com descarte → diálogo → reconexão → compactação → ramificação → erro do Narrador).
 
@@ -504,7 +505,7 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 ### 11.19 Favicon, modo claro/escuro e exportação em Markdown (§7)
 * **Favicon:** [`public/favicon.svg`](public/favicon.svg) (tome aberto com uma centelha), mais `favicon.ico` (16/32/48) e `apple-touch-icon.png` (180), todos locais; referenciados no `index.html`.
 * **Claro/escuro:** cada um dos 4 temas tem as duas variações (`.theme-<tema>.mode-light|mode-dark` em [`client/styles.css`](client/styles.css)). `<html>` recebe sempre uma classe de tema **e** uma de modo. A preferência de modo (`Automático (sistema)` — padrão —, `Claro`, `Escuro`) é global do navegador (`localStorage: chronicler.mode`), independente do tema da sessão (`active_theme`, inalterado no banco). No modo automático a UI acompanha `prefers-color-scheme`, inclusive mudanças em tempo real. Um script inline no `<head>` aplica tema e modo antes da primeira pintura (sem "flash"). O seletor de modo fica na tela inicial e no cabeçalho da sessão. Nota: no modo automático, um sistema claro mostra o Cyberpunk em sua variação clara; para ver a aparência neon original, escolha `Escuro`.
-* **Exportação `.md`:** `GET /api/sessions/:id/export[?include_context=true]` devolve `text/markdown` como anexo (`Content-Disposition` com `filename` ASCII e `filename*` UTF-8). Conteúdo ([`src/export.ts`](src/export.ts)): `# Título`, linha de metadados (data e nº de blocos), a prosa de **todos** os blocos em ordem — inclusive os arquivados na compactação, com o texto original — e, com `include_context`, a seção `## Mundo e personagens` (que já carrega as sinopses `## Crônica — Volume N`) seguida de `## Narrativa`. Instruções do jogador (`player_instruction`) **nunca** são exportadas. Na UI, o botão **Salvar .md** do cabeçalho abre uma janela com a opção de incluir o contexto e dispara o download via `fetch` + `Blob`.
+* **Exportação `.md`** *(estendida no §11.22: escopos, separador `---` e exportação por volume)*: `GET /api/sessions/:id/export[?include_context=true]` devolve `text/markdown` como anexo (`Content-Disposition` com `filename` ASCII e `filename*` UTF-8). Conteúdo ([`src/export.ts`](src/export.ts)): `# Título`, linha de metadados (data e nº de páginas), a prosa de **todas** as páginas em ordem — inclusive as arquivadas na compactação, com o texto original — e, com `include_context`, a seção `## Mundo e personagens` (que já carrega as sinopses `## Crônica — Volume N`) seguida de `## Narrativa`. Instruções do jogador (`player_instruction`) **nunca** são exportadas. Na UI, o botão **Salvar .md** do cabeçalho abre uma janela com a opção de incluir o contexto e dispara o download via `fetch` + `Blob`.
 
 ### 11.20 Cabeçalho com ícones e tela inicial responsiva (§7)
 * **Botões só com ícone:** no cabeçalho da sessão, *Biblioteca*, *Tema visual*, *Modo claro/escuro*, *Salvar .md* e *Contexto* viram botões quadrados (36 px) com SVG inline local ([`client/icons.ts`](client/icons.ts), sem CDN nem fonte de ícones). O cabeçalho deixou de quebrar linha: o título é a única parte flexível e trunca com reticências.
@@ -518,3 +519,13 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * **Ajuste de layout achado nas capturas:** na doca, a barra de HP ficava reduzida a um fio no celular por dividir a linha com o botão *Compactar Crônica*; a linha agora quebra (`flex-wrap`, barra com largura mínima de 16rem).
 * **Encerramento gracioso:** como PID 1 do contêiner, o Node ignorava `SIGTERM` e `stop`/`down` esperavam 10 s até o `SIGKILL`. O servidor agora trata `SIGTERM`/`SIGINT` (`app.close()` com limite de 3 s para conexões SSE abertas).
 * **Docker validado (Docker 29.7.2 + Compose 5.5.1, Fedora 44):** `docker compose up -d --build` (override temporário com `ports: !override` na 3100 e volume em `/tmp`, para não colidir com o Podman), build em ~100 s sem cache, contêiner `healthy`, `/api/health`, `/`, `/assets/*`, `/favicon.svg` e `/api/settings` = 200, criação de sessão via API, volume inexistente criado como root pelo Docker e corrigido pelo *entrypoint* (arquivos do SQLite pertencem ao usuário), processo do servidor sem root (`docker top`), dados mantidos após `docker restart` (0,5 s, graças ao tratamento de `SIGTERM`) e `down` limpo. Pré-requisito observado: usuário no grupo `docker` (`sudo usermod -aG docker $USER`), documentado no README.
+
+### 11.22 Páginas: cartão por página, volumes legíveis e exportação por escopo (§2, §4.3, §6, §7)
+* **Conceito e nomenclatura:** o texto gerado por cada prompt é uma **página** do Tome (antes "bloco"). A renomeação é completa e **sem migração**: tabela `narrative_pages`, índice `idx_pages_order`, campos `covered_page_start_index`/`covered_page_end_index`, rotas `/api/narrative/pages/:id[/regenerate|/branch]` (sem alias das antigas), JSON `pages`, `pages_to_archive`/`pages_to_keep`/`pages_to_discard`, evento SSE `page`, tipo `Page`, repositório `repos.pages`. O projeto é um "pré-pré-alpha": **atualizações não são suportadas**. `SCHEMA_VERSION` passou a 2 e um banco de versão anterior falha na abertura com mensagem clara (apague `./data`), em vez de `no such table`.
+* **Numeração absoluta:** o título do cartão é `Página N`, com `N = order_index` (começa em 1 e nunca é reaproveitado). Após uma compactação o Tome pode começar na "Página 4"; o total de páginas da crônica não se perde. A letra capitular aparece só na página 1 (visível no leitor de volume).
+* **Cartão de página** ([`client/pageCard.ts`](client/pageCard.ts)): cada página é uma folha separada (`.page-card`: cabeçalho "Página N", corpo em prosa e rodapé de ações), com os tokens por tema `--page-bg`, `--page-border` e `--page-shadow` em [`client/styles.css`](client/styles.css). O rodapé tem **três botões só de ícone SVG, um símbolo por ação, sempre visíveis** (nunca dependem de hover), com `aria-label` e tooltip: **lápis** = *Editar texto da página* (edita dentro do cartão; preserva as seguintes); **balão com linhas de texto** = *Editar prompt e re-gerar* (modal com o prompt de origem; se houver páginas posteriores, o aviso destrutivo continua e o envio manda `confirm_truncate`); **bifurcação** = *Ramificar a partir desta página* (desabilitado na última página; descarta as posteriores, com confirmação). Estados: edição no cartão (`.is-editing`), página fantasma durante o streaming (cabeçalho com o número que a página terá), páginas esmaecidas (`.is-dimmed`) quando uma re-geração descartará as posteriores. O mesmo componente roda em modo `readonly` (sem rodapé) no leitor de volume. Os tooltips do rodapé ancoram na borda direita do botão e têm largura máxima de 60 vw (tooltips invisíveis também contam para o `scrollWidth`; sem isso o celular ganhava rolagem horizontal).
+* **Páginas consumidas continuam legíveis:** a compactação segue marcando as páginas como `is_archived` (saem do contexto da IA, do HP e da próxima compactação), mas elas **permanecem no banco** e o jogador pode relê-las e exportá-las. `GET /api/archives/:id/pages` devolve `{archive, pages}` (somente as páginas arquivadas entre `covered_page_start_index` e `covered_page_end_index`, sob demanda). Páginas arquivadas não são editáveis nem pontos de ramificação (`409`).
+* **Leitor de volume = página própria** (rota `#/s/<id>/v/<n>`, [`client/views/volume.ts`](client/views/volume.ts)): cabeçalho com voltar, modo claro/escuro e exportar; cartão de sinopse; páginas em `readonly`; navegação para o volume anterior/seguinte e de volta ao Tome. O Tome mostra, acima das páginas ativas, uma linha com links "Volume N · páginas X a Y"; a aba *Crônica* da gaveta lista cada volume com a sinopse, o botão **Ler as N páginas** e o ícone de salvar o volume.
+* **Exportação** ([`src/export.ts`](src/export.ts)): as páginas são separadas por `---` (linhas em branco ao redor); a linha de metadados diz "N páginas"; prompts do jogador **nunca** são exportados. `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`; `active` = só o que está no Tome; `archived` = só as páginas já em volumes, `409` se não houver nenhuma; o nome do arquivo ganha o sufixo "no Tome" ou "volumes"). `GET /api/archives/:id/export?include_summary=` gera `# Título — Volume N`, metadados (faixa de páginas), `## Sinopse` (incluída por padrão; `include_summary=false` a omite) e as páginas do volume. Na UI, o modal "Salvar em Markdown" ganhou o escopo (Crônica completa · Só o que está no Tome · Só as páginas já em volumes) e cada volume tem o seu ícone de download (com a caixa "Incluir a sinopse").
+* **Os 8 temas:** o cartão é validado nas 8 combinações (4 temas × claro/escuro). [`test/pageThemes.test.ts`](test/pageThemes.test.ts) lê as variáveis reais do CSS e exige contraste WCAG ≥ 4,5:1 para texto, texto forte e texto esmaecido sobre a folha, ≥ 3:1 para ícones e acento, e borda da folha ≥ 1,3:1 contra o fundo do Tome (o texto esmaecido do Pós-apocalíptico escuro foi clareado de `#948677` para `#a09282` por causa disso). `npm run check:paginas` ([`scripts/check-pages.ts`](scripts/check-pages.ts)) roda um Chromium headless nas 8 combinações em 1280 px e 390 px e verifica no DOM renderizado: numeração, ações com opacidade 1, alvo ≥ 32 px, dentro do cartão e clicáveis, um único ícone por ação, glifos distintos, ícones na mesma linha, contraste calculado, ausência de rolagem horizontal, cartões sem sobreposição, tooltip no hover, edição dentro do cartão, aviso de volumes e leitor somente leitura; gera capturas em `docs/screenshots/paginas/`.
+* **Testes:** `test/archives.test.ts` (leitura/exportação de volumes e prova de que as páginas arquivadas ficam fora do contexto da IA, do HP e do Tome mas dentro da leitura e da exportação), `test/export.test.ts` (separador, escopos, volume), `test/repositories.test.ts` (guarda de banco antigo) e `test/ui.test.ts` (cartões, ícones, leitor, exportação por escopo).

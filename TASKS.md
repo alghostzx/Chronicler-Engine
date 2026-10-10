@@ -26,8 +26,8 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] `contextBuilder` puro (sem prompts passados), testado
 - [x] Geração estruturada com `responseJsonSchema` (`narrative_text` primeiro, `propertyOrdering`)
 - [x] SSE com parse incremental de `narrative_text` (`NarrativeTextExtractor`, testado com todas as fatias)
-- [x] `POST /api/sessions/:id/narrative/next` (eventos `start`/`chunk`/`block`/`dialogue_trigger`/`error`/`done`)
-- [x] Edição direta de bloco (`PUT /api/narrative/blocks/:id`)
+- [x] `POST /api/sessions/:id/narrative/next` (eventos `start`/`chunk`/`page`/`dialogue_trigger`/`error`/`done`)
+- [x] Edição direta de página (`PUT /api/narrative/pages/:id`)
 - [x] Regeneração com truncamento atômico pós-geração e `confirm_truncate`
 - [x] Trava de concorrência por sessão e bloqueio durante diálogo ativo
 - [x] Verificado contra a API real (`scripts/live-narrative.ts`, `gemini-3.8-flash`): streaming e `dialogue_trigger` OK
@@ -48,19 +48,19 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Verificado contra a API real (`scripts/live-dialogue.ts`)
 
 ## Fase 6 — Compactação ✅
-- [x] `splitForCompaction`: 75/25 por peso (tamanho do texto), ≥ 1 bloco de cada lado
+- [x] `splitForCompaction`: 75/25 por peso (tamanho do texto), ≥ 1 página de cada lado
 - [x] `POST /api/sessions/:id/compact/preview`: sinopse factual do Corpus Passado, sem efeitos colaterais
-- [x] `POST /api/sessions/:id/compact/commit` transacional: volume em `chronicle_archives`, `## Crônica — Volume N` no `world_context`, blocos `is_archived`
-- [x] Validação da faixa no commit (prefixo dos ativos, preserva o último bloco) e rollback atômico
+- [x] `POST /api/sessions/:id/compact/commit` transacional: volume em `chronicle_archives`, `## Crônica — Volume N` no `world_context`, páginas `is_archived`
+- [x] Validação da faixa no commit (prefixo dos ativos, preserva o última página) e rollback atômico
 - [x] Verificado contra a API real (`scripts/live-compaction.ts`): HP 62,6% → 79,3%
 
 ## Fase 7 — Frontend (Vanilla TS + Tailwind, pt-BR) ✅
-- [x] `POST /api/narrative/blocks/:id/branch` (ramificar) + testes
+- [x] `POST /api/narrative/pages/:id/branch` (ramificar) + testes
 - [x] Fontes locais empacotadas (`npm run fonts` → `public/fonts/`), sem CDN
 - [x] Temas (4) via variáveis CSS + classe na raiz, persistidos em `localStorage` e na sessão
 - [x] Tela inicial: chave da API (validada), modelo padrão (lista real da API), criar/listar/excluir sessões
 - [x] Layout: Gaveta de Contexto (Mundo/Regras/Modelo+limite/Crônica), Tome Interativo, Doca de Ação
-- [x] Tome com streaming (bloco fantasma), editar, ver prompt/re-gerar com aviso de descarte, ramificar
+- [x] Tome com streaming (página fantasma), editar, ver prompt/re-gerar com aviso de descarte, ramificar
 - [x] Barra de HP (verde/amarelo/vermelho) recalculada só por eventos + botão Compactar Crônica pulsante
 - [x] UI do Modo Diálogo (transcrição, encerrar/descartar, reconexão pós-reload)
 - [x] Modal de revisão da sinopse (minuta editável → consolidar)
@@ -88,7 +88,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 ## Fase 10 — Melhorias pós-entrega ✅
 - [x] Favicon (SVG + ICO + apple-touch-icon), servidos localmente
 - [x] Variações clara/escura para os 4 temas (Automático/Claro/Escuro, sem "flash" na carga)
-- [x] Botão **Salvar .md**: `GET /api/sessions/:id/export` (inclui blocos arquivados; contexto opcional; sem prompts do jogador)
+- [x] Botão **Salvar .md**: `GET /api/sessions/:id/export` (inclui páginas arquivadas; contexto opcional; sem prompts do jogador)
 - [x] Testes: exportação (módulo + rota), temas/modo (jsdom) e UI (download + alternância de modo); 142 testes passando
 - [x] Imagem reconstruída e contêiner Podman atualizado com estas mudanças (favicon, assets e API respondendo 200)
 
@@ -105,3 +105,44 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Correção encontrada nas capturas: barra de HP no celular
 - [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
 - [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
+
+## Fase 13 — Páginas (branch `feature/paginas`) 🚧
+Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft v2 revisado com as decisões do autor: renomeação completa **sem migração** (pré-pré-alpha, atualizações não suportadas), numeração absoluta (`Página N` = `order_index`), `---` entre páginas no export, páginas arquivadas legíveis e exportáveis, "Editar prompt" mantém o aviso destrutivo.
+
+### 13.1 Renomeação bloco → página (código, API, banco; sem migração)
+- [x] Schema: `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice `idx_pages_order`; `SCHEMA_VERSION` 2
+- [x] Banco de versão antiga (v1) falha com mensagem clara (apague `./data`) em vez de `no such table`; teste cobrindo
+- [x] Repositório `blocks` → `pages`; tipos `NarrativeBlock`/`Block` → `Page`
+- [x] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…` (sem alias); JSON (`blocks` → `pages`, `pages_to_archive/keep`, `pages_to_discard`, `covered_page_*`) e evento SSE `block` → `page`
+- [x] Mensagens de erro, prompts de compactação e textos da UI: "bloco(s)" → "página(s)"
+- [x] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
+
+### 13.2 Interface — cartão de página
+- [x] Ícones novos em `client/icons.ts`: lápis (editar texto), prompt editável, ramificar
+- [x] Componente `pageCard` (cartão separado por página, cabeçalho "Página N" absoluto, folha com borda/sombra, espaçamento) no lugar da prosa contínua; modo `readonly` reutilizável
+- [x] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, **com aviso de descarte**), Ramificar (desabilitado na última página)
+- [x] Estados: edição dentro do cartão, página fantasma (streaming), esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
+- [x] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
+
+### 13.3 Páginas consumidas continuam legíveis e exportáveis
+- [x] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes
+- [x] Painel Contexto → Crônica: "Volume N — páginas X a Y", sinopse, botão **Ler as N páginas** e ícone **Salvar volume em .md**
+- [x] Leitor de volume como **página separada** (rota `#/s/<id>/v/<n>`, não modal) com `pageCard` somente leitura, link de volta e ícone de exportar; arquivadas não são editáveis nem ponto de ramificação na UI
+- [x] Teste: páginas arquivadas ficam **fora** do contexto da IA/HP/compactação e **dentro** do que o jogador lê e exporta
+- [x] Exportador: `---` entre páginas (linhas em branco ao redor), metadados "N páginas"; prompts do jogador continuam fora
+- [x] `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`)
+- [x] `GET /api/archives/:id/export?include_summary=` (volume: `# Título — Volume N`, sinopse opcional, páginas)
+- [x] Modal "Salvar em Markdown" com escopo (completa · só no Tome · só em volumes) + checkbox de contexto
+
+### 13.4 Os 8 temas (4 temas × claro/escuro)
+- [x] Tokens de "folha" por tema/modo em `client/styles.css`
+- [x] `test/pageThemes.test.ts` (vitest): contraste WCAG de texto, texto esmaecido e ícones, e distinção folha × fundo nas 8 combinações
+- [x] `npm run check:paginas` (Chromium headless): 8 combinações × 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste no DOM renderizado, leitor de volume
+- [x] Capturas das 8 combinações (desktop e celular, mais leitor de volume e gaveta) em `docs/screenshots/paginas/` inspecionadas uma a uma
+- [x] Testes de UI (jsdom): rótulos novos, ícones sempre visíveis (sem `opacity-0`), número da página, leitor, modal de exportação
+
+### 13.5 Documentação e entrega
+- [x] Design document: nova §11.22 (conceito, mapa de renomeação, leitor de volumes, formato do export, sem migração) + notas remissivas nas seções antigas
+- [x] README: vocabulário novo, aviso "pré-pré-alpha: atualizações não suportadas, apague `./data`", galeria dos 8 temas
+- [x] Suíte completa (198 testes) + typecheck (servidor e cliente) + `npm run build` + imagem Docker reconstruída e testada (build, subida, endpoints, limpeza)
+- [ ] Merge de `feature/paginas` em `main` (publica a imagem no GHCR)
