@@ -20,8 +20,24 @@ export interface Session {
   active_theme: ThemeId;
   token_limit: number;
   model: string | null;
+  /** Narração automática das páginas novas: true/false, ou null = herdar o padrão global. */
+  tts_auto: boolean | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Estado da narração em áudio de uma página (espelha `AudioInfo` em src/tts/service.ts). */
+export interface AudioInfo {
+  status: 'ready' | 'generating' | 'error';
+  duration_ms?: number;
+  bytes?: number;
+  voice?: string;
+  model?: string;
+  created_at?: string;
+  done?: number;
+  total?: number;
+  queued?: boolean;
+  error?: string;
 }
 
 export interface Page {
@@ -32,6 +48,8 @@ export interface Page {
   generated_text: string;
   model_identifier: string | null;
   is_archived: boolean;
+  /** Narração em áudio (null = ainda não gerada). Vem do servidor; os controles de áudio a mantêm atualizada. */
+  audio?: AudioInfo | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,6 +92,18 @@ export interface SettingsInfo {
   api_key_configured: boolean;
   default_model: string;
   default_system_rules: string;
+}
+
+export interface TtsSettingsInfo {
+  auto_default: boolean;
+  model: string;
+  voice: string;
+  style: string;
+  defaults: { auto_default: boolean; model: string; voice: string; style: string };
+  models: { id: string; label: string }[];
+  voices: { id: string; trait: string }[];
+  style_max: number;
+  usage: { count: number; bytes: number };
 }
 
 export interface ModelsInfo {

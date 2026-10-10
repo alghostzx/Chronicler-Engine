@@ -4,7 +4,7 @@ import { encodeWav } from '../src/tts/pcm.js';
 import { loadConfig } from '../src/config.js';
 import { createRepositories, type Repositories } from '../src/db/index.js';
 import { openDatabase } from '../src/db/connection.js';
-import { buildApp } from '../src/server.js';
+import { buildApp, type BuildAppOptions } from '../src/server.js';
 
 export const FAKE_KEY = 'chave-de-teste-1234567890';
 
@@ -117,11 +117,16 @@ export interface TestApp {
 }
 
 /** App com SQLite em memória e Gemini mockado. */
-export async function makeApp(gateway: MockGateway = mockGateway()): Promise<TestApp> {
+export async function makeApp(
+  gateway: MockGateway = mockGateway(),
+  extra: Pick<BuildAppOptions, 'audio'> = {},
+): Promise<TestApp> {
   const repos = createRepositories(openDatabase(':memory:'));
   const app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), {
     repos,
     gatewayFactory: () => gateway,
+    // Sem espera real entre as tentativas de síntese nos testes.
+    audio: { retryDelaysMs: [0, 0], ...extra.audio },
   });
   return { app, repos, gateway };
 }

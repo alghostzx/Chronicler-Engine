@@ -15,6 +15,12 @@ export function openDatabase(databasePath: string): Db {
   }
   const db = new Database(databasePath);
   db.pragma('foreign_keys = ON');
+  if ((db.pragma('user_version', { simple: true }) as number) === 0) {
+    // Banco novo. Só tem efeito antes de qualquer escrita (inclusive a troca para WAL): permite
+    // devolver ao disco o espaço dos áudios apagados (`incremental_vacuum`) em vez de o arquivo
+    // só crescer.
+    db.pragma('auto_vacuum = INCREMENTAL');
+  }
   if (databasePath !== ':memory:') {
     db.pragma('journal_mode = WAL');
   }
@@ -35,11 +41,6 @@ function migrate(db: Db): void {
       `Banco de dados com versão de schema antiga (${current}); esta versão (${SCHEMA_VERSION}) não oferece migração. ` +
         'O projeto está em fase pré-alpha: apague o arquivo do banco (a pasta ./data) e inicie novamente.',
     );
-  }
-  if (current === 0) {
-    // Só tem efeito antes da primeira tabela existir: permite devolver ao disco o espaço dos
-    // áudios apagados (`incremental_vacuum`) em vez de o arquivo só crescer.
-    db.pragma('auto_vacuum = INCREMENTAL');
   }
   db.exec(SCHEMA_SQL);
   if (current < SCHEMA_VERSION) {

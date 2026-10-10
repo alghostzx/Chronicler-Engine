@@ -10,6 +10,7 @@ import {
 import { formatNumber, h, mount, toast, confirmModal } from '../dom';
 import { applyTheme } from '../theme';
 import { createModeControl, fullscreenButton } from '../controls';
+import { createTtsSettingsCard } from './ttsSettings';
 
 const DEFAULT_LIMIT = 1_000_000;
 
@@ -283,6 +284,7 @@ export async function renderHome(root: HTMLElement): Promise<void> {
         keyBox,
         defaultSelectHost,
       ),
+      createTtsSettingsCard(),
       h(
         'div',
         { class: 'grid grid-cols-1 gap-6 md:grid-cols-2' },

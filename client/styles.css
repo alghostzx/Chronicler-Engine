@@ -346,6 +346,78 @@
     opacity: 1;
   }
 
+  /* Narração por voz: botão "Ouvir" e painel (gerando / erro / player) acima do rodapé do cartão. */
+  .page-action-listen.is-playing {
+    @apply border-accent text-accent;
+  }
+  .audio-panel {
+    @apply px-3 py-2 sm:px-4;
+    border-top: 1px solid var(--page-border);
+  }
+  .audio-player {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .audio-seek {
+    flex: 1 1 7rem;
+    min-width: 7rem;
+    accent-color: var(--accent);
+  }
+  .audio-time {
+    @apply whitespace-nowrap text-xs text-muted;
+    font-variant-numeric: tabular-nums;
+  }
+  .audio-tools {
+    @apply ml-auto flex items-center gap-1;
+  }
+  .audio-rate {
+    @apply h-9 px-2 text-xs;
+    font-variant-numeric: tabular-nums;
+  }
+  .audio-status {
+    @apply flex items-center gap-2 text-sm text-muted;
+  }
+  .audio-status-text {
+    @apply min-w-0 flex-1;
+  }
+  .audio-error {
+    color: var(--hp-low);
+  }
+  .audio-note {
+    @apply w-full text-xs text-muted;
+  }
+  .audio-progress {
+    @apply h-1.5 w-16 shrink-0 overflow-hidden rounded-full sm:w-28;
+    background: var(--bg-main);
+    outline: 1px solid var(--page-border);
+  }
+  .audio-progress-bar {
+    @apply h-full;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+  .audio-spin {
+    animation: audio-spin 1s linear infinite;
+  }
+  .page-action-listen.is-busy svg {
+    animation: audio-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes audio-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes audio-pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .audio-spin,
+    .page-action-listen.is-busy svg {
+      animation: none;
+    }
+  }
+
   /* Botão "Compactar Crônica" pulsa quando o HP está em exaustão (< 20%). */
   @keyframes pulse-glow {
     0%,

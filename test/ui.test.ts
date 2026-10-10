@@ -143,12 +143,12 @@ describe('UI — sessão', () => {
     await waitFor(() => text().includes('O silêncio voltou.'), 'segunda página');
     expect(document.querySelectorAll('section[data-page-id]').length).toBe(2);
 
-    // Cada página é um cartão separado, numerado de forma absoluta, com 3 ações só em ícone sempre visíveis.
+    // Cada página é um cartão separado, numerado de forma absoluta, com 4 ações (ouvir, editar texto, editar prompt, ramificar) só em ícone sempre visíveis.
     const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card[data-page-id]'));
     expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
     for (const card of cards) {
       const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button'));
-      expect(actions.map((b) => b.getAttribute('aria-label'))).toEqual(['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página']);
+      expect(actions.map((b) => b.getAttribute('aria-label'))).toEqual(['Ouvir esta página', 'Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página']);
       for (const b of actions) {
         expect(b.textContent).toBe(''); // só ícone
         expect(b.querySelectorAll('svg').length).toBe(1); // um único ícone por ação
@@ -157,7 +157,7 @@ describe('UI — sessão', () => {
       }
     }
     const icons = Array.from(cards[0]!.querySelectorAll('.page-card-actions svg')).map((s) => s.innerHTML);
-    expect(new Set(icons).size).toBe(3); // glifos distintos
+    expect(new Set(icons).size).toBe(4); // glifos distintos
     expect(cards[0]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(false);
     expect(cards[1]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(true); // última página
     expect(cards[0]!.querySelector('.drop-cap')).not.toBeNull();
@@ -245,7 +245,9 @@ describe('UI — sessão', () => {
     expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
     expect(text()).toContain('Segundo capítulo.');
     expect(text()).not.toContain('Terceiro capítulo.');
-    expect(document.querySelectorAll('.page-card-actions').length).toBe(0); // somente leitura
+    // Somente leitura: o rodapé só tem o ícone de ouvir (sem editar nem ramificar).
+    const readOnlyActions = Array.from(document.querySelectorAll('.page-card-actions button'));
+    expect(readOnlyActions.map((b) => b.getAttribute('aria-label'))).toEqual(['Ouvir esta página', 'Ouvir esta página']);
     expect(document.querySelector('textarea')).toBeNull();
     expect(byLabel('Salvar volume em Markdown')).not.toBeNull();
     expect(document.querySelector('a[aria-label="Voltar ao Tome"]')!.getAttribute('href')).toMatch(/^#\/s\//);

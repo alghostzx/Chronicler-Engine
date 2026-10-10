@@ -108,7 +108,11 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: AppContext): void
       if (rangeHeader) {
         const range = parseRange(rangeHeader, bytes.length);
         if (!range) {
-          return reply.code(416).header('Content-Range', `bytes */${bytes.length}`).send({ error: 'Intervalo inválido.' });
+          return reply
+            .code(416)
+            .type('application/json')
+            .header('Content-Range', `bytes */${bytes.length}`)
+            .send({ error: 'Intervalo inválido.' });
         }
         return reply
           .code(206)

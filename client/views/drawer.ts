@@ -1,4 +1,4 @@
-import { api, type Archive, type ModelsInfo, type Session, type SettingsInfo } from '../api';
+import { api, type Archive, type ModelsInfo, type Session, type SettingsInfo, type TtsSettingsInfo } from '../api';
 import { iconButton } from '../controls';
 import { icon } from '../icons';
 import { formatNumber, h, mount, paragraphs, toast } from '../dom';
@@ -14,12 +14,13 @@ export interface DrawerHooks {
 
 const readLabel = (n: number): string => (n === 1 ? 'Ler a página' : `Ler as ${formatNumber(n)} páginas`);
 
-type Tab = 'mundo' | 'regras' | 'modelo' | 'cronica';
+type Tab = 'mundo' | 'regras' | 'modelo' | 'voz' | 'cronica';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'mundo', label: 'Mundo' },
   { id: 'regras', label: 'Regras' },
   { id: 'modelo', label: 'Modelo' },
+  { id: 'voz', label: 'Voz' },
   { id: 'cronica', label: 'Crônica' },
 ];
 
@@ -178,6 +179,49 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
     );
   }
 
+  /** Narração automática desta sessão: herda o padrão global (desligado de fábrica), liga ou desliga. */
+  async function renderVoiceTab() {
+    const session = hooks.getSession();
+    mount(content, h('p', { class: 'text-sm text-muted' }, 'Consultando a narração…'));
+    let tts: TtsSettingsInfo | null = null;
+    try {
+      tts = await api<TtsSettingsInfo>('GET', '/api/settings/tts');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+    const current = session.tts_auto === null ? 'inherit' : session.tts_auto ? 'on' : 'off';
+    const select = h(
+      'select',
+      { class: 'input', 'aria-label': 'Narração automática desta sessão' },
+      h('option', { value: 'inherit', selected: current === 'inherit' }, `Herdar o padrão global (${tts?.auto_default ? 'ligada' : 'desligada'})`),
+      h('option', { value: 'on', selected: current === 'on' }, 'Ligada: narrar cada página nova'),
+      h('option', { value: 'off', selected: current === 'off' }, 'Desligada: só narrar quando eu pedir'),
+    );
+    mount(
+      content,
+      h(
+        'div',
+        { class: 'space-y-4' },
+        h('div', null, h('label', { class: 'label' }, 'Narração automática'), select),
+        h(
+          'p',
+          { class: 'text-xs text-muted' },
+          'Ligada, o áudio de cada página nova do Narrador (inclusive a que fecha um diálogo) é gerado em segundo plano pela voz configurada, e consome tokens de voz da API. Desligada, use o ícone de alto-falante de cada página para gerar o áudio quando quiser. O Modo Diálogo nunca é narrado.',
+        ),
+        h(
+          'button',
+          {
+            class: 'btn btn-primary',
+            type: 'button',
+            onClick: () => void save({ tts_auto: select.value === 'inherit' ? null : select.value === 'on' }, 'Narração automática salva.'),
+          },
+          'Salvar',
+        ),
+        h('p', { class: 'text-xs text-muted' }, 'A voz, o estilo, o modelo de voz e o padrão global ficam em “Narração por voz”, na tela inicial.'),
+      ),
+    );
+  }
+
   function renderArchiveTab() {
     const archives = hooks.getArchives();
     if (archives.length === 0) {
@@ -239,6 +283,8 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
       });
     } else if (tab === 'modelo') {
       void renderModelTab();
+    } else if (tab === 'voz') {
+      void renderVoiceTab();
     } else {
       renderArchiveTab();
     }
