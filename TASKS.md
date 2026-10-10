@@ -105,3 +105,34 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Correção encontrada nas capturas: barra de HP no celular
 - [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
 - [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
+
+## Fase 13 — Páginas (branch `feature/paginas`) 🚧
+Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft aprovado? **Aguardando decisões** (profundidade da renomeação, numeração, export `.md`).
+
+### 13.1 Renomeação bloco → página (código, API, banco)
+- [ ] Migração SQLite v2 (`SCHEMA_VERSION` 2): `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice renomeado; transacional, bancos novos já nascem v2
+- [ ] Teste de migração com banco v1 real (dados preservados) e de banco mais novo que o suportado
+- [ ] Repositório `blocks` → `pages`; tipos `Block` → `Page`
+- [ ] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…`; JSON (`blocks` → `pages`, `pages_to_archive/keep`, `covered_page_*`) e evento SSE `block` → `page`
+- [ ] Mensagens de erro, prompts de compactação e textos da UI: "bloco(s)" → "página(s)"
+- [ ] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
+
+### 13.2 Interface — cartão de página
+- [ ] Ícones novos em `client/icons.ts`: lápis, prompt editável, ramificar
+- [ ] Cartão separado por página (cabeçalho "Página N", folha com borda/sombra, espaçamento) no lugar da prosa contínua
+- [ ] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, com aviso de descarte), Ramificar (desabilitado na última página)
+- [ ] Estados: edição dentro do cartão, página fantasma (streaming), páginas esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
+- [ ] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
+
+### 13.3 Os 8 temas (4 temas × claro/escuro)
+- [ ] Tokens de "folha" por tema/modo em `client/styles.css`
+- [ ] `test/pageThemes.test.ts` (vitest): contraste WCAG de texto, texto esmaecido e ícones, e distinção folha × fundo nas 8 combinações
+- [ ] `npm run check:paginas` (Chromium headless): para as 8 combinações em 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste calculado no DOM renderizado
+- [ ] Capturas das 8 combinações em `docs/screenshots/paginas/` inspecionadas uma a uma
+- [ ] Testes de UI (jsdom) atualizados para o novo vocabulário e para ícones sempre visíveis
+
+### 13.4 Documentação e entrega
+- [ ] Design document: nova §11.22 (conceito, mapa de renomeação, migração v2) + notas remissivas nas seções antigas
+- [ ] README: vocabulário e capturas novos (galeria dos 8 temas)
+- [ ] Suíte completa + typecheck (servidor e cliente) + rebuild da imagem e verificação
+- [ ] Merge de `feature/paginas` em `main` (publica a imagem no GHCR)
