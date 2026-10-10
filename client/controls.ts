@@ -184,3 +184,5 @@ export function createThemeControl(current: ThemeId, onSelect: (theme: ThemeId) 
     align,
   });
 }
+
+export { createFullscreenButton, toggleFullscreen, isFullscreen } from './fullscreen';
