@@ -9,7 +9,7 @@ import {
 } from '../api';
 import { formatNumber, h, mount, toast, confirmModal } from '../dom';
 import { applyTheme } from '../theme';
-import { createModeControl } from '../controls';
+import { createFullscreenButton, createModeControl } from '../controls';
 
 const DEFAULT_LIMIT = 1_000_000;
 
@@ -272,7 +272,7 @@ export async function renderHome(root: HTMLElement): Promise<void> {
       h(
         'header',
         { class: 'text-center' },
-        h('div', { class: 'mb-2 flex justify-end' }, createModeControl()),
+        h('div', { class: 'mb-2 flex justify-end gap-2' }, createFullscreenButton(), createModeControl()),
         h('h1', { class: 'font-display text-4xl font-bold text-strong' }, 'Chronicler Engine'),
         h('p', { class: 'mt-1 text-muted' }, 'Escreva a sua crônica com um Narrador de IA.'),
       ),
