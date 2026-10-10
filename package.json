@@ -25,6 +25,7 @@
     "screenshots": "tsx scripts/screenshots.ts",
     "check:paginas": "tsx scripts/check-pages.ts",
     "check:mobile": "tsx scripts/check-mobile.ts",
+    "check:audio": "tsx scripts/check-audio.ts",
     "icons": "tsx scripts/make-icons.ts"
   },
   "license": "MIT",

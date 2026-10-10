@@ -21,6 +21,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 - [Subindo com Docker](#subindo-com-docker)
 - [Subindo com Podman](#subindo-com-podman)
 - [Primeiro uso](#primeiro-uso)
+- [Narração por voz](#narração-por-voz)
 - [Usar no celular (PWA)](#usar-no-celular-pwa)
 - [Atualizar, parar e fazer backup](#atualizar-parar-e-fazer-backup)
 - [Solução de problemas](#solução-de-problemas)
@@ -32,7 +33,8 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 
 ## Recursos
 
-- **Tome em páginas**: cada texto gerado por um prompt é uma *página*, numerada (`Página 1`, `Página 2`…, numeração absoluta que não recomeça após compactar) e exibida como uma folha separada. Streaming da narrativa e, no rodapé de cada página, três ações em **ícones sempre visíveis** (com tooltip): ✎ *editar o texto*, 💬 *editar o prompt e re-gerar* (descartando as páginas posteriores, com aviso) e ⑂ *ramificar a partir daquela página*.
+- **Tome em páginas**: cada texto gerado por um prompt é uma *página*, numerada (`Página 1`, `Página 2`…, numeração absoluta que não recomeça após compactar) e exibida como uma folha separada. Streaming da narrativa e, no rodapé de cada página, quatro ações em **ícones sempre visíveis** (com tooltip): 🔊 *ouvir a página* (ver [Narração por voz](#narração-por-voz)), ✎ *editar o texto*, 💬 *editar o prompt e re-gerar* (descartando as páginas posteriores, com aviso) e ⑂ *ramificar a partir daquela página*.
+- **Narração por voz** (opcional): um narrador de voz grave lê as páginas em português do Brasil (Gemini TTS). O áudio fica guardado no SQLite (ouvir de novo é grátis), é descartado se a página mudar, pode ser gerado de novo ou baixado em MP3, e funciona também nas páginas já coletadas em volumes. Geração automática por crônica, desligada por padrão.
 - **Modo Diálogo**: o Narrador pode abrir uma conversa com um NPC (persona isolada, que não conhece o resto da história). Quem encerra é você (`Encerrar Diálogo e Narrar`, que costura a cena em prosa, ou `Descartar`); o NPC apenas *sinaliza* que quer terminar, destacando o botão. Recarregar a página retoma a cena.
 - **HP do Narrador**: barra de contexto (tokens usados × limite configurável por sessão) e **Compactação de Crônica**, que gera uma sinopse revisável por você antes de transformar as páginas antigas em um *volume*. As páginas consumidas saem do contexto da IA, mas **continuam legíveis** (botão *Ler as N páginas*, em uma tela própria) e exportáveis.
 - **4 temas**, cada um em variação clara e escura (Medieval, Cyberpunk, Pós-apocalíptico, Contemporâneo — 8 combinações, todas verificadas em um navegador headless), com fontes empacotadas localmente (nenhum CDN). O modo segue o sistema por padrão.
@@ -120,6 +122,20 @@ Por que o `docker-compose.podman.yml` e esses parâmetros? Em modo rootless, o "
 > [!WARNING]
 > A interface **não tem autenticação** e o banco guarda a chave da API. Por isso a porta é publicada somente em `127.0.0.1`. Para acessar de outra máquina, ponha um proxy reverso com autenticação (ou uma VPN) na frente — não troque o bind para `0.0.0.0` sozinho.
 
+## Narração por voz
+
+Cada página pode ser **lida em voz alta** por um narrador de voz grave e pausada (padrão: voz *Gacrux* do Gemini TTS, em português do Brasil). É opcional e **desligada por padrão**.
+
+- **Como ouvir:** clique no ícone de alto-falante (**Ouvir esta página**) no rodapé de qualquer página — do Tome ou do leitor de volume (páginas já coletadas em crônicas também). O áudio é gerado (com progresso e botão de cancelar), aparece um player (tocar/pausar, barra de posição, velocidade 0,75×–1,5×, **gerar de novo**, apagar e **baixar .mp3**) e o áudio fica guardado.
+- **Gerar de novo:** se a voz não ficou boa, *Gerar o áudio de novo* (com confirmação) substitui o anterior; o antigo só é descartado quando o novo fica pronto.
+- **Cache:** o MP3 (48 kbps, mono; ≈ 6 KB por segundo, ~360 KB por minuto) fica no SQLite — ouvir de novo não gasta nada. Ele é **descartado automaticamente** quando a página é editada, re-gerada ou removida por ramificação, e o espaço é devolvido ao arquivo do banco.
+- **Geração automática** (opcional): a opção global *Narrar automaticamente cada página nova* fica no cartão **Narração por voz** da tela inicial (padrão: desligada); cada crônica pode **herdar** esse padrão ou forçar *ligada*/*desligada* na aba **Voz** da gaveta de contexto. A página criada ao encerrar um diálogo também segue essa regra.
+- **Voz, modelo e estilo** (ritmo e tom) também são configurados no cartão da tela inicial, com **Ouvir amostra** e uso de armazenamento (e *Apagar todos os áudios*).
+- **O que nunca acontece:** o **Modo Diálogo não é narrado** (só a página em prosa que o fecha) e **não existe reprodução contínua** (“ler daqui até o fim”) — de propósito, para não gastar tokens de voz em dezenas de páginas sem querer. Cada geração é um pedido explícito (ou automático, se você ligar).
+
+> [!NOTE]
+> **Custo e privacidade.** O texto da página é enviado ao Google (Gemini TTS) e o áudio é cobrado como tokens de saída da sua chave (cerca de 1,5 mil tokens por minuto de áudio — veja a tabela de preços do modelo). Nomes inventados podem sair com pronúncia criativa: a IA lê, não conhece o seu mundo.
+
 ## Usar no celular (PWA)
 
 O Chronicler Engine é um **PWA instalável** (tem manifesto web e ícones): dá para adicioná-lo à tela de aplicativos do celular e abri-lo **sem a barra do navegador**, como um aplicativo (mantém a barra de status). Não é um PWA completo: não funciona offline nem sem o servidor.
@@ -143,7 +159,7 @@ O Chronicler Engine é um **PWA instalável** (tem manifesto web e ícones): dá
 
 - **Backup:** todos os dados (SQLite + chave) estão na pasta `./data`. Pare o contêiner e copie a pasta (`cp -a data data.bak`).
 - **Recomeçar do zero:** pare o contêiner e apague `./data`.
-- **Atualizando de uma versão anterior:** o formato do banco mudou (blocos viraram páginas) e não há migração; pare o contêiner, apague `./data` e suba de novo. Antes, salve as crônicas que quiser guardar com *Salvar em Markdown*.
+- **Atualizando de uma versão anterior:** o formato do banco mudou (blocos viraram páginas; depois chegou a narração por voz, schema v3) e não há migração; pare o contêiner, apague `./data` e suba de novo. Antes, salve as crônicas que quiser guardar com *Salvar em Markdown*.
 - **Outra porta:** mude `127.0.0.1:3000:3000` no `docker-compose.yml` (ex.: `127.0.0.1:8080:3000`).
 
 ## Solução de problemas
@@ -231,6 +247,7 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | `npm run fonts` | Reempacota as fontes de `@fontsource/*` em `public/fonts/` |
 | `npm run check:paginas` | Verifica o cartão de página nos 8 temas (claro/escuro × desktop/celular) em um Chromium headless — ações visíveis, contraste, sem rolagem horizontal — e grava capturas em `docs/screenshots/paginas/` |
 | `npm run check:mobile` | Verifica o layout do celular (390 px; alturas de tela cheia, com barra do navegador e com teclado aberto) na sessão e no leitor de volume, nos 8 temas: cabeçalho no topo, doca embaixo, só a área das páginas rola, campo de digitação visível, manifesto instalável. Grava folhas de contato em `docs/screenshots/mobile/`. `BROWSER=firefox` usa o Firefox do Playwright |
+| `npm run check:audio` | Verifica a narração por voz nos 8 temas (claro/escuro × desktop/celular): ícone *Ouvir*, progresso, player, tocar/pausar, tooltips, leitor de volume, aba *Voz* da gaveta e o cartão *Narração por voz* (síntese simulada). Grava capturas em `docs/screenshots/audio/`. `BROWSER=firefox` usa o Firefox do Playwright |
 | `npm run icons` | Regenera os ícones PNG do manifesto (`public/icons/`) a partir de `public/favicon.svg` |
 | `npm run screenshots` | Regenera `docs/screenshots/` com um Chromium headless (Gemini simulado; use `CHROME_PATH=…` se não houver um navegador do Playwright) |
 
@@ -248,6 +265,8 @@ A chave da API é configurada pela interface (e gravada no banco local). O arqui
 ## Licença
 
 Distribuído sob a licença **MIT**. Consulte o arquivo [`LICENSE`](LICENSE) para mais detalhes (isenção total de garantia e responsabilidade).
+
+A narração por voz codifica MP3 com [`@breezystack/lamejs`](https://github.com/breezystack/lamejs) (porte do LAME), licenciado sob **LGPL-3.0**. Ele é usado como biblioteca, sem modificações e instalada pelo `npm`, o que é compatível com a licença MIT deste projeto; quem redistribuir o pacote deve manter o aviso de licença da dependência.
 
 ## Sobre a autoria
 

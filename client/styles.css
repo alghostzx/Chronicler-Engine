@@ -370,7 +370,7 @@
     @apply ml-auto flex items-center gap-1;
   }
   .audio-rate {
-    @apply h-9 px-2 text-xs;
+    @apply h-9 min-w-[2.25rem] px-2 text-xs;
     font-variant-numeric: tabular-nums;
   }
   .audio-status {

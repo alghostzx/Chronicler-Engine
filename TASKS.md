@@ -183,37 +183,37 @@ Problemas relatados (Android Chrome): com a barra do navegador visível o campo 
 Decisões do autor: voz padrão **Gacrux** ("Mature", pré-definida, sem sotaque carioca) com estilo editável; **geração automática por sessão**, herdando um padrão global **desligado**; **sem** reprodução contínua ("ler daqui até o fim", risco de gasto enorme de tokens); MP3 48 kbps via `@breezystack/lamejs` (LGPL-3.0, documentado). Chave de teste validada: `gemini-3.8-flash-tts` funciona (Interactions API, não `generateContent`).
 
 ### 15.1 Banco e armazenamento (schema v3, sem migração)
-- [ ] `SCHEMA_VERSION` 3; tabela `page_audio` (`page_id` PK → `narrative_pages` `ON DELETE CASCADE`, `text_sha256`, `voice`, `model`, `style`, `mime`, `duration_ms`, `bytes`, `audio` BLOB); `sessions.tts_auto` (NULL = herda o padrão global)
-- [ ] `PRAGMA auto_vacuum = INCREMENTAL` na criação do banco + `incremental_vacuum` após apagar áudios
-- [ ] Repositório `audio` (get sem blob / com blob, put, delete, stats, purge); leitura valida `text_sha256` (obsoleto = inexistente e apagado)
-- [ ] Descarte: edição de texto, regeneração e ramificação/exclusão de sessão (CASCADE)
+- [x] `SCHEMA_VERSION` 3; tabela `page_audio` (`page_id` PK → `narrative_pages` `ON DELETE CASCADE`, `text_sha256`, `voice`, `model`, `style`, `mime`, `duration_ms`, `bytes`, `audio` BLOB); `sessions.tts_auto` (NULL = herda o padrão global)
+- [x] `PRAGMA auto_vacuum = INCREMENTAL` na criação do banco + `incremental_vacuum` após apagar áudios
+- [x] Repositório `audio` (get sem blob / com blob, put, delete, stats, purge); leitura valida `text_sha256` (obsoleto = inexistente e apagado)
+- [x] Descarte: edição de texto, regeneração e ramificação/exclusão de sessão (CASCADE)
 
 ### 15.2 Síntese (servidor)
-- [ ] `GeminiGateway.synthesize` (Interactions API, `speech_metadata.style`, voz em `speech_config`), mock em `test/helpers.ts`
-- [ ] Limpeza do texto (markdown/símbolos) e quebra por parágrafos (~1,5 mil caracteres)
-- [ ] WAV → PCM, silêncio de ~250 ms entre trechos, codificação MP3 48 kbps mono
-- [ ] Gerenciador de jobs: progresso n/m, cancelamento, máx. 2 simultâneos, retentativas 429/5xx, mensagens pt-BR, descarte do resultado se a página mudou/sumiu durante o job
+- [x] `GeminiGateway.synthesize` (Interactions API, `speech_metadata.style`, voz em `speech_config`), mock em `test/helpers.ts`
+- [x] Limpeza do texto (markdown/símbolos) e quebra por parágrafos (~1,5 mil caracteres)
+- [x] WAV → PCM, silêncio de ~250 ms entre trechos, codificação MP3 48 kbps mono
+- [x] Gerenciador de jobs: progresso n/m, cancelamento, máx. 2 simultâneos, retentativas 429/5xx, mensagens pt-BR, descarte do resultado se a página mudou/sumiu durante o job
 
 ### 15.3 API
-- [ ] `POST /api/narrative/pages/:id/audio` (gera/gera de novo), `GET …/audio/status`, `GET …/audio` (MP3 com `Range`), `DELETE …/audio`, `POST …/audio/cancel`
-- [ ] `GET/PUT /api/settings/tts` (auto padrão, modelo, voz, estilo), `GET /api/audio/usage`, `DELETE /api/audio` (apagar todos), `POST /api/settings/tts/sample`
-- [ ] `tts_auto` por sessão no `PUT /api/sessions/:id/context`
-- [ ] Geração automática em segundo plano após cada página do Narrador (inclusive a de fechamento de diálogo); nunca para mensagens de diálogo; desligada por padrão
-- [ ] Páginas arquivadas (volumes) também podem ser narradas
+- [x] `POST /api/narrative/pages/:id/audio` (gera/gera de novo), `GET …/audio/status`, `GET …/audio` (MP3 com `Range`), `DELETE …/audio`, `POST …/audio/cancel`
+- [x] `GET/PUT /api/settings/tts` (auto padrão, modelo, voz, estilo), `GET /api/audio/usage`, `DELETE /api/audio` (apagar todos), `POST /api/settings/tts/sample`
+- [x] `tts_auto` por sessão no `PUT /api/sessions/:id/context`
+- [x] Geração automática em segundo plano após cada página do Narrador (inclusive a de fechamento de diálogo); nunca para mensagens de diálogo; desligada por padrão
+- [x] Páginas arquivadas (volumes) também podem ser narradas
 
 ### 15.4 Interface
-- [ ] Ícones SVG novos (ouvir, tocar, pausar, regenerar, apagar, baixar, cancelar)
-- [ ] 4º ícone "Ouvir" sempre visível no cartão; player embutido (tocar/pausar, barra, tempo, velocidade, gerar de novo com aviso, apagar, baixar .mp3); estados gerando n/m e erro
-- [ ] Um único `<audio>` global (tocar uma página pausa a outra) + Media Session
-- [ ] Leitor de volume com o botão de áudio
-- [ ] Gaveta da sessão: geração automática (herdar/ligar/desligar); Biblioteca: configurações de voz (modelo, voz, estilo, amostra, uso de armazenamento, apagar tudo)
+- [x] Ícones SVG novos (ouvir, tocar, pausar, regenerar, apagar, baixar, cancelar)
+- [x] 4º ícone "Ouvir" sempre visível no cartão; player embutido (tocar/pausar, barra, tempo, velocidade, gerar de novo com aviso, apagar, baixar .mp3); estados gerando n/m e erro
+- [x] Um único `<audio>` global (tocar uma página pausa a outra) + Media Session
+- [x] Leitor de volume com o botão de áudio
+- [x] Gaveta da sessão: geração automática (herdar/ligar/desligar); Biblioteca: configurações de voz (modelo, voz, estilo, amostra, uso de armazenamento, apagar tudo)
 
 ### 15.5 Testes
-- [ ] Vitest (gateway simulado): geração, quebra, MP3 válido, cache (2ª leitura sem API), descarte por edição/regeneração/ramificação/sessão, hash de segurança, corrida, sem áudio em diálogo, auto só quando ligado, Range, auto_vacuum, UI jsdom
-- [ ] `npm run check:audio` (Chromium e Firefox; 8 temas × desktop/390 px; capturas inspecionadas)
-- [ ] Teste real com a chave (`scripts/live-tts-e2e.ts`), verificado por transcrição
+- [x] Vitest (gateway simulado): geração, quebra, MP3 válido, cache (2ª leitura sem API), descarte por edição/regeneração/ramificação/sessão, hash de segurança, corrida, sem áudio em diálogo, auto só quando ligado, Range, auto_vacuum, UI jsdom
+- [x] `npm run check:audio` (Chromium e Firefox; 8 temas × desktop/390 px; capturas inspecionadas)
+- [x] Teste real com a chave (`scripts/live-tts-e2e.ts`), verificado por transcrição
 
 ### 15.6 Documentação e entrega
-- [ ] README (uso, geração automática, custo/armazenamento, privacidade, LGPL do `lamejs`), design document §11.24
-- [ ] typecheck (servidor e cliente), suíte completa, `npm run build`
-- [ ] Remover `samples-tts/`; merge de `feature/tts-narrador` em `main`
+- [x] README (uso, geração automática, custo/armazenamento, privacidade, LGPL do `lamejs`), design document §11.24
+- [x] typecheck (servidor e cliente), suíte completa, `npm run build`
+- [x] Remover `samples-tts/`; merge de `feature/tts-narrador` em `main`

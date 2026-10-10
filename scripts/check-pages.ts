@@ -142,9 +142,10 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
 
     const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button.page-action'));
     if (kind === 'volume') {
-      if (card.querySelector('.page-card-actions')) problems.push(`${label}: leitor deve ser somente leitura`);
-    } else if (actions.length !== 3) {
-      problems.push(`${label}: esperava 3 ações, achou ${actions.length}`);
+      const names = actions.map((a) => a.getAttribute('aria-label'));
+      if (names.length !== 1 || names[0] !== 'Ouvir esta página') problems.push(`${label}: leitor deve ser somente leitura (apenas “Ouvir”), achou ${JSON.stringify(names)}`);
+    } else if (actions.length !== 4) {
+      problems.push(`${label}: esperava 4 ações, achou ${actions.length}`);
     }
     for (const b of actions) {
       const name = b.getAttribute('aria-label') ?? '?';
@@ -164,11 +165,11 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
       const cr = ratio(blend(c, under), under);
       if (cr < 3) problems.push(`${label}/${name}: contraste do ícone ${cr.toFixed(2)}:1 (< 3)`);
     }
-    if (kind === 'tome' && actions.length === 3) {
+    if (kind === 'tome' && actions.length === 4) {
       const rects = actions.map((a) => a.getBoundingClientRect());
       if (new Set(rects.map((r) => Math.round(r.top))).size !== 1) problems.push(`${label}: ícones quebraram em mais de uma linha`);
       const glyphs = actions.map((a) => a.querySelector('svg')!.innerHTML);
-      if (new Set(glyphs).size !== 3) problems.push(`${label}: ícones repetidos`);
+      if (new Set(glyphs).size !== 4) problems.push(`${label}: ícones repetidos`);
     }
   }
   return { problems, cards: cards.length };
@@ -222,7 +223,7 @@ for (const theme of THEMES) {
 
       // Ações clicáveis (verifica visibilidade, estabilidade e que nada cobre o botão) + tooltip
       const first = page.locator('.page-card[data-page-id]').first();
-      for (const label of ['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página']) {
+      for (const label of ['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página', 'Ouvir esta página']) {
         try {
           await first.getByRole('button', { name: label }).click({ trial: true, timeout: 3000 });
         } catch (e) {
