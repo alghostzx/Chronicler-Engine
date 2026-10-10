@@ -14,6 +14,7 @@ import { loadConfig, type AppConfig } from './config.js';
 import { HttpError, type AppContext } from './context.js';
 import { openRepositories, type Repositories } from './db/index.js';
 import { registerArchiveRoutes } from './routes/archives.js';
+import { registerAudioRoutes } from './routes/audio.js';
 import { registerCompactionRoutes } from './routes/compaction.js';
 import { registerDialogueRoutes } from './routes/dialogue.js';
 import { TurnRunner } from './routes/turnRunner.js';
@@ -21,6 +22,7 @@ import { registerNarrativeRoutes } from './routes/narrative.js';
 import { registerSessionRoutes } from './routes/sessions.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerTokenRoutes } from './routes/tokens.js';
+import { AudioService, type AudioServiceOptions } from './tts/service.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -28,6 +30,8 @@ export interface BuildAppOptions {
   repos?: Repositories;
   /** Fábrica de gateway do Gemini (testes injetam um mock). */
   gatewayFactory?: GatewayFactory;
+  /** Ajustes do serviço de narração (testes: sem espera entre tentativas). */
+  audio?: AudioServiceOptions;
 }
 
 export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -46,6 +50,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
     gatewayFactory,
     models: new ModelService(gatewayProvider, repos.settings),
     tokens: new TokenCounter(gatewayProvider),
+    audio: new AudioService(repos, gatewayProvider, opts.audio),
   } as AppContext;
   ctx.turns = new TurnRunner(ctx);
 
@@ -67,6 +72,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   });
 
   app.addHook('onClose', async () => {
+    ctx.audio.cancelAll();
     if (!opts.repos) repos.db.close();
   });
 
@@ -77,6 +83,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   registerDialogueRoutes(app, ctx);
   registerCompactionRoutes(app, ctx);
   registerArchiveRoutes(app, ctx);
+  registerAudioRoutes(app, ctx);
   registerTokenRoutes(app, ctx);
 
   if (fs.existsSync(config.publicDir)) {

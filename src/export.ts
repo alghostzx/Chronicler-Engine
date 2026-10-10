@@ -92,7 +92,7 @@ export function slugify(title: string): string {
 }
 
 /** Valor do cabeçalho Content-Disposition com nome ASCII e nome UTF-8 (RFC 6266). */
-export function contentDisposition(title: string): string {
+export function contentDisposition(title: string, ext = 'md'): string {
   const utf8Name = oneLine(title).replace(/[\\/:*?"<>|]+/g, '-').slice(0, 120) || 'cronica';
-  return `attachment; filename="${slugify(title)}.md"; filename*=UTF-8''${encodeURIComponent(utf8Name)}.md`;
+  return `attachment; filename="${slugify(title)}.${ext}"; filename*=UTF-8''${encodeURIComponent(utf8Name)}.${ext}`;
 }

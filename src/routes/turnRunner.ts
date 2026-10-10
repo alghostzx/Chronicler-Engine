@@ -96,7 +96,9 @@ export class TurnRunner {
       if (sse.signal.aborted || !result) return;
 
       const outcome = opts.persist(result, model);
-      sse.send('page', { page: outcome.page, discarded: outcome.discarded });
+      // Geração automática de voz (se ligada) em segundo plano: não segura o turno nem o SSE.
+      this.ctx.audio.autoStart(session, outcome.page);
+      sse.send('page', { page: this.ctx.audio.decorate([outcome.page])[0], discarded: outcome.discarded });
       if (outcome.dialogue) {
         sse.send('dialogue_trigger', {
           dialogue_id: outcome.dialogue.id,

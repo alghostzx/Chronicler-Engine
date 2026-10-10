@@ -36,6 +36,11 @@ function migrate(db: Db): void {
         'O projeto está em fase pré-alpha: apague o arquivo do banco (a pasta ./data) e inicie novamente.',
     );
   }
+  if (current === 0) {
+    // Só tem efeito antes da primeira tabela existir: permite devolver ao disco o espaço dos
+    // áudios apagados (`incremental_vacuum`) em vez de o arquivo só crescer.
+    db.pragma('auto_vacuum = INCREMENTAL');
+  }
   db.exec(SCHEMA_SQL);
   if (current < SCHEMA_VERSION) {
     db.pragma(`user_version = ${SCHEMA_VERSION}`);

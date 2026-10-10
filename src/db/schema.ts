@@ -9,8 +9,12 @@
  *
  * Versão 2: "blocos" viraram "páginas" (`narrative_pages`, `covered_page_*`). O projeto é
  * pré-pré-alpha: não há migração entre versões — bancos antigos são recusados com uma mensagem clara.
+ *
+ * Versão 3: narração por voz. `page_audio` guarda o MP3 (BLOB) de cada página narrada, em tabela
+ * separada para que listar páginas nunca carregue áudio; `sessions.tts_auto` liga/desliga a geração
+ * automática por sessão (NULL = herda o padrão global).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -27,6 +31,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     active_theme TEXT DEFAULT 'medieval',
     token_limit INTEGER DEFAULT 1000000,
     model TEXT,
+    tts_auto INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -74,6 +79,20 @@ CREATE TABLE IF NOT EXISTS dialogue_messages (
     content TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (dialogue_session_id) REFERENCES dialogue_sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS page_audio (
+    page_id TEXT PRIMARY KEY,
+    text_sha256 TEXT NOT NULL,
+    voice TEXT NOT NULL,
+    model TEXT NOT NULL,
+    style TEXT NOT NULL,
+    mime TEXT NOT NULL DEFAULT 'audio/mpeg',
+    duration_ms INTEGER NOT NULL,
+    bytes INTEGER NOT NULL,
+    audio BLOB NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (page_id) REFERENCES narrative_pages(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_pages_order ON narrative_pages(session_id, order_index);

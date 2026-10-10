@@ -17,7 +17,7 @@ const instructionBody = {
 };
 
 export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): void {
-  const { repos, turns } = ctx;
+  const { repos, turns, audio } = ctx;
 
   const requireSession = (id: string): Session => {
     const session = repos.sessions.get(id);
@@ -84,9 +84,11 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       if (turns.isBusy(page.session_id)) {
         throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
       }
-      const updated = repos.pages.updateText(page.id, req.body.generated_text);
+      const updated = repos.pages.updateText(page.id, req.body.generated_text)!;
       repos.sessions.touch(page.session_id);
-      return { page: updated };
+      // O áudio narrava o texto antigo: some junto com ele (a narração nova é opcional).
+      audio.discard(page.id);
+      return { page: audio.decorate([updated])[0] };
     },
   );
 
@@ -140,18 +142,25 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
         }),
         // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem
         // numa única transação, então uma falha de geração nunca apaga dados (§11.5).
-        persist: (result, model) =>
-          repos.transaction(() => {
+        persist: (result, model) => {
+          const outcome = repos.transaction(() => {
             const discarded = repos.pages.deleteAfter(session.id, page.order_index);
             const updated = repos.pages.replaceGeneration(page.id, {
               player_instruction: instruction,
               generated_text: result.narrative_text,
               model_identifier: model,
             })!;
+            // Páginas posteriores caem por CASCADE; esta continua (mesmo id), então o áudio
+            // dela é apagado explicitamente.
+            repos.audio.delete(page.id);
             const dialogue = turns.maybeCreateDialogue(session.id, result);
             repos.sessions.touch(session.id);
             return { page: updated, discarded, dialogue };
-          }),
+          });
+          audio.cancelMany([page.id, ...following.map((p) => p.id)]);
+          repos.audio.reclaim();
+          return outcome;
+        },
       });
     },
   );
@@ -193,6 +202,9 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
         repos.sessions.touch(session.id);
         return n;
       });
+      // Os áudios das páginas descartadas já foram para o lixo (CASCADE); falta parar os jobs.
+      audio.cancelMany(following.map((p) => p.id));
+      repos.audio.reclaim();
       return { discarded, last_page_id: page.id };
     },
   );
