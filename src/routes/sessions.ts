@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type AppContext } from '../context.js';
-import { buildStoryMarkdown, contentDisposition } from '../export.js';
+import { buildStoryMarkdown, contentDisposition, type ExportScope } from '../export.js';
 import { DEFAULT_SYSTEM_RULES } from '../prompts/narrator.js';
 import { publicDialogue } from './dialogue.js';
 
@@ -73,26 +73,40 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
     };
   });
 
-  // Exporta a história como arquivo Markdown (download). Inclui as páginas arquivadas.
-  app.get<{ Params: { id: string }; Querystring: { include_context?: boolean } }>(
+  // Exporta a história como arquivo Markdown (download). Por padrão (`scope=all`) inclui também as
+  // páginas já consumidas por volumes; `active` = só o que está no Tome; `archived` = só as dos volumes.
+  const SCOPE_SUFFIX: Record<ExportScope, string> = { all: '', active: ' — no Tome', archived: ' — volumes' };
+  app.get<{ Params: { id: string }; Querystring: { include_context?: boolean; scope?: ExportScope } }>(
     '/api/sessions/:id/export',
     {
       schema: {
         params: idParams,
-        querystring: { type: 'object', properties: { include_context: { type: 'boolean' } } },
+        querystring: {
+          type: 'object',
+          properties: {
+            include_context: { type: 'boolean' },
+            scope: { type: 'string', enum: ['all', 'active', 'archived'] },
+          },
+        },
       },
     },
     async (req, reply) => {
       const session = requireSession(req.params.id);
+      const scope = req.query.scope ?? 'all';
+      const all = repos.pages.listAll(session.id);
+      const pages = scope === 'all' ? all : all.filter((p) => p.is_archived === (scope === 'archived'));
+      if (scope === 'archived' && pages.length === 0) {
+        throw new HttpError(409, 'Nenhuma página foi consumida por um volume ainda.');
+      }
       const markdown = buildStoryMarkdown({
         session,
-        pages: repos.pages.listAll(session.id),
+        pages,
         exportedAt: new Date(),
         includeContext: req.query.include_context === true,
       });
       return reply
         .header('Content-Type', 'text/markdown; charset=utf-8')
-        .header('Content-Disposition', contentDisposition(session.title))
+        .header('Content-Disposition', contentDisposition(session.title + SCOPE_SUFFIX[scope]))
         .header('Cache-Control', 'no-store')
         .send(markdown);
     },

@@ -125,14 +125,14 @@ Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"
 - [x] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
 
 ### 13.3 Páginas consumidas continuam legíveis e exportáveis
-- [ ] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes
-- [ ] Painel Contexto → Crônica: "Volume N — páginas X a Y", sinopse, botão **Ler as N páginas** e ícone **Salvar volume em .md**
-- [ ] Leitor de volume como **página separada** (rota `#/s/<id>/v/<n>`, não modal) com `pageCard` somente leitura, link de volta e ícone de exportar; arquivadas não são editáveis nem ponto de ramificação na UI
-- [ ] Teste: páginas arquivadas ficam **fora** do contexto da IA/HP/compactação e **dentro** do que o jogador lê e exporta
-- [ ] Exportador: `---` entre páginas (linhas em branco ao redor), metadados "N páginas"; prompts do jogador continuam fora
-- [ ] `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`)
-- [ ] `GET /api/archives/:id/export?include_summary=` (volume: `# Título — Volume N`, sinopse opcional, páginas)
-- [ ] Modal "Salvar em Markdown" com escopo (completa · só no Tome · só em volumes) + checkbox de contexto
+- [x] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes
+- [x] Painel Contexto → Crônica: "Volume N — páginas X a Y", sinopse, botão **Ler as N páginas** e ícone **Salvar volume em .md**
+- [x] Leitor de volume como **página separada** (rota `#/s/<id>/v/<n>`, não modal) com `pageCard` somente leitura, link de volta e ícone de exportar; arquivadas não são editáveis nem ponto de ramificação na UI
+- [x] Teste: páginas arquivadas ficam **fora** do contexto da IA/HP/compactação e **dentro** do que o jogador lê e exporta
+- [x] Exportador: `---` entre páginas (linhas em branco ao redor), metadados "N páginas"; prompts do jogador continuam fora
+- [x] `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`)
+- [x] `GET /api/archives/:id/export?include_summary=` (volume: `# Título — Volume N`, sinopse opcional, páginas)
+- [x] Modal "Salvar em Markdown" com escopo (completa · só no Tome · só em volumes) + checkbox de contexto
 
 ### 13.4 Os 8 temas (4 temas × claro/escuro)
 - [ ] Tokens de "folha" por tema/modo em `client/styles.css`

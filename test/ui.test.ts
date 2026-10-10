@@ -233,6 +233,27 @@ describe('UI — sessão', () => {
     await waitFor(() => text().includes('Volume 1'), 'volume listado');
     click(document.querySelector('summary')!);
     expect(text()).toContain('Sinopse editada pelo jogador.');
+
+    // As páginas consumidas continuam legíveis: o Tome aponta para o volume e o leitor é uma página própria.
+    expect(document.querySelector('nav[aria-label^="Páginas anteriores"] a')!.getAttribute('href')).toMatch(/\/v\/1$/);
+    const read = Array.from(document.querySelectorAll('a')).find((a) => /^Ler as 2 páginas$/.test(a.textContent ?? ''))!;
+    expect(read.getAttribute('href')).toMatch(/\/v\/1$/);
+    click(read);
+    location.hash = read.getAttribute('href')!;
+    await waitFor(() => text().includes('Primeiro capítulo.'), 'leitor de volume');
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card'));
+    expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
+    expect(text()).toContain('Segundo capítulo.');
+    expect(text()).not.toContain('Terceiro capítulo.');
+    expect(document.querySelectorAll('.page-card-actions').length).toBe(0); // somente leitura
+    expect(document.querySelector('textarea')).toBeNull();
+    expect(byLabel('Salvar volume em Markdown')).not.toBeNull();
+    expect(document.querySelector('a[aria-label="Voltar ao Tome"]')!.getAttribute('href')).toMatch(/^#\/s\//);
+    expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
+
+    // Volume inexistente: mensagem clara em vez de tela vazia.
+    location.hash = `${location.hash.replace(/\/v\/1$/, '')}/v/9`;
+    await waitFor(() => text().includes('O Volume 9 não existe'), 'volume inexistente');
   });
 
   it('ramifica a partir de uma página anterior descartando as seguintes', async () => {
@@ -292,6 +313,74 @@ describe('UI — sessão', () => {
     expect(withCtx).toContain('## Mundo e personagens\n\nReino de Valdoria.');
     expect(withCtx).toContain('## Narrativa');
     expect(plain).not.toContain('Valdoria');
+    clickSpy.mockRestore();
+  });
+
+  it('exporta por escopo (completa, Tome, volumes) e salva um volume com ou sem sinopse', async () => {
+    await openNewSession();
+    for (const [i, msg] of ['Primeiro capítulo.', 'Segundo capítulo.', 'Terceiro capítulo.'].entries()) {
+      gateway.queue(narratorJson(msg));
+      await send(`Ação ${i}`);
+      await waitFor(() => text().includes(msg) && !button('Narrando…'), msg);
+    }
+    gateway.queue('Sinopse do primeiro volume.');
+    click(button('Compactar Crônica')!);
+    await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'minuta');
+    click(await waitFor(() => button(/Consolidar Volume 1/), 'consolidar'));
+    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'compactado');
+
+    const blobs: Blob[] = [];
+    const downloads: string[] = [];
+    URL.createObjectURL = ((b: Blob) => (blobs.push(b), 'blob:teste')) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download);
+    });
+    const readBlob = (b: Blob) =>
+      new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.readAsText(b);
+      });
+
+    // Só as páginas dos volumes.
+    click(byLabel('Salvar em Markdown')!);
+    const radios = await waitFor(() => Array.from(document.querySelectorAll<HTMLInputElement>('input[name="export-scope"]')), 'escopos');
+    expect(radios.map((r) => r.value)).toEqual(['all', 'active', 'archived']);
+    expect(radios.every((r) => !r.disabled)).toBe(true);
+    expect(radios[0]!.checked).toBe(true);
+    radios[2]!.checked = true;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 1, 'download dos volumes');
+    expect(downloads[0]).toBe('Teste — volumes.md');
+    const archivedMd = await readBlob(blobs[0]!);
+    expect(archivedMd).toContain('Primeiro capítulo.\n\n---\n\nSegundo capítulo.');
+    expect(archivedMd).not.toContain('Terceiro capítulo.');
+
+    // Só o Tome.
+    click(byLabel('Salvar em Markdown')!);
+    const again = await waitFor(() => Array.from(document.querySelectorAll<HTMLInputElement>('input[name="export-scope"]')), 'escopos 2');
+    again[1]!.checked = true;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 2, 'download do Tome');
+    const activeMd = await readBlob(blobs[1]!);
+    expect(activeMd).toContain('Terceiro capítulo.');
+    expect(activeMd).not.toContain('Primeiro capítulo.');
+
+    // Volume pela gaveta, sem a sinopse.
+    click(byLabel('Contexto da sessão')!);
+    click(await waitFor(() => button('Crônica'), 'aba Crônica'));
+    click(await waitFor(() => byLabel('Salvar Volume 1 em Markdown'), 'ícone de salvar volume'));
+    const box = await waitFor(() => document.querySelector<HTMLInputElement>('#export-summary'), 'checkbox da sinopse');
+    expect(box.checked).toBe(true); // sinopse incluída por padrão
+    box.checked = false;
+    click(button('Baixar arquivo .md')!);
+    await waitFor(() => downloads.length === 3, 'download do volume');
+    expect(downloads[2]).toBe('Teste — Volume 1.md');
+    const volumeMd = await readBlob(blobs[2]!);
+    expect(volumeMd).toContain('# Teste — Volume 1');
+    expect(volumeMd).toContain('Primeiro capítulo.');
+    expect(volumeMd).not.toContain('Sinopse');
     clickSpy.mockRestore();
   });
 

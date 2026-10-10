@@ -57,6 +57,22 @@ export class PagesRepository {
     ).map(toPage);
   }
 
+  /**
+   * Páginas já consumidas por um volume (arquivadas) com `order_index` entre `from` e `to`, em ordem.
+   * Continuam existindo para leitura e exportação, mas ficam fora do contexto da IA.
+   */
+  listArchivedRange(sessionId: string, from: number, to: number): Page[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM narrative_pages
+           WHERE session_id = ? AND is_archived = TRUE AND order_index BETWEEN ? AND ?
+           ORDER BY order_index ASC`,
+        )
+        .all(sessionId, from, to) as PageRow[]
+    ).map(toPage);
+  }
+
   /** Última página ativa da sessão, se houver. */
   last(sessionId: string): Page | undefined {
     const row = this.db

@@ -31,6 +31,10 @@ export class ArchivesRepository {
     return this.db.prepare('SELECT * FROM chronicle_archives WHERE id = ?').get(id) as ChronicleArchive;
   }
 
+  get(id: string): ChronicleArchive | undefined {
+    return this.db.prepare('SELECT * FROM chronicle_archives WHERE id = ?').get(id) as ChronicleArchive | undefined;
+  }
+
   list(sessionId: string): ChronicleArchive[] {
     return this.db
       .prepare('SELECT * FROM chronicle_archives WHERE session_id = ? ORDER BY volume_number ASC')

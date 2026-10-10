@@ -10,8 +10,9 @@ import {
   type TokenInfo,
   type Session,
 } from '../api';
-import { downloadStoryMarkdown } from '../download';
+import { downloadStoryMarkdown, type ExportScope } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
+import { icon } from '../icons';
 import { applyTheme } from '../theme';
 import { createModeControl, createThemeControl, iconButton } from '../controls';
 import { pageCard, pageHeader } from '../pageCard';
@@ -111,6 +112,21 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   const exportBtn = iconButton({ icon: 'download', label: 'Salvar em Markdown', tip: 'Salvar a crônica como arquivo Markdown (.md)', align: 'end', onClick: () => openExport() });
 
   function openExport(): void {
+    const archived = detail.archives.reduce((n, x) => n + (x.covered_page_end_index - x.covered_page_start_index + 1), 0);
+    const active = detail.pages.length;
+    const scopes: { id: ExportScope; label: string; hint: string; disabled?: boolean }[] = [
+      { id: 'all', label: 'Crônica completa', hint: `${countPages(active + archived)} (Tome e volumes)` },
+      { id: 'active', label: 'Só o que está no Tome', hint: countPages(active) },
+      { id: 'archived', label: 'Só as páginas já em volumes', hint: archived > 0 ? countPages(archived) : 'nenhum volume ainda', disabled: archived === 0 },
+    ];
+    const radios = scopes.map((s) =>
+      h(
+        'label',
+        { class: `flex items-center text-sm ${s.disabled ? 'text-muted' : 'text-ink'}` },
+        h('input', { type: 'radio', name: 'export-scope', value: s.id, class: 'mr-2', checked: s.id === 'all', disabled: s.disabled }),
+        h('span', null, s.label, h('span', { class: 'ml-2 text-xs text-muted' }, s.hint)),
+      ),
+    );
     const withContext = h('input', { type: 'checkbox', id: 'export-context', class: 'mr-2' });
     const go = h('button', { class: 'btn btn-primary', type: 'button' }, 'Baixar arquivo .md');
     const modal = openModal(
@@ -118,7 +134,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       h(
         'div',
         { class: 'space-y-3' },
-        h('p', { class: 'text-sm text-muted' }, 'O arquivo contém o título e toda a prosa da crônica, inclusive os capítulos já compactados. Suas instruções (prompts) não são incluídas.'),
+        h('p', { class: 'text-sm text-muted' }, 'O arquivo contém o título e a prosa das páginas, separadas por “---”. As páginas já resumidas em volumes continuam disponíveis. Suas instruções (prompts) não são incluídas.'),
+        h('fieldset', { class: 'space-y-1' }, h('legend', { class: 'label' }, 'O que salvar'), ...radios),
         h('label', { class: 'flex items-center text-sm text-ink', for: 'export-context' }, withContext, 'Incluir o mundo, os personagens e as sinopses dos volumes'),
         h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'), go),
       ),
@@ -126,7 +143,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     go.addEventListener('click', async () => {
       go.disabled = true;
       try {
-        const name = await downloadStoryMarkdown(sessionId, withContext.checked);
+        const chosen = modal.body.querySelector<HTMLInputElement>('input[name="export-scope"]:checked');
+        const scope = (chosen?.value ?? 'all') as ExportScope;
+        const name = await downloadStoryMarkdown(sessionId, { includeContext: withContext.checked, scope });
         toast(`Arquivo “${name}” gerado.`, 'success');
         modal.close();
       } catch (err) {
@@ -319,6 +338,19 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           { class: 'py-16 text-center text-muted' },
           h('p', { class: 'font-display text-2xl text-strong' }, 'O Tome está em branco'),
           h('p', { class: 'mt-2 text-base' }, 'Descreva a cena inicial ou a primeira ação do seu personagem na Doca abaixo.'),
+        ),
+      );
+    }
+    if (detail.archives.length > 0) {
+      items.push(
+        h(
+          'nav',
+          { class: 'flex flex-wrap items-center gap-2 font-sans text-sm text-muted', 'aria-label': 'Páginas anteriores, resumidas em volumes' },
+          icon('book', 16),
+          h('span', null, 'Páginas já resumidas em volumes:'),
+          ...detail.archives.map((a) =>
+            h('a', { href: `#/s/${sessionId}/v/${a.volume_number}`, class: 'rounded border border-line px-2 py-0.5 text-ink hover:border-accent hover:text-accent' }, `Volume ${a.volume_number} · páginas ${a.covered_page_start_index} a ${a.covered_page_end_index}`),
+          ),
         ),
       );
     }
