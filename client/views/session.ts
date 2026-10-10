@@ -14,7 +14,7 @@ import { downloadStoryMarkdown, type ExportScope } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
 import { icon } from '../icons';
 import { applyTheme } from '../theme';
-import { createModeControl, createThemeControl, iconButton } from '../controls';
+import { createModeControl, createThemeControl, fullscreenButton, iconButton } from '../controls';
 import { pageCard, pageHeader } from '../pageCard';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
@@ -82,7 +82,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   const tomeScroll = h('div', { class: 'flex-1 overflow-y-auto', id: 'tome-scroll' });
   const tomePage = h('article', { class: 'mx-auto max-w-3xl space-y-6 px-3 py-6 font-reading text-lg text-ink sm:px-5 sm:py-8 prose-tome-host' });
   tomeScroll.appendChild(tomePage);
-  const dock = h('footer', { class: 'border-t border-line bg-panel px-4 py-3' });
+  const dock = h('footer', { class: 'shrink-0 border-t border-line bg-panel px-4 py-3' });
   const titleEl = h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, session().title);
   const drawerWrap = h('div', { class: 'hidden absolute inset-y-0 right-0 z-30 w-full max-w-md lg:static lg:z-auto lg:w-[26rem] lg:max-w-none' });
 
@@ -166,14 +166,15 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     root,
     h(
       'div',
-      { class: 'flex h-screen flex-col' },
+      { class: 'app-screen' },
       h(
         'header',
-        { class: 'flex items-center gap-2 border-b border-line bg-panel px-3 py-2' },
+        { class: 'flex shrink-0 items-center gap-1.5 border-b border-line bg-panel px-3 py-2 sm:gap-2' },
         iconButton({ icon: 'library', label: 'Voltar à biblioteca', tip: 'Voltar à biblioteca de crônicas', align: 'start', href: '#/' }),
         titleEl,
         themeControl.el,
         createModeControl(),
+        fullscreenButton(),
         exportBtn,
         drawerBtn,
       ),
@@ -447,7 +448,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       h(
         'div',
         { class: 'mx-auto max-w-3xl space-y-2' },
-        h('div', { class: 'flex flex-wrap items-center gap-x-3 gap-y-2' }, h('div', { class: 'min-w-[16rem] flex-1' }, hpBar()), compact),
+        h('div', { class: 'dock-meta flex flex-wrap items-center gap-x-3 gap-y-2' }, h('div', { class: 'min-w-[16rem] flex-1' }, hpBar()), compact),
         dialogueBar,
         h('div', { class: 'flex gap-2' }, ta, send),
       ),

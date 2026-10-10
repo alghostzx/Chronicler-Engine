@@ -146,3 +146,35 @@ Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"
 - [x] README: vocabulário novo, aviso "pré-pré-alpha: atualizações não suportadas, apague `./data`", galeria dos 8 temas
 - [x] Suíte completa (198 testes) + typecheck (servidor e cliente) + `npm run build` + imagem Docker reconstruída e testada (build, subida, endpoints, limpeza)
 - [x] Merge de `feature/paginas` em `main` (a imagem no GHCR é publicada no push)
+
+## Fase 14 — Mobile: layout, tela cheia e instalável (branch `feature/mobile-app`)
+Problemas relatados (Android Chrome): com a barra do navegador visível o campo de digitação fica fora da tela; com o teclado aberto o cabeçalho some e a interface sai de alcance. Decisões do autor: `display: standalone` (mantém a barra de status, sem modo imersivo), botão "Tela cheia" no cabeçalho seguindo o padrão de ícones, alvo Android (testar também com Firefox headless se possível), **somente manifesto** (sem convite/botão de instalação; documentar como instalável "PWA").
+
+### 14.1 Layout que cabe na tela (cabeçalho + digitação sempre visíveis)
+- [x] `viewport`: `viewport-fit=cover, interactive-widget=resizes-content`
+- [x] `100dvh` (fallback `100vh`) no lugar de `h-screen` nas telas de sessão e leitor de volume; "app shell" (sem rolagem do documento; só a área das páginas rola)
+- [x] `client/viewport.ts`: fallback com `visualViewport` (altura útil → `--app-height`) para navegadores que não redimensionam o layout com o teclado
+- [x] `env(safe-area-inset-*)` no cabeçalho/dock; biblioteca/home continuam rolando normalmente
+
+### 14.2 Botão "Tela cheia"
+- [x] Ícones novos (entrar/sair da tela cheia) em `client/icons.ts`
+- [x] Botão no cabeçalho da biblioteca, da sessão e do leitor (padrão `iconButton`, tooltip + `aria-label`, pt-BR), oculto onde a Fullscreen API não existe; alterna rótulo/ícone ao mudar de estado
+
+### 14.3 Instalável (manifesto)
+- [x] `public/manifest.webmanifest` (nome, `short_name`, `lang pt-BR`, `start_url`, `scope`, `display: standalone`, cores, ícones)
+- [x] Ícones PNG 192/512 + maskable 512 gerados a partir de `favicon.svg` (`scripts/make-icons.ts`, `npm run icons`)
+- [x] Metas em `index.html` (`manifest`, `theme-color`, `mobile-web-app-capable`, apple-*) e `theme-color` dinâmico por tema/modo
+- [x] Service worker **não necessário**: o Chromium reporta 0 erros de instalabilidade sem ele (verificado via CDP)
+
+### 14.4 Testes
+- [x] Vitest: meta viewport, manifesto (campos, arquivos de ícone, Content-Type), `theme-color` por tema, botão de tela cheia
+- [x] `npm run check:mobile` (Chromium, 390 px; alturas 844/760/480; 8 temas; sessão e leitor): cabeçalho no topo, dock embaixo, sem rolagem do documento, só a área das páginas rola, textarea visível, sem overflow horizontal, erros de instalabilidade = 0
+- [x] Mesma verificação no Firefox headless (`BROWSER=firefox npm run check:mobile`; Firefox 157 do Playwright)
+- [x] Capturas inspecionadas (folhas de contato dos 8 temas: sessão com barra, sessão com teclado, leitor com teclado)
+- [x] Doca compacta em altura ≤ 520 px (oculta HP/Compactar) para sobrar espaço às páginas com o teclado aberto
+- [ ] Confirmação no celular real (Android Chrome) pelo autor
+
+### 14.5 Documentação e entrega
+- [x] README (instalável como PWA, HTTPS necessário, `check:mobile`, `icons`) e design document §11.23
+- [x] typecheck (servidor e cliente), suíte completa, `npm run build`
+- [ ] Merge de `feature/mobile-app` em `main`

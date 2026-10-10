@@ -1,5 +1,5 @@
 import { THEMES, type ThemeId } from './api';
-import { h } from './dom';
+import { h, toast } from './dom';
 import { icon, type IconName } from './icons';
 import { MODE_PREFS, isModePref, savedMode, setModePref, type ModePref } from './theme';
 
@@ -188,4 +188,40 @@ export function createThemeControl(current: ThemeId, onSelect: (theme: ThemeId) 
     onSelect,
     align,
   });
+}
+
+/** O navegador permite pedir tela cheia (Fullscreen API)? Não existe, por exemplo, no iPhone. */
+export function canFullscreen(): boolean {
+  return !!document.fullscreenEnabled && typeof document.documentElement.requestFullscreen === 'function';
+}
+
+/**
+ * Botão de ícone que entra/sai do modo de tela cheia (esconde a barra do navegador). Retorna `null`
+ * onde a API não existe; o ícone, o rótulo e a dica acompanham o estado atual.
+ */
+export function fullscreenButton(): HTMLButtonElement | null {
+  if (!canFullscreen()) return null;
+  const button = h('button', { type: 'button', class: `btn btn-icon ${tipClass('end')}` });
+
+  const paint = (): void => {
+    const on = !!document.fullscreenElement;
+    const label = on ? 'Sair da tela cheia' : 'Tela cheia';
+    button.replaceChildren(icon(on ? 'fullscreenExit' : 'fullscreen'));
+    button.setAttribute('aria-label', label);
+    button.setAttribute('data-tip', on ? 'Sair da tela cheia e voltar a mostrar a barra do navegador' : 'Usar a tela inteira (esconde a barra do navegador)');
+    button.setAttribute('aria-pressed', String(on));
+  };
+  const onChange = (): void => {
+    // O botão sai do DOM ao trocar de tela: solta o ouvinte global.
+    if (!button.isConnected) return document.removeEventListener('fullscreenchange', onChange);
+    paint();
+  };
+
+  button.addEventListener('click', () => {
+    const action = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    action.catch(() => toast('Não foi possível alternar a tela cheia neste navegador.', 'error'));
+  });
+  document.addEventListener('fullscreenchange', onChange);
+  paint();
+  return button;
 }

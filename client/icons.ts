@@ -74,6 +74,20 @@ const ICONS = {
     ['path', { d: 'M12 7v14' }],
     ['path', { d: 'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z' }],
   ],
+  /** Entrar em tela cheia: cantos que se afastam. */
+  fullscreen: [
+    ['path', { d: 'M8 3H5a2 2 0 0 0-2 2v3' }],
+    ['path', { d: 'M21 8V5a2 2 0 0 0-2-2h-3' }],
+    ['path', { d: 'M3 16v3a2 2 0 0 0 2 2h3' }],
+    ['path', { d: 'M16 21h3a2 2 0 0 0 2-2v-3' }],
+  ],
+  /** Sair da tela cheia: cantos que se aproximam. */
+  fullscreenExit: [
+    ['path', { d: 'M8 3v3a2 2 0 0 1-2 2H3' }],
+    ['path', { d: 'M21 8h-3a2 2 0 0 1-2-2V3' }],
+    ['path', { d: 'M3 16h3a2 2 0 0 1 2 2v3' }],
+    ['path', { d: 'M16 21v-3a2 2 0 0 1 2-2h3' }],
+  ],
   /** Voltar. */
   back: [
     ['path', { d: 'm12 19-7-7 7-7' }],
