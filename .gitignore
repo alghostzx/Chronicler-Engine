@@ -18,6 +18,7 @@ build/
 
 # SECRETS
 GEMINIKEY.txt
+ELEVENLABSKEY.txt
 
 # Dados locais (o banco guarda a chave da API)
 data/
