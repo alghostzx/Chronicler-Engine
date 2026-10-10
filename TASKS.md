@@ -106,7 +106,7 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
 - [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
 
-## Fase 13 — Páginas (branch `feature/paginas`) 🚧
+## Fase 13 — Páginas (branch `feature/paginas`, mesclada em `main`) ✅
 Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft v2 revisado com as decisões do autor: renomeação completa **sem migração** (pré-pré-alpha, atualizações não suportadas), numeração absoluta (`Página N` = `order_index`), `---` entre páginas no export, páginas arquivadas legíveis e exportáveis, "Editar prompt" mantém o aviso destrutivo.
 
 ### 13.1 Renomeação bloco → página (código, API, banco; sem migração)
@@ -145,4 +145,4 @@ Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"
 - [x] Design document: nova §11.22 (conceito, mapa de renomeação, leitor de volumes, formato do export, sem migração) + notas remissivas nas seções antigas
 - [x] README: vocabulário novo, aviso "pré-pré-alpha: atualizações não suportadas, apague `./data`", galeria dos 8 temas
 - [x] Suíte completa (198 testes) + typecheck (servidor e cliente) + `npm run build` + imagem Docker reconstruída e testada (build, subida, endpoints, limpeza)
-- [ ] Merge de `feature/paginas` em `main` (publica a imagem no GHCR)
+- [x] Merge de `feature/paginas` em `main` (a imagem no GHCR é publicada no push)
