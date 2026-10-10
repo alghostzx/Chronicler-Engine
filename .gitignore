@@ -16,9 +16,8 @@ __pycache__/
 dist/
 build/
 
-# SECRETS
+# Segredos
 GEMINIKEY.txt
-ELEVENLABSKEY.txt
 
 # Dados locais (o banco guarda a chave da API)
 data/
