@@ -278,19 +278,19 @@ try {
     if (!manifest.url) problems.push('o navegador não encontrou o manifesto');
     report('instalabilidade (Chromium/CDP): sem erros e manifesto válido', problems);
 
-    // A biblioteca rola normalmente (sem app shell), inclusive ao voltar da sessão sem recarregar.
+    // A tela inicial rola normalmente (sem app shell), inclusive ao voltar da sessão sem recarregar.
     const homeProblems: string[] = [];
     const shellOn = async (): Promise<boolean> => page.evaluate(() => document.documentElement.classList.contains('app-shell'));
-    if (await shellOn()) homeProblems.push('biblioteca com app-shell ligado');
+    if (await shellOn()) homeProblems.push('tela inicial com app-shell ligado');
     await page.evaluate((id) => (location.hash = `#/s/${id}`), sessionId);
     await page.waitForSelector('footer textarea');
     if (!(await shellOn())) homeProblems.push('sessão sem app-shell');
     await page.evaluate(() => (location.hash = '#/'));
     await page.waitForFunction(() => !document.querySelector('footer textarea'));
-    if (await shellOn()) homeProblems.push('app-shell continuou ligado ao voltar para a biblioteca');
+    if (await shellOn()) homeProblems.push('app-shell continuou ligado ao voltar para a tela inicial');
     const overflow = await page.evaluate(() => getComputedStyle(document.documentElement).overflowY + '/' + getComputedStyle(document.body).overflowY);
-    if (overflow.includes('hidden')) homeProblems.push(`biblioteca sem rolagem (overflow ${overflow})`);
-    report('biblioteca: rolagem normal, app shell só na sessão e no leitor', homeProblems);
+    if (overflow.includes('hidden')) homeProblems.push(`tela inicial sem rolagem (overflow ${overflow})`);
+    report('tela inicial: rolagem normal, app shell só na sessão e no leitor', homeProblems);
 
     await ctx.close();
   }

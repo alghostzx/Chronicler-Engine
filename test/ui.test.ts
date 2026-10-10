@@ -47,7 +47,21 @@ function type(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+/**
+ * Cada `boot` reimporta o cliente (`vi.resetModules`) e a instância anterior continuaria ouvindo
+ * `hashchange`/`keydown` da mesma janela, abrindo quadros duplicados. Guarda os ouvintes para
+ * removê-los antes de subir a próxima instância.
+ */
+const windowListeners: Array<[string, EventListenerOrEventListenerObject]> = [];
+const addWindowListener = window.addEventListener.bind(window) as typeof window.addEventListener;
+window.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+  if (type === 'hashchange' || type === 'keydown') windowListeners.push([type, listener]);
+  addWindowListener(type, listener, options);
+}) as typeof window.addEventListener;
+
 async function boot(opts: { withKey: boolean; hash?: string }): Promise<void> {
+  for (const [type, listener] of windowListeners.splice(0)) window.removeEventListener(type, listener);
+
   gateway = mockGateway();
   const repos = createRepositories(openDatabase(':memory:'));
   if (opts.withKey) repos.settings.set('gemini_api_key', FAKE_KEY);
@@ -75,23 +89,111 @@ afterEach(async () => {
   await app?.close();
 });
 
+/** Abre a tela de título e o quadro "Nova Crônica" (rota `#/nova`). */
+async function openNewChronicleFrame(withKey = true): Promise<void> {
+  await boot({ withKey, hash: '#/nova' });
+  await waitFor(() => document.querySelector('[role="dialog"] input[aria-label="Título da crônica"]'), 'quadro Nova Crônica');
+}
+
+const menuItem = (label: string) => Array.from(document.querySelectorAll<HTMLElement>('.title-menu-item')).find((i) => i.textContent === label);
+
 describe('UI — tela inicial', () => {
-  it('não gera rolagem horizontal no celular: grades de 1 coluna e filhos com min-w-0', async () => {
+  it('mostra logo (SVG), legenda e o menu Continuar / Nova Crônica / Opções, no tema Srcery sem persistir', async () => {
     await boot({ withKey: true });
-    await waitFor(() => document.querySelector('input[aria-label="Título da crônica"]'), 'home');
-    // Sem `grid-cols-*` explícito a coluna implícita é `auto` e cresce com a <option> mais longa.
-    const grids = Array.from(document.querySelectorAll('main .grid'));
-    expect(grids.length).toBeGreaterThanOrEqual(2);
-    for (const g of grids) expect(g.className).toMatch(/\bgrid-cols-1\b/);
-    for (const g of grids) for (const child of Array.from(g.children)) expect(child.className).toMatch(/\bmin-w-0\b/);
-    for (const f of Array.from(document.querySelectorAll('main select, main input:not([type=checkbox]), main textarea'))) {
-      expect(f.className).toMatch(/\binput\b/); // `.input` aplica w-full min-w-0 max-w-full
-    }
-    expect(document.querySelector('main')!.className).toMatch(/\bmin-w-0\b/);
+    await waitFor(() => document.querySelector('.title-menu'), 'menu');
+    const logo = document.querySelector<HTMLImageElement>('h1 img.title-logo')!;
+    expect(logo.getAttribute('src')).toBe('/logo.svg');
+    expect(logo.alt).toBe('Chronicler Engine');
+    expect(document.querySelector('h1 picture source')!.getAttribute('srcset')).toBe('/logo-stacked.svg');
+    expect(text()).toContain('Escreva a sua crônica com um Narrador de IA.');
+    expect(Array.from(document.querySelectorAll('.title-menu-item')).map((i) => i.textContent)).toEqual(['Continuar', 'Nova Crônica', 'Opções']);
+    expect(document.documentElement.classList.contains('theme-srcery')).toBe(true);
+    expect(document.documentElement.classList.contains('mode-dark')).toBe(true);
+    expect(localStorage.getItem('chronicler.theme')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('.title-notice')!.hasAttribute('hidden')).toBe(true);
   });
 
-  it('pede a chave, valida, lista só modelos de texto e cria uma sessão', async () => {
+  it('sem chave avisa e pulsa em Opções; sem crônicas o Continuar fica desabilitado', async () => {
     await boot({ withKey: false });
+    await waitFor(() => document.querySelector('.title-menu'), 'menu');
+    expect(menuItem('Opções')!.classList.contains('is-pulsing')).toBe(true);
+    const notice = document.querySelector('.title-notice')!;
+    expect(notice.hasAttribute('hidden')).toBe(false);
+    expect(notice.textContent).toContain('Opções');
+    const cont = menuItem('Continuar')!;
+    expect(cont.getAttribute('aria-disabled')).toBe('true');
+    click(cont);
+    expect(location.hash).toBe('#/');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('Nova Crônica abre o quadro sobreposto; Esc e Fechar o dispensam voltando ao menu', async () => {
+    await boot({ withKey: true });
+    await waitFor(() => document.querySelector('.title-menu'), 'menu');
+    click(menuItem('Nova Crônica')!);
+    await waitFor(() => document.querySelector('[role="dialog"] input[aria-label="Título da crônica"]'), 'quadro');
+    expect(location.hash).toBe('#/nova');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await waitFor(() => !document.querySelector('[role="dialog"]'), 'quadro fechado');
+    await waitFor(() => location.hash === '#/', 'voltou ao menu');
+
+    click(menuItem('Nova Crônica')!);
+    await waitFor(() => document.querySelector('[role="dialog"]'), 'quadro de novo');
+    click(byLabel('Fechar')!);
+    await waitFor(() => !document.querySelector('[role="dialog"]'), 'fechado pelo botão');
+    await waitFor(() => location.hash === '#/', 'menu de novo');
+  });
+
+  it('Continuar lista as crônicas, abre uma e permite excluir com confirmação', async () => {
+    await openNewChronicleFrame();
+    type(document.querySelector<HTMLInputElement>('input[aria-label="Título da crônica"]')!, 'Primeira');
+    document.querySelector('[role="dialog"] form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => location.hash.startsWith('#/s/'), 'sessão criada');
+    const id = location.hash.slice(4);
+    await waitFor(() => text().includes('O Tome está em branco'), 'sessão aberta');
+
+    location.hash = '#/';
+    await waitFor(() => document.querySelector('.title-menu'), 'menu');
+    expect(menuItem('Continuar')!.getAttribute('aria-disabled')).toBe('false');
+    click(menuItem('Continuar')!);
+    const link = await waitFor(() => document.querySelector<HTMLAnchorElement>('[role="dialog"] a[href^="#/s/"]'), 'lista');
+    expect(link.textContent).toBe('Primeira');
+    expect(link.getAttribute('href')).toBe(`#/s/${id}`);
+
+    click(byLabel('Excluir Primeira')!);
+    const confirm = await waitFor(
+      () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) => b.textContent === 'Excluir' && b.closest('[role="dialog"]')!.textContent!.includes('Excluir crônica')),
+      'confirmar',
+    );
+    click(confirm);
+    await waitFor(() => text().includes('Nenhuma crônica ainda'), 'lista vazia');
+  });
+
+  it('a página Opções reúne a conexão com o Gemini e a narração por voz', async () => {
+    await boot({ withKey: true, hash: '#/opcoes' });
+    await waitFor(() => document.querySelector('.options-screen'), 'opções');
+    await waitFor(() => document.querySelector('select[aria-label="Modelo padrão global"]'), 'seletor de modelo');
+    expect(text()).toContain('Conexão com o Gemini');
+    expect(text()).toContain('Narração por voz');
+    expect(byLabel('Voltar ao menu inicial')!.getAttribute('href')).toBe('#/');
+    expect(document.documentElement.classList.contains('theme-srcery')).toBe(true);
+  });
+
+  it('não gera rolagem horizontal no celular: grades de 1 coluna e filhos com min-w-0', async () => {
+    await openNewChronicleFrame();
+    // Sem `grid-cols-*` explícito a coluna implícita é `auto` e cresce com a <option> mais longa.
+    const grids = Array.from(document.querySelectorAll('[role="dialog"] .grid'));
+    expect(grids.length).toBeGreaterThanOrEqual(1);
+    for (const g of grids) expect(g.className).toMatch(/\bgrid-cols-1\b/);
+    for (const g of grids) for (const child of Array.from(g.children)) expect(child.className).toMatch(/\bmin-w-0\b/);
+    for (const f of Array.from(document.querySelectorAll('[role="dialog"] select, [role="dialog"] input:not([type=checkbox]), [role="dialog"] textarea'))) {
+      expect(f.className).toMatch(/\binput\b/); // `.input` aplica w-full min-w-0 max-w-full
+    }
+  });
+
+  it('pede a chave nas Opções, valida, lista só modelos de texto e cria uma sessão', async () => {
+    await boot({ withKey: false, hash: '#/opcoes' });
     const input = await waitFor(() => document.querySelector<HTMLInputElement>('input[type=password]'), 'campo da chave');
     type(input, FAKE_KEY);
     click(await waitFor(() => button('Validar e salvar'), 'botão validar'));
@@ -102,21 +204,23 @@ describe('UI — tela inicial', () => {
     expect(labels.some((l) => l.includes('gemini-2.5-flash-lite'))).toBe(true);
     expect(labels.some((l) => /image|tts/i.test(l))).toBe(false);
 
-    type(document.querySelector<HTMLInputElement>('input[aria-label="Título da crônica"]')!, 'A Queda de Valdoria');
-    document.querySelector('form.space-y-3')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    location.hash = '#/nova';
+    type(await waitFor(() => document.querySelector<HTMLInputElement>('input[aria-label="Título da crônica"]'), 'quadro nova'), 'A Queda de Valdoria');
+    document.querySelector('[role="dialog"] form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => location.hash.startsWith('#/s/'), 'navegação para a sessão');
     await waitFor(() => text().includes('O Tome está em branco'), 'tome vazio');
     expect(document.title).toContain('A Queda de Valdoria');
+    expect(document.documentElement.classList.contains('theme-srcery')).toBe(false);
   });
 });
 
 describe('UI — sessão', () => {
   async function openNewSession(): Promise<string> {
-    await boot({ withKey: true });
-    await waitFor(() => document.querySelector('input[aria-label="Título da crônica"]'), 'home');
+    await boot({ withKey: true, hash: '#/nova' });
+    await waitFor(() => document.querySelector('[role="dialog"] input[aria-label="Título da crônica"]'), 'home');
     type(document.querySelector<HTMLInputElement>('input[aria-label="Título da crônica"]')!, 'Teste');
     (document.querySelector<HTMLSelectElement>('select[aria-label="Tema"]')!).value = 'cyberpunk';
-    document.querySelector('form.space-y-3')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    document.querySelector('[role="dialog"] form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => location.hash.startsWith('#/s/') && text().includes('O Tome está em branco'), 'sessão aberta');
     return location.hash.slice(4);
   }
@@ -207,7 +311,7 @@ describe('UI — sessão', () => {
 
     // Simula reload: troca de rota e volta, reconstruindo o estado a partir do servidor.
     location.hash = '#/';
-    await waitFor(() => text().includes('Suas crônicas'), 'home');
+    await waitFor(() => text().includes('Continuar'), 'home');
     location.hash = `#/s/${id}`;
     await waitFor(() => text().includes('Falando com: Guarda'), 'diálogo restaurado');
   });
@@ -401,7 +505,7 @@ describe('UI — sessão', () => {
     const header = document.querySelector('header')!;
     const controls = Array.from(header.querySelectorAll<HTMLElement>('a.btn, button.btn'));
     expect(controls.map((c) => c.getAttribute('aria-label'))).toEqual([
-      'Voltar à biblioteca',
+      'Voltar ao menu inicial',
       'Tema visual',
       'Modo claro ou escuro',
       'Salvar em Markdown',

@@ -1,21 +1,41 @@
 import { mount } from './dom';
 import { initTheme } from './theme';
 import { setAppShell } from './viewport';
-import { renderHome } from './views/home';
+import { renderOptions } from './views/options';
 import { renderSession } from './views/session';
+import { renderTitle, type TitleHandle, type TitleView } from './views/title';
 import { renderVolume } from './views/volume';
 
 const root = document.getElementById('app')!;
 let cleanup: (() => void) | null = null;
+/** Tela de título montada (as rotas #/, #/continuar e #/nova só trocam o quadro, sem recarregar). */
+let title: TitleHandle | null = null;
 /** Descarta navegações obsoletas (respostas assíncronas que chegam depois de uma nova rota). */
 let navigation = 0;
 
+/** Rotas da tela de título: `#/` (menu), `#/continuar` e `#/nova` (quadros sobre o menu). */
+function titleView(hash: string): TitleView | null {
+  if (hash === '' || hash === '#' || hash === '#/') return 'menu';
+  if (hash === '#/continuar') return 'continuar';
+  if (hash === '#/nova') return 'nova';
+  return null;
+}
+
 async function route(): Promise<void> {
   const current = ++navigation;
+  const view = titleView(location.hash);
+
+  // Trocar de quadro dentro da tela de título não recria a tela.
+  if (view && title) {
+    title.show(view);
+    return;
+  }
   cleanup?.();
   cleanup = null;
+  title?.dispose();
+  title = null;
 
-  // Sessão e leitor de volume são "app shell" (sem rolagem do documento); a biblioteca rola normalmente.
+  // Sessão e leitor de volume são "app shell" (sem rolagem do documento); o resto rola normalmente.
   setAppShell(/^#\/s\/[^/]+(\/v\/\d+)?$/.test(location.hash));
 
   const volume = /^#\/s\/([^/]+)\/v\/(\d+)$/.exec(location.hash);
@@ -32,8 +52,13 @@ async function route(): Promise<void> {
     else cleanup = dispose;
     return;
   }
-  document.title = 'Chronicler Engine';
-  await renderHome(root);
+  if (location.hash === '#/opcoes') {
+    await renderOptions(root);
+    return;
+  }
+  const handle = await renderTitle(root, view ?? 'menu');
+  if (current !== navigation) handle.dispose();
+  else title = handle;
 }
 
 initTheme();

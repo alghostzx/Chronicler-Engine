@@ -1,5 +1,7 @@
 /** Utilitários mínimos de DOM (sem framework): criação de elementos, toasts e modais. */
 
+import { icon } from './icons';
+
 type Child = Node | string | number | null | undefined | false | Child[];
 
 export type Attrs = {
@@ -68,38 +70,62 @@ export interface ModalHandle {
   body: HTMLElement;
 }
 
-/** Abre um modal acessível (Esc fecha, clique no fundo fecha). */
-export function openModal(title: string, content: Child, opts: { wide?: boolean; onClose?: () => void } = {}): ModalHandle {
+/** Modais abertos (o último é o do topo): Esc fecha só o do topo, p.ex. uma confirmação sobre um quadro. */
+const modalStack: Array<() => void> = [];
+
+/**
+ * Abre um modal acessível (Esc fecha, clique no fundo fecha). Com `closeButton` mostra um botão de
+ * ícone “Fechar” no canto (fica por último na ordem do foco, para o primeiro campo receber o foco).
+ */
+export function openModal(
+  title: string,
+  content: Child,
+  opts: { wide?: boolean; closeButton?: boolean; onClose?: () => void } = {},
+): ModalHandle {
   const previouslyFocused = document.activeElement as HTMLElement | null;
   const body = h('div', { class: 'mt-3' }, content);
+  const closeBtn = opts.closeButton
+    ? h(
+        'button',
+        { type: 'button', class: 'btn btn-icon tip tip-end absolute right-3 top-3', 'aria-label': 'Fechar', 'data-tip': 'Fechar', onClick: () => close() },
+        icon('close'),
+      )
+    : null;
   const dialog = h(
     'div',
     {
-      class: `card max-h-[90vh] w-full overflow-y-auto shadow-2xl ${opts.wide ? 'max-w-3xl' : 'max-w-lg'}`,
+      class: `card relative max-h-[90vh] w-full overflow-y-auto shadow-2xl ${opts.wide ? 'max-w-3xl' : 'max-w-lg'}`,
       role: 'dialog',
       'aria-modal': 'true',
       'aria-label': title,
     },
-    h('h2', { class: 'font-display text-lg text-strong' }, title),
+    h('h2', { class: `font-display text-lg text-strong${closeBtn ? ' pr-10' : ''}` }, title),
     body,
+    closeBtn,
   );
-  const backdrop = h('div', { class: 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4' }, dialog);
+  const backdrop = h('div', { class: 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm' }, dialog);
 
+  let closed = false;
   const close = () => {
+    if (closed) return;
+    closed = true;
+    const at = modalStack.indexOf(close);
+    if (at >= 0) modalStack.splice(at, 1);
     document.removeEventListener('keydown', onKey);
     backdrop.remove();
     previouslyFocused?.focus?.();
     opts.onClose?.();
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && modalStack[modalStack.length - 1] === close) close();
   };
   backdrop.addEventListener('mousedown', (e) => {
     if (e.target === backdrop) close();
   });
+  modalStack.push(close);
   document.addEventListener('keydown', onKey);
   document.body.appendChild(backdrop);
-  (dialog.querySelector('textarea, input, select, button') as HTMLElement | null)?.focus();
+  (dialog.querySelector('textarea, input, select, button, a[href]') as HTMLElement | null)?.focus();
   return { close, body };
 }
 

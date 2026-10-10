@@ -135,7 +135,7 @@ async function shoot(
   console.log('ok', file);
 }
 
-await shoot('01-biblioteca.png', { hash: '#/', mode: 'dark', ready: 'input[aria-label="Título da crônica"]' });
+await shoot('01-tela-inicial.png', { hash: '#/', mode: 'dark', ready: '.title-menu', act: async (p) => { await p.mouse.move(5, 5); } });
 await shoot('02-tome-medieval.png', { hash: `#/s/${medieval}`, mode: 'dark', ready: 'section[data-page-id]' });
 await shoot('03-tome-cyberpunk.png', { hash: `#/s/${cyber}`, mode: 'dark', ready: 'section[data-page-id]' });
 await shoot('04-contexto-contemporaneo.png', {
@@ -166,7 +166,10 @@ await shoot('06-tooltip.png', {
     await p.waitForTimeout(600);
   },
 });
-await shoot('07-celular-biblioteca.png', { hash: '#/', mode: 'dark', mobile: true, ready: 'input[aria-label="Título da crônica"]', fullPage: true });
+await shoot('07-celular-tela-inicial.png', { hash: '#/', mode: 'dark', mobile: true, ready: '.title-menu', fullPage: true });
+await shoot('09-continuar.png', { hash: '#/continuar', mode: 'dark', ready: '[role="dialog"] a[href^="#/s/"]' });
+await shoot('10-nova-cronica.png', { hash: '#/nova', mode: 'dark', ready: '[role="dialog"] input[aria-label="Título da crônica"]' });
+await shoot('11-opcoes.png', { hash: '#/opcoes', mode: 'dark', ready: '#tts-auto' });
 await shoot('08-celular-tome.png', { hash: `#/s/${medieval}`, mode: 'light', mobile: true, ready: 'section[data-page-id]' });
 
 await browser.close();

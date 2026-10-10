@@ -207,8 +207,8 @@ describe('UI — narração das páginas', () => {
 });
 
 describe('UI — configurações de voz', () => {
-  it('tela inicial: padrão global desligado, voz Gacrux, salvar e apagar tudo', async () => {
-    await boot('#/');
+  it('página Opções: padrão global desligado, voz Gacrux, salvar e apagar tudo', async () => {
+    await boot('#/opcoes');
     const auto = await waitFor(() => document.querySelector<HTMLInputElement>('#tts-auto'), 'cartão de voz');
     expect(auto.checked).toBe(false);
     const voice = byLabel('Voz do narrador') as HTMLSelectElement;
@@ -228,7 +228,7 @@ describe('UI — configurações de voz', () => {
   });
 
   it('amostra de voz usa a voz escolhida no formulário', async () => {
-    await boot('#/');
+    await boot('#/opcoes');
     await waitFor(() => document.querySelector('#tts-auto'), 'cartão de voz');
     const created = vi.fn(() => 'blob:amostra');
     (URL as unknown as { createObjectURL: unknown }).createObjectURL = created;

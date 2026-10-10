@@ -57,10 +57,17 @@ export function resolveMode(pref: ModePref): Mode {
   return dark ? 'dark' : 'light';
 }
 
+/**
+ * Escopo visual da tela inicial e de Opções: paleta Srcery escura fixa (`theme-srcery`), sem tocar no
+ * tema/modo salvos (valem nas crônicas). Sair da tela inicial (`applyTheme`) desfaz o escopo.
+ */
+let titleScope = false;
+
 function paint(): void {
   const root = document.documentElement;
-  root.classList.remove(...ALL_THEMES, 'mode-light', 'mode-dark');
-  root.classList.add(`theme-${currentTheme}`, `mode-${resolveMode(currentPref)}`);
+  root.classList.remove(...ALL_THEMES, 'theme-srcery', 'mode-light', 'mode-dark');
+  if (titleScope) root.classList.add('theme-srcery', 'mode-dark');
+  else root.classList.add(`theme-${currentTheme}`, `mode-${resolveMode(currentPref)}`);
   syncThemeColor();
 }
 
@@ -79,8 +86,15 @@ function syncThemeColor(): void {
 
 /** Aplica o tema (classe na raiz <html>) mantendo o modo claro/escuro atual. */
 export function applyTheme(theme: ThemeId): void {
+  titleScope = false;
   currentTheme = theme;
   write(THEME_KEY, theme);
+  paint();
+}
+
+/** Liga a paleta Srcery (tela inicial e Opções). */
+export function applyTitleScreen(): void {
+  titleScope = true;
   paint();
 }
 

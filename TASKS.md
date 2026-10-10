@@ -217,3 +217,24 @@ Decisões do autor: voz padrão **Gacrux** ("Mature", pré-definida, sem sotaque
 - [x] README (uso, geração automática, custo/armazenamento, privacidade, LGPL do `lamejs`), design document §11.24
 - [x] typecheck (servidor e cliente), suíte completa, `npm run build`
 - [x] Remover `samples-tts/`; merge de `feature/tts-narrador` em `main`
+
+## Fase 16 — Tela inicial de jogo (branch `feature/tela-inicial`)
+Rascunho aprovado pelo autor antes de implementar (ver decisões pendentes no draft). Logo em arte ASCII renderizado como SVG com a paleta **Srcery**, legenda e menu `Continuar` / `Nova Crônica` / `Opções`; os dois primeiros abrem quadros sobrepostos, `Opções` é uma página (`#/opcoes`) com a conexão com o Gemini e a narração por voz.
+
+### 16.1 Logo
+- [x] `scripts/make-logo.ts` (`npm run logo`): converte `echo-chronicler-engine-logo.sh` (cores ANSI → paleta Srcery; `▀ ▄ █ ░ ▒ ▓`) em SVG (um `<path>` por cor), faixa única e variante empilhada (CHRONICLER / ENGINE) para celular
+- [x] SVGs gerados em `public/` e `<picture>` com `alt`; sempre cabe na largura, `max-height` limitado
+
+### 16.2 Tela de título
+- [x] Escopo de cores `theme-srcery` (fundo escuro fixo, vinheta, brilho discreto) para `#/` e `#/opcoes`
+- [x] Legenda abaixo do logo na fonte normal; menu com três botões grandes, teclado (↑/↓/Enter/Esc), foco visível, alvos ≥ 44 px, `prefers-reduced-motion`
+- [x] `Continuar` desabilitado sem crônicas; aviso/pulso de `Opções` quando não há chave do Gemini; botão de Tela cheia mantido
+
+### 16.3 Quadros e Opções
+- [x] Quadro **Continuar** (lista, excluir com confirmação) e quadro **Nova Crônica** (formulário atual) sobre fundo escurecido; Esc/clique fora/Fechar; foco devolvido; botão "voltar" fecha o quadro
+- [x] Página **Opções** (`#/opcoes`): conexão com o Gemini + modelo padrão + narração por voz; botão Voltar
+
+### 16.4 Testes e entrega
+- [x] Vitest (conversor do logo; menu, quadros, Opções, teclado, criação/exclusão)
+- [x] `npm run check:inicio` (Chromium e Firefox; larguras 320–1920; capturas inspecionadas) + regressões `check:mobile`/`check:paginas`/`check:audio`
+- [x] README (tela inicial e capturas), design document §11.25, typecheck, suíte completa, `npm run build`; merge de `feature/tela-inicial` em `main`

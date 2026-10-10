@@ -33,6 +33,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 
 ## Recursos
 
+- **Tela inicial de jogo**: logo em arte ASCII (SVG na paleta [Srcery](https://srcery.sh), que se ajusta a qualquer largura — empilhado em duas linhas no celular), a legenda e o menu **Continuar** / **Nova Crônica** (os dois abrem um quadro sobre o menu, com o fundo escurecido; o botão *Voltar* do navegador fecha o quadro) / **Opções** (página com a conexão com o Gemini e a narração por voz).
 - **Tome em páginas**: cada texto gerado por um prompt é uma *página*, numerada (`Página 1`, `Página 2`…, numeração absoluta que não recomeça após compactar) e exibida como uma folha separada. Streaming da narrativa e, no rodapé de cada página, quatro ações em **ícones sempre visíveis** (com tooltip): 🔊 *ouvir a página* (ver [Narração por voz](#narração-por-voz)), ✎ *editar o texto*, 💬 *editar o prompt e re-gerar* (descartando as páginas posteriores, com aviso) e ⑂ *ramificar a partir daquela página*.
 - **Narração por voz** (opcional): um narrador de voz grave lê as páginas em português do Brasil (Gemini TTS). O áudio fica guardado no SQLite (ouvir de novo é grátis), é descartado se a página mudar, pode ser gerado de novo ou baixado em MP3, e funciona também nas páginas já coletadas em volumes. Geração automática por crônica, desligada por padrão.
 - **Modo Diálogo**: o Narrador pode abrir uma conversa com um NPC (persona isolada, que não conhece o resto da história). Quem encerra é você (`Encerrar Diálogo e Narrar`, que costura a cena em prosa, ou `Descartar`); o NPC apenas *sinaliza* que quer terminar, destacando o botão. Recarregar a página retoma a cena.
@@ -113,9 +114,9 @@ Por que o `docker-compose.podman.yml` e esses parâmetros? Em modo rootless, o "
 
 ## Primeiro uso
 
-1. **Informe a chave do Gemini** em *Conexão com o Gemini* e clique em *Validar e salvar*. A chave é testada na hora, gravada **apenas** no SQLite local e nunca devolvida ao navegador.
-2. Escolha o **modelo padrão** na lista (ela é consultada na API; *Atualizar* consulta de novo). O padrão inicial é `gemini-3.8-flash`.
-3. Em **Nova crônica**, dê um título, escolha o tema visual, o limite de tokens do contexto (padrão: 1.000.000) e, se quiser, descreva o mundo e os personagens.
+1. No menu inicial, abra **Opções** e informe a chave em *Conexão com o Gemini* (*Validar e salvar*). Enquanto não há chave, o menu avisa e o item *Opções* pulsa. A chave é testada na hora, gravada **apenas** no SQLite local e nunca devolvida ao navegador.
+2. Ainda em *Opções*, escolha o **modelo padrão** na lista (ela é consultada na API; *Atualizar* consulta de novo). O padrão inicial é `gemini-3.8-flash`. Volte pelo ícone de seta.
+3. Em **Nova Crônica**, dê um título, escolha o tema visual, o limite de tokens do contexto (padrão: 1.000.000) e, se quiser, descreva o mundo e os personagens. Para retomar uma crônica, use **Continuar**.
 4. No Tome, descreva o que o seu personagem faz e envie com `Enviar` ou `Ctrl+Enter`. O Narrador responde em prosa, em tempo real.
 5. Use o painel **Contexto** (ícone à direita no cabeçalho) para editar mundo/personagens e ler os volumes compactados, **Salvar em Markdown** para exportar, e acompanhe o **HP** na barra inferior: perto de zero, o botão *Compactar Crônica* pulsa.
 
@@ -129,8 +130,8 @@ Cada página pode ser **lida em voz alta** por um narrador de voz grave e pausad
 - **Como ouvir:** clique no ícone de alto-falante (**Ouvir esta página**) no rodapé de qualquer página — do Tome ou do leitor de volume (páginas já coletadas em crônicas também). O áudio é gerado (com progresso e botão de cancelar), aparece um player (tocar/pausar, barra de posição, velocidade 0,75×–1,5×, **gerar de novo**, apagar e **baixar .mp3**) e o áudio fica guardado.
 - **Gerar de novo:** se a voz não ficou boa, *Gerar o áudio de novo* (com confirmação) substitui o anterior; o antigo só é descartado quando o novo fica pronto.
 - **Cache:** o MP3 (48 kbps, mono; ≈ 6 KB por segundo, ~360 KB por minuto) fica no SQLite — ouvir de novo não gasta nada. Ele é **descartado automaticamente** quando a página é editada, re-gerada ou removida por ramificação, e o espaço é devolvido ao arquivo do banco.
-- **Geração automática** (opcional): a opção global *Narrar automaticamente cada página nova* fica no cartão **Narração por voz** da tela inicial (padrão: desligada); cada crônica pode **herdar** esse padrão ou forçar *ligada*/*desligada* na aba **Voz** da gaveta de contexto. A página criada ao encerrar um diálogo também segue essa regra.
-- **Voz, modelo e estilo** (ritmo e tom) também são configurados no cartão da tela inicial, com **Ouvir amostra** e uso de armazenamento (e *Apagar todos os áudios*).
+- **Geração automática** (opcional): a opção global *Narrar automaticamente cada página nova* fica no cartão **Narração por voz** da página **Opções** (padrão: desligada); cada crônica pode **herdar** esse padrão ou forçar *ligada*/*desligada* na aba **Voz** da gaveta de contexto. A página criada ao encerrar um diálogo também segue essa regra.
+- **Voz, modelo e estilo** (ritmo e tom) também são configurados nesse cartão de **Opções**, com **Ouvir amostra** e uso de armazenamento (e *Apagar todos os áudios*).
 - **O que nunca acontece:** o **Modo Diálogo não é narrado** (só a página em prosa que o fecha) e **não existe reprodução contínua** (“ler daqui até o fim”) — de propósito, para não gastar tokens de voz em dezenas de páginas sem querer. Cada geração é um pedido explícito (ou automático, se você ligar).
 
 > [!NOTE]
@@ -180,12 +181,16 @@ As imagens abaixo são geradas por script (veja [Desenvolvimento local](#desenvo
 
 | | |
 | --- | --- |
-| ![Biblioteca de crônicas e configuração](docs/screenshots/01-biblioteca.png) | ![Tema Cyberpunk escuro](docs/screenshots/03-tome-cyberpunk.png) |
-| **Biblioteca**: chave, modelo padrão, nova crônica e lista | **Cyberpunk (escuro)** com a barra de HP |
+| ![Tela inicial com o logo e o menu](docs/screenshots/01-tela-inicial.png) | ![Tema Cyberpunk escuro](docs/screenshots/03-tome-cyberpunk.png) |
+| **Tela inicial**: logo Srcery, legenda e menu | **Cyberpunk (escuro)** com a barra de HP |
 | ![Painel de contexto no tema Contemporâneo claro](docs/screenshots/04-contexto-contemporaneo.png) | ![Menu de temas](docs/screenshots/05-tema-menu.png) |
 | **Contemporâneo (claro)** com o painel de Contexto aberto | **Menu de tema** (o de modo claro/escuro funciona igual) |
 | ![Tooltip de um botão de ícone](docs/screenshots/06-tooltip.png) | ![Gaveta com um volume, e o Tome continuando na página 4](docs/screenshots/paginas/volumes-gaveta.png) |
 | **Tooltips** em todos os botões de ícone | **Volumes**: a numeração das páginas continua (aqui, Página 4 e 5) e o volume pode ser lido ou salvo |
+| ![Quadro Continuar sobre o menu](docs/screenshots/09-continuar.png) | ![Quadro Nova Crônica sobre o menu](docs/screenshots/10-nova-cronica.png) |
+| **Continuar**: lista de crônicas em um quadro sobre o menu | **Nova Crônica**: formulário em um quadro sobre o menu |
+| ![Página de Opções](docs/screenshots/11-opcoes.png) | |
+| **Opções**: conexão com o Gemini e narração por voz | |
 
 **As páginas nos 8 temas** (4 temas × claro e escuro; gerado por `npm run check:paginas`):
 
@@ -207,7 +212,7 @@ As imagens abaixo são geradas por script (veja [Desenvolvimento local](#desenvo
 **No celular** (sem rolagem horizontal):
 
 <p>
-  <img src="docs/screenshots/07-celular-biblioteca.png" alt="Biblioteca no celular" width="260">
+  <img src="docs/screenshots/07-celular-tela-inicial.png" alt="Tela inicial no celular" width="260">
   &nbsp;
   <img src="docs/screenshots/08-celular-tome.png" alt="Tome com diálogo no celular, tema Medieval claro" width="260">
 </p>
@@ -248,6 +253,8 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | `npm run check:paginas` | Verifica o cartão de página nos 8 temas (claro/escuro × desktop/celular) em um Chromium headless — ações visíveis, contraste, sem rolagem horizontal — e grava capturas em `docs/screenshots/paginas/` |
 | `npm run check:mobile` | Verifica o layout do celular (390 px; alturas de tela cheia, com barra do navegador e com teclado aberto) na sessão e no leitor de volume, nos 8 temas: cabeçalho no topo, doca embaixo, só a área das páginas rola, campo de digitação visível, manifesto instalável. Grava folhas de contato em `docs/screenshots/mobile/`. `BROWSER=firefox` usa o Firefox do Playwright |
 | `npm run check:audio` | Verifica a narração por voz nos 8 temas (claro/escuro × desktop/celular): ícone *Ouvir*, progresso, player, tocar/pausar, tooltips, leitor de volume, aba *Voz* da gaveta e o cartão *Narração por voz* (síntese simulada). Grava capturas em `docs/screenshots/audio/`. `BROWSER=firefox` usa o Firefox do Playwright |
+| `npm run logo` | Regenera `public/logo.svg` e `public/logo-stacked.svg` a partir da arte ANSI em `scripts/logo/echo-chronicler-engine-logo.sh` (paleta Srcery; o mesmo script imprime o logo colorido no terminal) |
+| `npm run check:inicio` | Verifica a tela inicial e a página de Opções (vazio × com chave e crônicas; 320–1920 px): logo cabendo na largura e na altura máxima, contraste, alvos de toque de 44 px, teclado, quadros (Esc, *Voltar*, *Fechar*, foco) e a volta ao tema da crônica. Grava capturas em `docs/screenshots/inicio/` (não versionadas). `BROWSER=firefox` usa o Firefox do Playwright |
 | `npm run icons` | Regenera os ícones PNG do manifesto (`public/icons/`) a partir de `public/favicon.svg` |
 | `npm run screenshots` | Regenera `docs/screenshots/` com um Chromium headless (Gemini simulado; use `CHROME_PATH=…` se não houver um navegador do Playwright) |
 

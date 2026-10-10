@@ -2,7 +2,7 @@ import { api, type Archive, type ModelsInfo, type Session, type SettingsInfo, ty
 import { iconButton } from '../controls';
 import { icon } from '../icons';
 import { formatNumber, h, mount, paragraphs, toast } from '../dom';
-import { modelOptions } from './home';
+import { modelOptions } from './options';
 import { openVolumeExport } from './volumeExport';
 
 export interface DrawerHooks {
