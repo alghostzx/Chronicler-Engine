@@ -5,31 +5,17 @@
 // Requer um navegador do Playwright (`npx playwright-core install chromium-headless-shell`) ou
 // `CHROME_PATH=/caminho/do/chrome`.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { loadConfig } from '../src/config.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
+import { findChrome } from './chrome.js';
 import { FAKE_KEY, SAMPLE_MODELS, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
 
 const OUT = 'docs/screenshots';
 fs.mkdirSync(OUT, { recursive: true });
-
-function findChrome(): string | undefined {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  const root = path.join(os.homedir(), '.cache', 'ms-playwright');
-  if (!fs.existsSync(root)) return undefined;
-  for (const dir of fs.readdirSync(root).sort().reverse()) {
-    if (!dir.startsWith('chromium')) continue;
-    for (const sub of ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/chrome', 'chrome-linux64/chrome']) {
-      const p = path.join(root, dir, sub);
-      if (fs.existsSync(p)) return p;
-    }
-  }
-  return undefined;
-}
 
 // --- Dados de exemplo --------------------------------------------------------------------------
 const gateway = mockGateway({

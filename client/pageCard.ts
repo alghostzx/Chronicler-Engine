@@ -40,8 +40,8 @@ export function pageCard(o: PageCardOptions): HTMLElement {
   ];
   if (!o.readonly) {
     const last = (o.laterCount ?? 0) === 0;
-    const action = (icon: 'pencil' | 'prompt' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false, align: 'center' | 'end' = 'center') =>
-      iconButton({ icon, label, tip, align, up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });
+    const action = (icon: 'pencil' | 'prompt' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
+      iconButton({ icon, label, tip, align: 'end', up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });
     children.push(
       h(
         'footer',
@@ -54,7 +54,6 @@ export function pageCard(o: PageCardOptions): HTMLElement {
           last ? 'Esta já é a última página; continue a história na Doca' : 'Ramificar: continuar a história a partir desta página',
           o.onBranch,
           last,
-          'end',
         ),
       ),
     );

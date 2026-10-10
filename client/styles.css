@@ -86,7 +86,7 @@
   --bg-main: #1c1a17; /* cinza terra */
   --bg-panel: #26231f;
   --text-main: #d4c5b9; /* desbotado */
-  --text-muted: #948677;
+  --text-muted: #a09282;
   --text-strong: #e8dccf;
   --font-reading: 'Special Elite', monospace;
   --font-display: 'Special Elite', monospace;
@@ -308,6 +308,10 @@
   .page-card-actions {
     @apply flex items-center justify-end gap-2 border-t px-3 py-2 sm:px-4;
     border-color: var(--page-border);
+  }
+  /* Tooltips do rodapé ancoram na borda direita do botão e nunca passam da largura da tela. */
+  .page-card-actions .tip::after {
+    max-width: min(16rem, 60vw);
   }
   /* Ação de página: ícone sempre visível (nunca depende de hover). */
   .page-action {

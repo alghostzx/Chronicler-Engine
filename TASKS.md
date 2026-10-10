@@ -135,11 +135,11 @@ Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"
 - [x] Modal "Salvar em Markdown" com escopo (completa · só no Tome · só em volumes) + checkbox de contexto
 
 ### 13.4 Os 8 temas (4 temas × claro/escuro)
-- [ ] Tokens de "folha" por tema/modo em `client/styles.css`
-- [ ] `test/pageThemes.test.ts` (vitest): contraste WCAG de texto, texto esmaecido e ícones, e distinção folha × fundo nas 8 combinações
-- [ ] `npm run check:paginas` (Chromium headless): 8 combinações × 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste no DOM renderizado, leitor de volume
-- [ ] Capturas das 8 combinações em `docs/screenshots/paginas/` inspecionadas uma a uma
-- [ ] Testes de UI (jsdom): rótulos novos, ícones sempre visíveis (sem `opacity-0`), número da página, leitor, modal de exportação
+- [x] Tokens de "folha" por tema/modo em `client/styles.css`
+- [x] `test/pageThemes.test.ts` (vitest): contraste WCAG de texto, texto esmaecido e ícones, e distinção folha × fundo nas 8 combinações
+- [x] `npm run check:paginas` (Chromium headless): 8 combinações × 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste no DOM renderizado, leitor de volume
+- [x] Capturas das 8 combinações (desktop e celular, mais leitor de volume e gaveta) em `docs/screenshots/paginas/` inspecionadas uma a uma
+- [x] Testes de UI (jsdom): rótulos novos, ícones sempre visíveis (sem `opacity-0`), número da página, leitor, modal de exportação
 
 ### 13.5 Documentação e entrega
 - [ ] Design document: nova §11.22 (conceito, mapa de renomeação, leitor de volumes, formato do export, sem migração) + notas remissivas nas seções antigas
