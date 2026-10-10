@@ -118,11 +118,11 @@ Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"
 - [x] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
 
 ### 13.2 Interface — cartão de página
-- [ ] Ícones novos em `client/icons.ts`: lápis (editar texto), prompt editável, ramificar
-- [ ] Componente `pageCard` (cartão separado por página, cabeçalho "Página N" absoluto, folha com borda/sombra, espaçamento) no lugar da prosa contínua; modo `readonly` reutilizável
-- [ ] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, **com aviso de descarte**), Ramificar (desabilitado na última página)
-- [ ] Estados: edição dentro do cartão, página fantasma (streaming), esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
-- [ ] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
+- [x] Ícones novos em `client/icons.ts`: lápis (editar texto), prompt editável, ramificar
+- [x] Componente `pageCard` (cartão separado por página, cabeçalho "Página N" absoluto, folha com borda/sombra, espaçamento) no lugar da prosa contínua; modo `readonly` reutilizável
+- [x] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, **com aviso de descarte**), Ramificar (desabilitado na última página)
+- [x] Estados: edição dentro do cartão, página fantasma (streaming), esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
+- [x] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
 
 ### 13.3 Páginas consumidas continuam legíveis e exportáveis
 - [ ] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes

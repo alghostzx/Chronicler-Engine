@@ -51,6 +51,34 @@ const ICONS = {
     ['path', { d: 'M12 17v4' }],
   ],
   check: [['polyline', { points: '20 6 9 17 4 12' }]],
+  /** Editar o texto da página: lápis. */
+  pencil: [
+    ['path', { d: 'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z' }],
+    ['path', { d: 'm15 5 4 4' }],
+  ],
+  /** Editar o prompt (a instrução enviada ao Narrador) e re-gerar: balão de fala com linhas de texto. */
+  prompt: [
+    ['path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }],
+    ['path', { d: 'M7 8h10' }],
+    ['path', { d: 'M7 12h6' }],
+  ],
+  /** Ramificar a história a partir da página: bifurcação. */
+  branch: [
+    ['line', { x1: '6', y1: '3', x2: '6', y2: '15' }],
+    ['circle', { cx: '18', cy: '6', r: '3' }],
+    ['circle', { cx: '6', cy: '18', r: '3' }],
+    ['path', { d: 'M18 9a9 9 0 0 1-9 9' }],
+  ],
+  /** Ler um volume (páginas já consumidas pela crônica): livro aberto. */
+  book: [
+    ['path', { d: 'M12 7v14' }],
+    ['path', { d: 'M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z' }],
+  ],
+  /** Voltar. */
+  back: [
+    ['path', { d: 'm12 19-7-7 7-7' }],
+    ['path', { d: 'M19 12H5' }],
+  ],
 } satisfies Record<string, Shape[]>;
 
 export type IconName = keyof typeof ICONS;

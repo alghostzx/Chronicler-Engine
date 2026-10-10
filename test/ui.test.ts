@@ -143,8 +143,28 @@ describe('UI — sessão', () => {
     await waitFor(() => text().includes('O silêncio voltou.'), 'segunda página');
     expect(document.querySelectorAll('section[data-page-id]').length).toBe(2);
 
+    // Cada página é um cartão separado, numerado de forma absoluta, com 3 ações só em ícone sempre visíveis.
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card[data-page-id]'));
+    expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
+    for (const card of cards) {
+      const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button'));
+      expect(actions.map((b) => b.getAttribute('aria-label'))).toEqual(['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página']);
+      for (const b of actions) {
+        expect(b.textContent).toBe(''); // só ícone
+        expect(b.querySelectorAll('svg').length).toBe(1); // um único ícone por ação
+        expect(b.getAttribute('data-tip')).toBeTruthy(); // tooltip
+        expect(b.className).not.toMatch(/opacity-0|md:opacity-0|group-hover/); // nunca depende de hover
+      }
+    }
+    const icons = Array.from(cards[0]!.querySelectorAll('.page-card-actions svg')).map((s) => s.innerHTML);
+    expect(new Set(icons).size).toBe(3); // glifos distintos
+    expect(cards[0]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(false);
+    expect(cards[1]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(true); // última página
+    expect(cards[0]!.querySelector('.drop-cap')).not.toBeNull();
+    expect(cards[1]!.querySelector('.drop-cap')).toBeNull();
+
     // Edição manual da primeira página preserva a segunda.
-    click(button('Editar Texto')!);
+    click(byLabel('Editar texto da página')!);
     const editor = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-page-id] textarea'), 'editor');
     type(editor, 'A porta gemeu.');
     click(await waitFor(() => button('Salvar edição'), 'salvar edição'));
@@ -152,7 +172,7 @@ describe('UI — sessão', () => {
     expect(text()).toContain('O silêncio voltou.');
 
     // Re-geração da primeira página avisa e descarta a segunda.
-    click(button('Ver Prompt de Origem / Re-gerar')!);
+    click(byLabel('Editar prompt e re-gerar')!);
     const modalTa = await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'modal');
     expect(modalTa.value).toBe('Abro a porta');
     expect(text()).toContain('descarta definitivamente a página seguinte');
@@ -222,7 +242,7 @@ describe('UI — sessão', () => {
       await send(`Ir para ${msg}`);
       await waitFor(() => text().includes(msg) && !button('Narrando…'), msg);
     }
-    click(button('Ramificar a partir daqui')!);
+    click(byLabel('Ramificar a partir desta página')!);
     click(await waitFor(() => button('Descartar e ramificar'), 'confirmação'));
     await waitFor(() => !text().includes('Cena B.'), 'página B descartada');
     expect(text()).toContain('Cena A.');

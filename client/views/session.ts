@@ -14,6 +14,7 @@ import { downloadStoryMarkdown } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
 import { applyTheme } from '../theme';
 import { createModeControl, createThemeControl, iconButton } from '../controls';
+import { pageCard, pageHeader } from '../pageCard';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
 
@@ -39,7 +40,7 @@ const HP_COLORS: Record<TokenInfo['state'], string> = {
 };
 
 /**
- * Tela da sessão: Tome Interativo (prosa contínua), Gaveta de Contexto e Doca de Ação
+ * Tela da sessão: Tome Interativo (uma folha por página), Gaveta de Contexto e Doca de Ação
  * (design §7.1). Retorna a função de limpeza chamada pelo roteador ao sair da tela.
  */
 export async function renderSession(root: HTMLElement, sessionId: string): Promise<() => void> {
@@ -78,7 +79,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   // --- Elementos fixos --------------------------------------------------------------------------
   const tomeScroll = h('div', { class: 'flex-1 overflow-y-auto', id: 'tome-scroll' });
-  const tomePage = h('article', { class: 'mx-auto max-w-3xl px-5 py-8 font-reading text-lg text-ink prose-tome-host' });
+  const tomePage = h('article', { class: 'mx-auto max-w-3xl space-y-6 px-3 py-6 font-reading text-lg text-ink sm:px-5 sm:py-8 prose-tome-host' });
   tomeScroll.appendChild(tomePage);
   const dock = h('footer', { class: 'border-t border-line bg-panel px-4 py-3' });
   const titleEl = h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, session().title);
@@ -203,36 +204,35 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   let ghostTextEl: HTMLElement | null = null;
 
+  /** Número da próxima página (absoluto): considera também as páginas já consumidas pelos volumes. */
+  function nextPageIndex(): number {
+    const active = detail.pages.reduce((m, x) => Math.max(m, x.order_index), 0);
+    const archived = detail.archives.reduce((m, x) => Math.max(m, x.covered_page_end_index), 0);
+    return Math.max(active, archived) + 1;
+  }
+
   function ghostArticle(): HTMLElement {
+    const replaced = ghost?.replaceId ? detail.pages.find((x) => x.id === ghost!.replaceId) : undefined;
     ghostTextEl = h('div', { class: 'cursor-blink whitespace-pre-wrap leading-8', 'aria-live': 'polite' }, ghost?.text ?? '');
-    return h('section', { class: 'mb-6' }, ghostTextEl);
+    return h('section', { class: 'page-card is-ghost', 'aria-label': 'Página sendo escrita' }, pageHeader(replaced?.order_index ?? nextPageIndex()), h('div', { class: 'page-card-body' }, ghostTextEl));
   }
 
   function pageArticle(b: Page, dimmed: boolean): HTMLElement {
     if (editingId === b.id) return editArticle(b);
     const laterCount = detail.pages.filter((x) => x.order_index > b.order_index).length;
-    const actionBtn = (label: string, onClick: () => void, title?: string) =>
-      h('button', { class: 'btn px-2 py-1 text-xs', type: 'button', disabled: busy || !!dlg, title, onClick }, label);
-
-    return h(
-      'section',
-      { class: `group relative mb-6 ${dimmed ? 'opacity-40' : ''}`, 'data-page-id': b.id },
-      h('div', { class: `prose-tome ${detail.pages[0]?.id === b.id ? 'drop-cap' : ''}` }, ...paragraphs(b.generated_text).map((p) => h('p', null, p))),
-      h(
-        'div',
-        { class: 'mt-1 flex flex-wrap gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100' },
-        actionBtn('Editar Texto', () => {
-          editingId = b.id;
-          renderTome(false);
-        }),
-        actionBtn('Ver Prompt de Origem / Re-gerar', () => openRegenerate(b)),
-        actionBtn(
-          'Ramificar a partir daqui',
-          () => void branchFrom(b, laterCount),
-          laterCount === 0 ? 'Esta já é a última página.' : undefined,
-        ),
-      ),
-    );
+    return pageCard({
+      page: b,
+      dimmed,
+      dropCap: b.order_index === 1,
+      busy: busy || !!dlg,
+      laterCount,
+      onEditText: () => {
+        editingId = b.id;
+        renderTome(false);
+      },
+      onEditPrompt: () => openRegenerate(b),
+      onBranch: () => void branchFrom(b, laterCount),
+    });
   }
 
   function editArticle(b: Page): HTMLElement {
@@ -258,11 +258,12 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     queueMicrotask(() => ta.focus());
     return h(
       'section',
-      { class: 'mb-6 space-y-2', 'data-page-id': b.id },
-      ta,
+      { class: 'page-card is-editing', 'data-page-id': b.id, 'data-page-index': String(b.order_index) },
+      pageHeader(b.order_index),
+      h('div', { class: 'page-card-body' }, ta),
       h(
-        'div',
-        { class: 'flex gap-2' },
+        'footer',
+        { class: 'page-card-actions flex-wrap justify-start' },
         saveBtn,
         h(
           'button',
@@ -286,7 +287,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const d = dlg;
     return h(
       'section',
-      { class: 'card mb-6 border-accent font-sans text-base', 'aria-label': `Diálogo com ${d.dialogue.npc_name}` },
+      { class: 'card border-accent font-sans text-base', 'aria-label': `Diálogo com ${d.dialogue.npc_name}` },
       h('h3', { class: 'mb-3 font-display text-sm uppercase tracking-wider text-accent' }, `Diálogo — ${d.dialogue.npc_name}`),
       d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} para começar a conversa.`) : null,
       h(

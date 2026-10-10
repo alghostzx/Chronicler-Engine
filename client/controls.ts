@@ -6,7 +6,7 @@ import { MODE_PREFS, isModePref, savedMode, setModePref, type ModePref } from '.
 /** Posição do tooltip em relação ao botão (evita cortar nas bordas da tela). */
 export type TipAlign = 'start' | 'center' | 'end';
 
-const tipClass = (align: TipAlign): string => `tip${align === 'center' ? '' : ` tip-${align}`}`;
+const tipClass = (align: TipAlign, up = false): string => `tip${align === 'center' ? '' : ` tip-${align}`}${up ? ' tip-up' : ''}`;
 
 /**
  * Botão quadrado só com ícone. O texto vira `aria-label` (leitores de tela) e tooltip visual
@@ -17,16 +17,21 @@ export function iconButton(opts: {
   label: string;
   tip?: string;
   align?: TipAlign;
+  /** Tooltip acima do botão (útil em rodapés de cartões). */
+  up?: boolean;
+  disabled?: boolean;
+  /** Classe extra (ex.: `page-action`). */
+  extraClass?: string;
   onClick?: () => void;
   href?: string;
 }): HTMLButtonElement | HTMLAnchorElement {
   const attrs = {
-    class: `btn btn-icon ${tipClass(opts.align ?? 'center')}`,
+    class: `btn btn-icon ${tipClass(opts.align ?? 'center', opts.up)}${opts.extraClass ? ` ${opts.extraClass}` : ''}`,
     'aria-label': opts.label,
     'data-tip': opts.tip ?? opts.label,
   };
   if (opts.href !== undefined) return h('a', { ...attrs, href: opts.href }, icon(opts.icon));
-  return h('button', { ...attrs, type: 'button', onClick: opts.onClick }, icon(opts.icon));
+  return h('button', { ...attrs, type: 'button', disabled: opts.disabled, onClick: opts.onClick }, icon(opts.icon));
 }
 
 export interface MenuOption<T extends string> {

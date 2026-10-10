@@ -23,6 +23,9 @@
   --hp-ok: #2e7d32;
   --hp-warn: #f9a825;
   --hp-low: #c62828;
+  --page-bg: #fbf5e6; /* folha da página */
+  --page-border: #c9b27f;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.07), 0 6px 16px rgb(0 0 0 / 0.08);
 }
 .theme-medieval.mode-dark {
   --bg-main: #1e1710; /* couro escuro */
@@ -37,6 +40,9 @@
   --hp-ok: #7cb342;
   --hp-warn: #f9a825;
   --hp-low: #e55353;
+  --page-bg: #2b2117; /* folha da página */
+  --page-border: #5a452b;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 20px rgb(0 0 0 / 0.35);
 }
 
 /* --- Cyberpunk ---------------------------------------------------------------------- */
@@ -53,6 +59,9 @@
   --hp-ok: #00e5ff;
   --hp-warn: #ffea00;
   --hp-low: #ff1744;
+  --page-bg: #161b22; /* folha da página */
+  --page-border: #3b4350;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 20px rgb(0 0 0 / 0.35);
 }
 .theme-cyberpunk.mode-light {
   --bg-main: #f3f6fa; /* painel de laboratório */
@@ -67,6 +76,9 @@
   --hp-ok: #00838f;
   --hp-warn: #c77800;
   --hp-low: #d50032;
+  --page-bg: #ffffff; /* folha da página */
+  --page-border: #b8c3d2;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.07), 0 6px 16px rgb(0 0 0 / 0.08);
 }
 
 /* --- Pós-apocalíptico --------------------------------------------------------------- */
@@ -83,6 +95,9 @@
   --hp-ok: #558b2f;
   --hp-warn: #e0a030;
   --hp-low: #bf360c;
+  --page-bg: #272420; /* folha da página */
+  --page-border: #4a443b;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 20px rgb(0 0 0 / 0.35);
 }
 .theme-pos-apocaliptico.mode-light {
   --bg-main: #e4ddd0; /* papel sujo */
@@ -97,6 +112,9 @@
   --hp-ok: #4a7a22;
   --hp-warn: #b8780f;
   --hp-low: #a62a0a;
+  --page-bg: #efe9dc; /* folha da página */
+  --page-border: #b0a493;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.07), 0 6px 16px rgb(0 0 0 / 0.08);
 }
 
 /* --- Contemporâneo ------------------------------------------------------------------ */
@@ -113,6 +131,9 @@
   --hp-ok: #10b981;
   --hp-warn: #f59e0b;
   --hp-low: #ef4444;
+  --page-bg: #ffffff; /* folha da página */
+  --page-border: #d1d5db;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.07), 0 6px 16px rgb(0 0 0 / 0.08);
 }
 .theme-contemporaneo.mode-dark {
   --bg-main: #0f1115;
@@ -127,6 +148,9 @@
   --hp-ok: #34d399;
   --hp-warn: #fbbf24;
   --hp-low: #f87171;
+  --page-bg: #171a21; /* folha da página */
+  --page-border: #343a48;
+  --page-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 20px rgb(0 0 0 / 0.35);
 }
 
 @layer base {
@@ -197,6 +221,10 @@
     pointer-events: none;
     transition: opacity 0.12s ease;
   }
+  .tip.tip-up::after {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
   .tip.tip-start::after {
     left: 0;
     transform: none;
@@ -246,6 +274,45 @@
   }
   .prose-tome.drop-cap p:first-child::first-letter {
     @apply font-display text-5xl font-bold float-left mr-2 leading-[0.9] text-accent;
+  }
+
+  /* Cartão de página: uma folha separada por prompt (design §11.22). */
+  .page-card {
+    @apply relative min-w-0 rounded-xl border;
+    background: var(--page-bg);
+    border-color: var(--page-border);
+    box-shadow: var(--page-shadow);
+    transition: opacity 0.2s ease;
+  }
+  .page-card.is-dimmed {
+    opacity: 0.4;
+  }
+  .page-card.is-editing {
+    @apply ring-1 ring-accent;
+  }
+  .page-card-header {
+    @apply flex items-center justify-between border-b px-4 py-2 sm:px-6;
+    border-color: var(--page-border);
+  }
+  .page-card-title {
+    @apply font-display text-xs uppercase tracking-widest text-muted;
+  }
+  .page-card-body {
+    @apply px-4 py-5 sm:px-6 sm:py-6;
+    overflow-wrap: anywhere;
+  }
+  .page-card-body .prose-tome p:last-child,
+  .page-card-body.prose-tome p:last-child {
+    @apply mb-0;
+  }
+  .page-card-actions {
+    @apply flex items-center justify-end gap-2 border-t px-3 py-2 sm:px-4;
+    border-color: var(--page-border);
+  }
+  /* Ação de página: ícone sempre visível (nunca depende de hover). */
+  .page-action {
+    @apply bg-transparent text-ink;
+    opacity: 1;
   }
 
   /* Botão "Compactar Crônica" pulsa quando o HP está em exaustão (< 20%). */
