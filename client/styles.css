@@ -163,6 +163,33 @@
   body {
     transition: background-color 0.3s ease, color 0.3s ease;
   }
+
+  /*
+   * "App shell" (telas da sessão e do leitor de volume): o documento nunca rola; a tela ocupa
+   * exatamente a área visível — descontando a barra do navegador e o teclado — com o cabeçalho no
+   * topo e a doca embaixo; só a região das páginas (`flex-1 min-h-0 overflow-y-auto`) rola.
+   * `--app-height` é definido por `client/viewport.ts` (visualViewport); sem ele vale `100dvh`
+   * (ou `100vh` em navegadores sem essa unidade).
+   */
+  html.app-shell,
+  html.app-shell body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .app-screen {
+    --fallback-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: var(--app-height, var(--fallback-height));
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overflow: hidden;
+  }
+  @supports (height: 100dvh) {
+    .app-screen {
+      --fallback-height: 100dvh;
+    }
+  }
   ::selection {
     background: var(--accent);
     color: var(--bg-main);
@@ -350,5 +377,14 @@
     to {
       visibility: hidden;
     }
+  }
+}
+
+/* Fora de @layer de propósito: precisa vencer o `flex` (utilitário) da linha de HP da doca.
+   Altura muito curta (teclado aberto ou celular deitado): a doca mostra só a digitação; o HP e
+   "Compactar Crônica" voltam quando houver espaço, para a área das páginas não sumir. */
+@media (max-height: 520px) {
+  .dock-meta {
+    display: none;
   }
 }

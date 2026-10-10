@@ -21,6 +21,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 - [Subindo com Docker](#subindo-com-docker)
 - [Subindo com Podman](#subindo-com-podman)
 - [Primeiro uso](#primeiro-uso)
+- [Usar no celular (PWA)](#usar-no-celular-pwa)
 - [Atualizar, parar e fazer backup](#atualizar-parar-e-fazer-backup)
 - [Solução de problemas](#solução-de-problemas)
 - [Capturas de tela](#capturas-de-tela)
@@ -37,6 +38,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 - **4 temas**, cada um em variação clara e escura (Medieval, Cyberpunk, Pós-apocalíptico, Contemporâneo — 8 combinações, todas verificadas em um navegador headless), com fontes empacotadas localmente (nenhum CDN). O modo segue o sistema por padrão.
 - **Salvar em Markdown** (`.md`): as páginas saem separadas por `---`. Escolha entre a crônica completa, só o que está no Tome ou só as páginas já em volumes, com a opção de incluir mundo e sinopses; cada volume também pode ser salvo sozinho. Seus prompts nunca vão no arquivo.
 - **Seletor de modelos** alimentado pela própria API do Gemini (só modelos de geração de texto), com padrão global e escolha por sessão.
+- **Feito para o celular**: no Tome e no leitor de volume a interface cabe exatamente na tela — cabeçalho no topo, campo de digitação embaixo e **só a área das páginas rola**, com a barra do navegador ou o teclado abertos. Botão **Tela cheia** no cabeçalho e **instalável como PWA** (ver [Usar no celular](#usar-no-celular-pwa)).
 - Interface em pt-BR, responsiva (funciona no celular) e acessível por teclado (botões de ícone com tooltip e `aria-label`).
 
 ## Requisitos
@@ -117,6 +119,16 @@ Por que o `docker-compose.podman.yml` e esses parâmetros? Em modo rootless, o "
 
 > [!WARNING]
 > A interface **não tem autenticação** e o banco guarda a chave da API. Por isso a porta é publicada somente em `127.0.0.1`. Para acessar de outra máquina, ponha um proxy reverso com autenticação (ou uma VPN) na frente — não troque o bind para `0.0.0.0` sozinho.
+
+## Usar no celular (PWA)
+
+O Chronicler Engine é um **PWA instalável** (tem manifesto web e ícones): dá para adicioná-lo à tela de aplicativos do celular e abri-lo **sem a barra do navegador**, como um aplicativo (mantém a barra de status). Não é um PWA completo: não funciona offline nem sem o servidor.
+
+- **Android (Chrome):** abra o endereço do servidor, menu ⋮ → *Instalar app* (ou *Adicionar à tela inicial*).
+- **iPhone (Safari):** *Compartilhar* → *Adicionar à Tela de Início*.
+- **Requer HTTPS** (ou `localhost`): o navegador só oferece a instalação em origem segura. Atrás de um proxy reverso com certificado (ex.: `https://game.example.com`) funciona; em `http://IP-da-rede-local:3000` o Chrome apenas cria um atalho comum.
+- **Tela cheia sem instalar:** o botão de ícone **Tela cheia** do cabeçalho esconde a barra do navegador (onde o navegador permite; o iPhone não tem essa API — lá, use a instalação).
+- A cor da barra de status acompanha o tema e o modo (claro/escuro) ativos.
 
 ## Atualizar, parar e fazer backup
 
@@ -218,6 +230,8 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | `npm start` | Executa o build de produção |
 | `npm run fonts` | Reempacota as fontes de `@fontsource/*` em `public/fonts/` |
 | `npm run check:paginas` | Verifica o cartão de página nos 8 temas (claro/escuro × desktop/celular) em um Chromium headless — ações visíveis, contraste, sem rolagem horizontal — e grava capturas em `docs/screenshots/paginas/` |
+| `npm run check:mobile` | Verifica o layout do celular (390 px; alturas de tela cheia, com barra do navegador e com teclado aberto) na sessão e no leitor de volume, nos 8 temas: cabeçalho no topo, doca embaixo, só a área das páginas rola, campo de digitação visível, manifesto instalável. Grava folhas de contato em `docs/screenshots/mobile/`. `BROWSER=firefox` usa o Firefox do Playwright |
+| `npm run icons` | Regenera os ícones PNG do manifesto (`public/icons/`) a partir de `public/favicon.svg` |
 | `npm run screenshots` | Regenera `docs/screenshots/` com um Chromium headless (Gemini simulado; use `CHROME_PATH=…` se não houver um navegador do Playwright) |
 
 ### Variáveis de ambiente

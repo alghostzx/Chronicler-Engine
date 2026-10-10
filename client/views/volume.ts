@@ -1,5 +1,5 @@
 import { api, type Archive, type Page, type SessionDetail } from '../api';
-import { createModeControl, iconButton } from '../controls';
+import { createModeControl, fullscreenButton, iconButton } from '../controls';
 import { h, mount, paragraphs } from '../dom';
 import { pageCard } from '../pageCard';
 import { applyTheme } from '../theme';
@@ -44,13 +44,14 @@ export async function renderVolume(root: HTMLElement, sessionId: string, volumeN
     root,
     h(
       'div',
-      { class: 'flex h-screen flex-col' },
+      { class: 'app-screen' },
       h(
         'header',
-        { class: 'flex items-center gap-2 border-b border-line bg-panel px-3 py-2' },
+        { class: 'flex shrink-0 items-center gap-1.5 border-b border-line bg-panel px-3 py-2 sm:gap-2' },
         iconButton({ icon: 'back', label: 'Voltar ao Tome', tip: 'Voltar ao Tome da crônica', align: 'start', href: `#/s/${sessionId}` }),
         h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, `${title} — Volume ${archive.volume_number}`),
         createModeControl(),
+        fullscreenButton(),
         iconButton({ icon: 'download', label: 'Salvar volume em Markdown', tip: `Salvar o Volume ${archive.volume_number} como arquivo Markdown (.md)`, align: 'end', onClick: () => openVolumeExport(archive!) }),
       ),
       h(

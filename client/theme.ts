@@ -61,6 +61,20 @@ function paint(): void {
   const root = document.documentElement;
   root.classList.remove(...ALL_THEMES, 'mode-light', 'mode-dark');
   root.classList.add(`theme-${currentTheme}`, `mode-${resolveMode(currentPref)}`);
+  syncThemeColor();
+}
+
+/** Atualiza `<meta name="theme-color">` (barra de status/título do app) com a cor do cabeçalho do tema. */
+function syncThemeColor(): void {
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel').trim();
+  if (!color) return;
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = color;
 }
 
 /** Aplica o tema (classe na raiz <html>) mantendo o modo claro/escuro atual. */

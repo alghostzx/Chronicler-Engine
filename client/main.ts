@@ -1,5 +1,6 @@
 import { mount } from './dom';
 import { initTheme } from './theme';
+import { setAppShell } from './viewport';
 import { renderHome } from './views/home';
 import { renderSession } from './views/session';
 import { renderVolume } from './views/volume';
@@ -13,6 +14,9 @@ async function route(): Promise<void> {
   const current = ++navigation;
   cleanup?.();
   cleanup = null;
+
+  // Sessão e leitor de volume são "app shell" (sem rolagem do documento); a biblioteca rola normalmente.
+  setAppShell(/^#\/s\/[^/]+(\/v\/\d+)?$/.test(location.hash));
 
   const volume = /^#\/s\/([^/]+)\/v\/(\d+)$/.exec(location.hash);
   if (volume) {

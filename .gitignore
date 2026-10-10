@@ -27,3 +27,6 @@ data/
 
 # Artefatos de build do frontend
 public/assets/
+
+# Capturas do check:mobile no Firefox (verificação local)
+docs/screenshots/mobile-firefox/
