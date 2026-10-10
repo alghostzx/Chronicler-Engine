@@ -67,13 +67,13 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
     const active = repos.dialogues.getActive(session.id);
     return {
       session,
-      blocks: repos.blocks.listActive(session.id),
+      pages: repos.pages.listActive(session.id),
       archives: repos.archives.list(session.id),
       active_dialogue: active ? publicDialogue(active) : null,
     };
   });
 
-  // Exporta a história como arquivo Markdown (download). Inclui os blocos arquivados.
+  // Exporta a história como arquivo Markdown (download). Inclui as páginas arquivadas.
   app.get<{ Params: { id: string }; Querystring: { include_context?: boolean } }>(
     '/api/sessions/:id/export',
     {
@@ -86,7 +86,7 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
       const session = requireSession(req.params.id);
       const markdown = buildStoryMarkdown({
         session,
-        blocks: repos.blocks.listAll(session.id),
+        pages: repos.pages.listAll(session.id),
         exportedAt: new Date(),
         includeContext: req.query.include_context === true,
       });

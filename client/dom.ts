@@ -151,3 +151,8 @@ export function paragraphs(text: string): string[] {
 export function formatNumber(n: number): string {
   return n.toLocaleString('pt-BR');
 }
+
+/** "1 página" / "N páginas" (N com separador de milhar pt-BR). */
+export function countPages(n: number): string {
+  return `${formatNumber(n)} ${n === 1 ? 'página' : 'páginas'}`;
+}

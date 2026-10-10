@@ -37,8 +37,8 @@ export async function openCompaction(sessionId: string): Promise<boolean> {
           try {
             await api('POST', `/api/sessions/${sessionId}/compact/commit`, {
               summary_text: ta.value,
-              covered_block_start_index: preview.covered_block_start_index,
-              covered_block_end_index: preview.covered_block_end_index,
+              covered_page_start_index: preview.covered_page_start_index,
+              covered_page_end_index: preview.covered_page_end_index,
             });
             committed = true;
             toast('Crônica compactada.', 'success');
@@ -55,7 +55,7 @@ export async function openCompaction(sessionId: string): Promise<boolean> {
             h(
               'p',
               { class: 'text-sm text-muted' },
-              `${preview.blocks_to_archive} blocos antigos (${preview.covered_block_start_index} a ${preview.covered_block_end_index}) viram o Volume ${preview.next_volume_number}; os ${preview.blocks_to_keep} mais recentes permanecem intactos. Revise e edite a sinopse antes de consolidar — o texto original dos blocos arquivados deixa de ser enviado ao Narrador.`,
+              `${preview.pages_to_archive} páginas antigas (${preview.covered_page_start_index} a ${preview.covered_page_end_index}) viram o Volume ${preview.next_volume_number}; as ${preview.pages_to_keep} mais recentes permanecem intactas. Revise e edite a sinopse antes de consolidar — o texto original das páginas arquivadas deixa de ser enviado ao Narrador.`,
             ),
             ta,
             h('div', { class: 'flex justify-end gap-2' }, h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'), commit),

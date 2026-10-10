@@ -188,7 +188,7 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
           h(
             'details',
             { class: 'rounded border border-line bg-main p-3', open: archives.length === 1 },
-            h('summary', { class: 'cursor-pointer font-display text-strong' }, `Volume ${a.volume_number} — blocos ${a.covered_block_start_index} a ${a.covered_block_end_index}`),
+            h('summary', { class: 'cursor-pointer font-display text-strong' }, `Volume ${a.volume_number} — páginas ${a.covered_page_start_index} a ${a.covered_page_end_index}`),
             h('div', { class: 'mt-3 space-y-2 text-sm leading-6' }, ...paragraphs(a.summary_text).map((p) => h('p', null, p))),
           ),
         ),

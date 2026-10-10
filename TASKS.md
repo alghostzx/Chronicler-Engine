@@ -110,12 +110,12 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft v2 revisado com as decisões do autor: renomeação completa **sem migração** (pré-pré-alpha, atualizações não suportadas), numeração absoluta (`Página N` = `order_index`), `---` entre páginas no export, páginas arquivadas legíveis e exportáveis, "Editar prompt" mantém o aviso destrutivo.
 
 ### 13.1 Renomeação bloco → página (código, API, banco; sem migração)
-- [ ] Schema: `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice `idx_pages_order`; `SCHEMA_VERSION` 2
-- [ ] Banco de versão antiga (v1) falha com mensagem clara (apague `./data`) em vez de `no such table`; teste cobrindo
-- [ ] Repositório `blocks` → `pages`; tipos `NarrativeBlock`/`Block` → `Page`
-- [ ] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…` (sem alias); JSON (`blocks` → `pages`, `pages_to_archive/keep`, `pages_to_discard`, `covered_page_*`) e evento SSE `block` → `page`
-- [ ] Mensagens de erro, prompts de compactação e textos da UI: "bloco(s)" → "página(s)"
-- [ ] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
+- [x] Schema: `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice `idx_pages_order`; `SCHEMA_VERSION` 2
+- [x] Banco de versão antiga (v1) falha com mensagem clara (apague `./data`) em vez de `no such table`; teste cobrindo
+- [x] Repositório `blocks` → `pages`; tipos `NarrativeBlock`/`Block` → `Page`
+- [x] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…` (sem alias); JSON (`blocks` → `pages`, `pages_to_archive/keep`, `pages_to_discard`, `covered_page_*`) e evento SSE `block` → `page`
+- [x] Mensagens de erro, prompts de compactação e textos da UI: "bloco(s)" → "página(s)"
+- [x] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
 
 ### 13.2 Interface — cartão de página
 - [ ] Ícones novos em `client/icons.ts`: lápis (editar texto), prompt editável, ramificar
@@ -127,7 +127,7 @@ Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"
 ### 13.3 Páginas consumidas continuam legíveis e exportáveis
 - [ ] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes
 - [ ] Painel Contexto → Crônica: "Volume N — páginas X a Y", sinopse, botão **Ler as N páginas** e ícone **Salvar volume em .md**
-- [ ] Leitor de volume (modal largo rolável) com `pageCard` somente leitura; arquivadas não são editáveis nem ponto de ramificação na UI
+- [ ] Leitor de volume como **página separada** (rota `#/s/<id>/v/<n>`, não modal) com `pageCard` somente leitura, link de volta e ícone de exportar; arquivadas não são editáveis nem ponto de ramificação na UI
 - [ ] Teste: páginas arquivadas ficam **fora** do contexto da IA/HP/compactação e **dentro** do que o jogador lê e exporta
 - [ ] Exportador: `---` entre páginas (linhas em branco ao redor), metadados "N páginas"; prompts do jogador continuam fora
 - [ ] `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`)

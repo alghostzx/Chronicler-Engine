@@ -4,12 +4,12 @@ import { GenerationError, type GeminiGateway } from '../ai/gateway.js';
 import { streamNarratorTurn } from '../ai/narrator.js';
 import { NarratorResponseError, type NarratorResult } from '../ai/narratorSchema.js';
 import { HttpError, type AppContext } from '../context.js';
-import type { DialogueSession, NarrativeBlock, Session } from '../db/types.js';
+import type { DialogueSession, Page, Session } from '../db/types.js';
 import { openSse } from './sse.js';
 
 export interface PersistOutcome {
-  block: NarrativeBlock;
-  /** Blocos posteriores descartados (apenas em regeneração intermediária). */
+  page: Page;
+  /** Páginas posteriores descartadas (apenas em regeneração intermediária). */
   discarded: number;
   dialogue?: DialogueSession;
 }
@@ -21,7 +21,7 @@ export function friendlyError(err: unknown): string {
 }
 
 /**
- * Orquestra turnos do Narrador (próximo bloco, regeneração, costura de diálogo) e as
+ * Orquestra turnos do Narrador (próxima página, regeneração, costura de diálogo) e as
  * travas de concorrência compartilhadas entre as rotas.
  */
 export class TurnRunner {
@@ -56,7 +56,7 @@ export class TurnRunner {
    * `claim` antes; é liberada aqui ao final. Eventos:
    *  - `start`  {model}
    *  - `chunk`  {text}              (parse incremental de narrative_text)
-   *  - `block`  {block, discarded}  (no fechamento do payload, após persistir)
+   *  - `page`  {page, discarded}  (no fechamento do payload, após persistir)
    *  - `dialogue_trigger` {dialogue_id, npc_name}   (somente se o Narrador ativou diálogo)
    *  - `error`  {message}
    *  - `done`   {}
@@ -96,7 +96,7 @@ export class TurnRunner {
       if (sse.signal.aborted || !result) return;
 
       const outcome = opts.persist(result, model);
-      sse.send('block', { block: outcome.block, discarded: outcome.discarded });
+      sse.send('page', { page: outcome.page, discarded: outcome.discarded });
       if (outcome.dialogue) {
         sse.send('dialogue_trigger', {
           dialogue_id: outcome.dialogue.id,

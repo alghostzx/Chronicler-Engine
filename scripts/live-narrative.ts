@@ -43,7 +43,7 @@ async function turn(instruction: string) {
     const data = JSON.parse(d!.slice(5));
     if (e === 'event: start') console.log('modelo:', data.model);
     if (e === 'event: error') console.log('ERRO:', data.message);
-    if (e === 'event: block') console.log('\nTEXTO:\n' + data.block.generated_text);
+    if (e === 'event: page') console.log('\nTEXTO:\n' + data.page.generated_text);
     if (e === 'event: dialogue_trigger') console.log('\nDIÁLOGO →', data.npc_name);
   }
 }
@@ -51,6 +51,6 @@ async function turn(instruction: string) {
 await turn('Entro no Corvo Cego, me sento no balcão e peço uma caneca de hidromel.');
 await turn('Assim que vejo a taverneira Elena, inicio um diálogo direto com ela.');
 
-const blocks = repos.blocks.listActive(sessionId);
-console.log(`\nBlocos salvos: ${blocks.length}; diálogo ativo:`, repos.dialogues.getActive(sessionId)?.npc_name ?? 'nenhum');
+const pages = repos.pages.listActive(sessionId);
+console.log(`\nPáginas salvas: ${pages.length}; diálogo ativo:`, repos.dialogues.getActive(sessionId)?.npc_name ?? 'nenhum');
 await app.close();

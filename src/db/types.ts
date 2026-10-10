@@ -11,7 +11,7 @@ export interface Session {
   updated_at: string;
 }
 
-export interface NarrativeBlock {
+export interface Page {
   id: string;
   session_id: string;
   order_index: number;
@@ -28,8 +28,8 @@ export interface ChronicleArchive {
   session_id: string;
   volume_number: number;
   summary_text: string;
-  covered_block_start_index: number;
-  covered_block_end_index: number;
+  covered_page_start_index: number;
+  covered_page_end_index: number;
   created_at: string;
 }
 

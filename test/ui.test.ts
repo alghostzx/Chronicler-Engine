@@ -133,33 +133,33 @@ describe('UI — sessão', () => {
 
     gateway.queue(narratorJson('A porta rangeu.\n\nUma sombra cruzou o corredor.'));
     await send('Abro a porta');
-    await waitFor(() => document.querySelectorAll('.prose-tome p').length === 2, 'primeiro bloco persistido');
+    await waitFor(() => document.querySelectorAll('.prose-tome p').length === 2, 'primeira página persistida');
     expect(text()).toContain('A porta rangeu.');
     expect(document.documentElement.classList.contains('theme-cyberpunk')).toBe(true);
     await waitFor(() => /\d+% — /.test(text()), 'HP calculado');
 
     gateway.queue(narratorJson('O silêncio voltou.'));
     await send('Espero');
-    await waitFor(() => text().includes('O silêncio voltou.'), 'segundo bloco');
-    expect(document.querySelectorAll('section[data-block-id]').length).toBe(2);
+    await waitFor(() => text().includes('O silêncio voltou.'), 'segunda página');
+    expect(document.querySelectorAll('section[data-page-id]').length).toBe(2);
 
-    // Edição manual do primeiro bloco preserva o segundo.
+    // Edição manual da primeira página preserva a segunda.
     click(button('Editar Texto')!);
-    const editor = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-block-id] textarea'), 'editor');
+    const editor = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-page-id] textarea'), 'editor');
     type(editor, 'A porta gemeu.');
     click(await waitFor(() => button('Salvar edição'), 'salvar edição'));
     await waitFor(() => text().includes('A porta gemeu.'), 'texto editado');
     expect(text()).toContain('O silêncio voltou.');
 
-    // Re-geração do primeiro bloco avisa e descarta o segundo.
+    // Re-geração da primeira página avisa e descarta a segunda.
     click(button('Ver Prompt de Origem / Re-gerar')!);
     const modalTa = await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'modal');
     expect(modalTa.value).toBe('Abro a porta');
-    expect(text()).toContain('descarta definitivamente os 1 bloco(s)');
+    expect(text()).toContain('descarta definitivamente a página seguinte');
     gateway.queue(narratorJson('A porta explodiu.'));
     click(button(/Re-gerar e descartar 1/)!);
-    await waitFor(() => text().includes('A porta explodiu.') && !text().includes('O silêncio voltou.'), 'bloco regerado e posterior descartado');
-    expect(document.querySelectorAll('section[data-block-id]').length).toBe(1);
+    await waitFor(() => text().includes('A porta explodiu.') && !text().includes('O silêncio voltou.'), 'página regerada e posterior descartada');
+    expect(document.querySelectorAll('section[data-page-id]').length).toBe(1);
   });
 
   it('conduz um diálogo com NPC do gatilho até a costura em prosa', async () => {
@@ -205,7 +205,7 @@ describe('UI — sessão', () => {
     expect(ta.value).toContain('Sinopse');
     type(ta, 'Sinopse editada pelo jogador.');
     click(await waitFor(() => button(/Consolidar Volume 1/), 'botão consolidar'));
-    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'blocos arquivados somem do tome');
+    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'páginas arquivadas somem do tome');
     expect(text()).toContain('Terceiro capítulo.');
 
     click(byLabel('Contexto da sessão')!);
@@ -215,7 +215,7 @@ describe('UI — sessão', () => {
     expect(text()).toContain('Sinopse editada pelo jogador.');
   });
 
-  it('ramifica a partir de um bloco anterior descartando os seguintes', async () => {
+  it('ramifica a partir de uma página anterior descartando as seguintes', async () => {
     await openNewSession();
     for (const msg of ['Cena A.', 'Cena B.']) {
       gateway.queue(narratorJson(msg));
@@ -224,7 +224,7 @@ describe('UI — sessão', () => {
     }
     click(button('Ramificar a partir daqui')!);
     click(await waitFor(() => button('Descartar e ramificar'), 'confirmação'));
-    await waitFor(() => !text().includes('Cena B.'), 'bloco B descartado');
+    await waitFor(() => !text().includes('Cena B.'), 'página B descartada');
     expect(text()).toContain('Cena A.');
   });
 
@@ -232,7 +232,7 @@ describe('UI — sessão', () => {
     await openNewSession();
     gateway.queue(narratorJson('A porta rangeu.'));
     await send('Abro a porta');
-    await waitFor(() => text().includes('A porta rangeu.') && !button('Narrando…'), 'bloco');
+    await waitFor(() => text().includes('A porta rangeu.') && !button('Narrando…'), 'página');
 
     const blobs: Blob[] = [];
     const downloads: string[] = [];
@@ -328,6 +328,6 @@ describe('UI — sessão', () => {
     await waitFor(() => document.querySelector('#toasts div'), 'toast de erro');
     const ta = await waitFor(() => document.querySelector<HTMLTextAreaElement>('footer textarea:not([disabled])'), 'doca liberada');
     expect(ta.value).toBe('Faço algo');
-    expect(document.querySelectorAll('section[data-block-id]').length).toBe(0);
+    expect(document.querySelectorAll('section[data-page-id]').length).toBe(0);
   });
 });

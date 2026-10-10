@@ -56,7 +56,7 @@ async function turn(id: string, instruction: string, text: string, trigger?: { n
     narratorJson(text, trigger ? { activate: true, npc_name: trigger.npc, dynamic_system_prompt: trigger.prompt } : { activate: false }),
   );
   const r = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: instruction } });
-  if (!r.body.includes('event: block')) throw new Error(`Turno falhou: ${r.body.slice(0, 300)}`);
+  if (!r.body.includes('event: page')) throw new Error(`Turno falhou: ${r.body.slice(0, 300)}`);
 }
 
 const medieval = await createSession(
@@ -150,12 +150,12 @@ async function shoot(
 }
 
 await shoot('01-biblioteca.png', { hash: '#/', mode: 'dark', ready: 'input[aria-label="Título da crônica"]' });
-await shoot('02-tome-medieval.png', { hash: `#/s/${medieval}`, mode: 'dark', ready: 'section[data-block-id]' });
-await shoot('03-tome-cyberpunk.png', { hash: `#/s/${cyber}`, mode: 'dark', ready: 'section[data-block-id]' });
+await shoot('02-tome-medieval.png', { hash: `#/s/${medieval}`, mode: 'dark', ready: 'section[data-page-id]' });
+await shoot('03-tome-cyberpunk.png', { hash: `#/s/${cyber}`, mode: 'dark', ready: 'section[data-page-id]' });
 await shoot('04-contexto-contemporaneo.png', {
   hash: `#/s/${modern}`,
   mode: 'light',
-  ready: 'section[data-block-id]',
+  ready: 'section[data-page-id]',
   act: async (p) => {
     await p.click('[aria-label="Contexto da sessão"]');
     await p.mouse.move(600, 400); // tira o mouse de cima do botão (sem tooltip na captura)
@@ -165,7 +165,7 @@ await shoot('04-contexto-contemporaneo.png', {
 await shoot('05-tema-menu.png', {
   hash: `#/s/${modern}`,
   mode: 'light',
-  ready: 'section[data-block-id]',
+  ready: 'section[data-page-id]',
   act: async (p) => {
     await p.click('[aria-label="Tema visual"]');
     await p.waitForTimeout(200);
@@ -174,14 +174,14 @@ await shoot('05-tema-menu.png', {
 await shoot('06-tooltip.png', {
   hash: `#/s/${cyber}`,
   mode: 'dark',
-  ready: 'section[data-block-id]',
+  ready: 'section[data-page-id]',
   act: async (p) => {
     await p.hover('[aria-label="Salvar em Markdown"]');
     await p.waitForTimeout(600);
   },
 });
 await shoot('07-celular-biblioteca.png', { hash: '#/', mode: 'dark', mobile: true, ready: 'input[aria-label="Título da crônica"]', fullPage: true });
-await shoot('08-celular-tome.png', { hash: `#/s/${medieval}`, mode: 'light', mobile: true, ready: 'section[data-block-id]' });
+await shoot('08-celular-tome.png', { hash: `#/s/${medieval}`, mode: 'light', mobile: true, ready: 'section[data-page-id]' });
 
 await browser.close();
 await app.close();

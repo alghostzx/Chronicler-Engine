@@ -112,14 +112,14 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
         session,
         request: buildBridgeRequest({
           session,
-          precedingBlocks: repos.blocks.listActive(session.id),
+          precedingPages: repos.pages.listActive(session.id),
           npcName: dialogue.npc_name,
           messages,
         }),
-        // O bloco de costura é o ÚNICO ponto em que o diálogo altera a história (checklist §10 nº 5).
+        // A página de costura é o ÚNICO ponto em que o diálogo altera a história (checklist §10 nº 5).
         persist: (result, model) =>
           repos.transaction(() => {
-            const block = repos.blocks.append(session.id, {
+            const page = repos.pages.append(session.id, {
               player_instruction: bridgeInstruction(dialogue.npc_name, messages),
               generated_text: result.narrative_text,
               model_identifier: model,
@@ -128,7 +128,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
             // O Narrador pode encadear outro diálogo; a sub-sessão anterior já está concluída.
             const next = turns.maybeCreateDialogue(session.id, result);
             repos.sessions.touch(session.id);
-            return { block, discarded: 0, dialogue: next };
+            return { page, discarded: 0, dialogue: next };
           }),
       });
     },

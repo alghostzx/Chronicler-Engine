@@ -29,6 +29,13 @@ function migrate(db: Db): void {
       `Banco de dados com versão de schema (${current}) mais nova que a suportada (${SCHEMA_VERSION}).`,
     );
   }
+  // Banco criado por uma versão anterior (user_version 1..SCHEMA_VERSION-1): sem migração (pré-pré-alpha).
+  if (current > 0 && current < SCHEMA_VERSION) {
+    throw new Error(
+      `Banco de dados com versão de schema antiga (${current}); esta versão (${SCHEMA_VERSION}) não oferece migração. ` +
+        'O projeto está em fase pré-alpha: apague o arquivo do banco (a pasta ./data) e inicie novamente.',
+    );
+  }
   db.exec(SCHEMA_SQL);
   if (current < SCHEMA_VERSION) {
     db.pragma(`user_version = ${SCHEMA_VERSION}`);

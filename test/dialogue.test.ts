@@ -15,7 +15,7 @@ beforeEach(async () => {
     world_context: 'Reino de Aldor',
     model: 'gemini-2.5-flash',
   }).id;
-  t.repos.blocks.append(sessionId, { player_instruction: 'META-ANTERIOR', generated_text: 'Prosa anterior.' });
+  t.repos.pages.append(sessionId, { player_instruction: 'META-ANTERIOR', generated_text: 'Prosa anterior.' });
   dialogueId = t.repos.dialogues.create(sessionId, 'Elena Vance', NPC_PROMPT).id;
 });
 
@@ -61,14 +61,14 @@ describe('POST /dialogue/:id/message', () => {
     expect(req.responseJsonSchema).toBeDefined();
   });
 
-  it('não altera os blocos da história (checklist §10 nº 5)', async () => {
+  it('não altera as páginas da história (checklist §10 nº 5)', async () => {
     t.gateway.queue(npcJson('a'), npcJson('b'), npcJson('c'));
     await say('1');
     await say('2');
     await say('3');
-    const blocks = t.repos.blocks.listAll(sessionId);
-    expect(blocks).toHaveLength(1);
-    expect(blocks[0]!.generated_text).toBe('Prosa anterior.');
+    const pages = t.repos.pages.listAll(sessionId);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]!.generated_text).toBe('Prosa anterior.');
   });
 
   it('sinaliza npc_wants_to_end sem encerrar sozinho', async () => {
@@ -112,14 +112,14 @@ describe('POST /dialogue/:id/conclude (costura)', () => {
     await say('Pago bem.');
   };
 
-  it('envia ao Narrador a transcrição literal e grava UM novo bloco, concluindo o diálogo', async () => {
+  it('envia ao Narrador a transcrição literal e grava UMA nova página, concluindo o diálogo', async () => {
     await converse();
     t.gateway.queue(narratorJson('Elena estreitou os olhos e, por fim, abriu a porta dos fundos.'));
 
     const res = await conclude();
     const events = parseSse(res.body);
     expect(events.map((e) => e.event)).toContain('chunk');
-    expect(events.slice(-2).map((e) => e.event)).toEqual(['block', 'done']);
+    expect(events.slice(-2).map((e) => e.event)).toEqual(['page', 'done']);
 
     const req = t.gateway.requests.at(-1)!;
     expect(req.systemInstruction).toBe('REGRAS DO NARRADOR');
@@ -130,14 +130,14 @@ describe('POST /dialogue/:id/conclude (costura)', () => {
     expect(req.userText).not.toContain('SEGREDO-DO-NPC'); // o segredo do NPC não vai para o Narrador
     expect(req.responseJsonSchema).toBeDefined();
 
-    const blocks = t.repos.blocks.listActive(sessionId);
-    expect(blocks).toHaveLength(2);
-    expect(blocks[1]).toMatchObject({
+    const pages = t.repos.pages.listActive(sessionId);
+    expect(pages).toHaveLength(2);
+    expect(pages[1]).toMatchObject({
       order_index: 2,
       generated_text: 'Elena estreitou os olhos e, por fim, abriu a porta dos fundos.',
       model_identifier: 'gemini-2.5-flash',
     });
-    expect(blocks[1]!.player_instruction).toContain('[Diálogo com Elena Vance]');
+    expect(pages[1]!.player_instruction).toContain('[Diálogo com Elena Vance]');
     expect(t.repos.dialogues.get(dialogueId)!.status).toBe('concluded');
     expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
   });
@@ -165,12 +165,12 @@ describe('POST /dialogue/:id/conclude (costura)', () => {
     expect(next.userText).not.toContain('Protagonista: Procuro um mapa.');
   });
 
-  it('falha da costura não grava bloco e mantém o diálogo ativo', async () => {
+  it('falha da costura não grava página e mantém o diálogo ativo', async () => {
     await converse();
     t.gateway.queue('lixo');
     const events = parseSse((await conclude()).body);
     expect(events.at(-1)!.event).toBe('error');
-    expect(t.repos.blocks.listAll(sessionId)).toHaveLength(1);
+    expect(t.repos.pages.listAll(sessionId)).toHaveLength(1);
     expect(t.repos.dialogues.getActive(sessionId)!.id).toBe(dialogueId);
     // nova tentativa funciona
     t.gateway.queue(narratorJson('Agora foi.'));
@@ -228,7 +228,7 @@ describe('cancelamento e reconexão', () => {
     expect(res.statusCode).toBe(204);
     expect(t.repos.dialogues.get(dialogueId)).toBeUndefined();
     expect(t.repos.dialogues.listMessages(dialogueId)).toHaveLength(0);
-    expect(t.repos.blocks.listAll(sessionId)).toHaveLength(1);
+    expect(t.repos.pages.listAll(sessionId)).toHaveLength(1);
     expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
   });
 });

@@ -10,15 +10,15 @@ beforeEach(async () => {
 describe('exportação em Markdown (módulo puro)', () => {
   const base = { exportedAt: new Date('2026-10-09T12:00:00Z') };
 
-  it('gera título, metadados e a prosa dos blocos', () => {
+  it('gera título, metadados e a prosa das páginas', () => {
     const md = buildStoryMarkdown({
       ...base,
       session: { title: 'A Queda de Valdoria', world_context: 'Um reino antigo.' },
-      blocks: [{ generated_text: 'Primeiro.\n\nSegundo.' }, { generated_text: '  Terceiro.  ' }],
+      pages: [{ generated_text: 'Primeiro.\n\nSegundo.' }, { generated_text: '  Terceiro.  ' }],
       includeContext: false,
     });
     expect(md).toBe(
-      '# A Queda de Valdoria\n\n*Exportado do Chronicler Engine em 2026-10-09 · 2 blocos*\n\nPrimeiro.\n\nSegundo.\n\nTerceiro.\n',
+      '# A Queda de Valdoria\n\n*Exportado do Chronicler Engine em 2026-10-09 · 2 páginas*\n\nPrimeiro.\n\nSegundo.\n\nTerceiro.\n',
     );
   });
 
@@ -26,7 +26,7 @@ describe('exportação em Markdown (módulo puro)', () => {
     const md = buildStoryMarkdown({
       ...base,
       session: { title: 'T', world_context: 'Mundo.\n\n## Crônica — Volume 1\n\nSinopse.' },
-      blocks: [{ generated_text: 'Texto.' }],
+      pages: [{ generated_text: 'Texto.' }],
       includeContext: true,
     });
     expect(md).toContain('## Mundo e personagens\n\nMundo.');
@@ -34,15 +34,15 @@ describe('exportação em Markdown (módulo puro)', () => {
     expect(md.indexOf('## Narrativa')).toBeGreaterThan(md.indexOf('Sinopse.'));
   });
 
-  it('normaliza título com quebras de linha e usa o singular para 1 bloco', () => {
+  it('normaliza título com quebras de linha e usa o singular para 1 página', () => {
     const md = buildStoryMarkdown({
       ...base,
       session: { title: 'Linha 1\nLinha 2', world_context: '' },
-      blocks: [{ generated_text: 'x' }],
+      pages: [{ generated_text: 'x' }],
       includeContext: true,
     });
     expect(md.startsWith('# Linha 1 Linha 2\n')).toBe(true);
-    expect(md).toContain('1 bloco*');
+    expect(md).toContain('1 página*');
     expect(md).not.toContain('## Mundo');
   });
 
@@ -59,8 +59,8 @@ describe('exportação em Markdown (módulo puro)', () => {
 describe('GET /api/sessions/:id/export', () => {
   function seed() {
     const s = t.repos.sessions.create({ title: 'Minha Crônica', system_rules: 'r', world_context: 'Mundo X' });
-    for (const text of ['Bloco um.', 'Bloco dois.', 'Bloco três.']) {
-      t.repos.blocks.append(s.id, { player_instruction: 'segredo do jogador', generated_text: text });
+    for (const text of ['Página um.', 'Página dois.', 'Página três.']) {
+      t.repos.pages.append(s.id, { player_instruction: 'segredo do jogador', generated_text: text });
     }
     return s;
   }
@@ -72,17 +72,17 @@ describe('GET /api/sessions/:id/export', () => {
     expect(res.headers['content-type']).toContain('text/markdown');
     expect(res.headers['content-disposition']).toContain('attachment; filename="minha-cronica.md"');
     expect(res.body).toContain('# Minha Crônica');
-    expect(res.body).toContain('Bloco um.\n\nBloco dois.\n\nBloco três.');
+    expect(res.body).toContain('Página um.\n\nPágina dois.\n\nPágina três.');
     expect(res.body).not.toContain('segredo do jogador');
     expect(res.body).not.toContain('Mundo X');
   });
 
-  it('inclui blocos arquivados na compactação e o contexto sob demanda', async () => {
+  it('inclui páginas arquivadas na compactação e o contexto sob demanda', async () => {
     const s = seed();
-    t.repos.blocks.archiveRange(s.id, 1, 2);
+    t.repos.pages.archiveRange(s.id, 1, 2);
     const res = await t.app.inject({ method: 'GET', url: `/api/sessions/${s.id}/export?include_context=true` });
-    expect(res.body).toContain('Bloco um.');
-    expect(res.body).toContain('Bloco dois.');
+    expect(res.body).toContain('Página um.');
+    expect(res.body).toContain('Página dois.');
     expect(res.body).toContain('## Mundo e personagens\n\nMundo X');
   });
 

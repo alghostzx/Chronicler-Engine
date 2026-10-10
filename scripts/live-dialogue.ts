@@ -52,6 +52,6 @@ for (const line of ['Procuro um navio que parta para o norte esta noite. Sabe de
 
 const concl = sse((await app.inject({ method: 'POST', url: `/api/dialogue/${did}/conclude` })).body);
 console.log('\nEventos da costura:', concl.map((e) => e.event).filter((e, i, a) => a.indexOf(e) === i).join(','));
-console.log('\nBLOCO DE COSTURA:\n' + concl.find((e) => e.event === 'block')?.data.block.generated_text);
-console.log('\nBlocos:', repos.blocks.listActive(sessionId).length, '| diálogo ativo:', repos.dialogues.getActive(sessionId)?.npc_name ?? 'nenhum');
+console.log('\nPÁGINA DE COSTURA:\n' + concl.find((e) => e.event === 'page')?.data.page.generated_text);
+console.log('\nPáginas:', repos.pages.listActive(sessionId).length, '| diálogo ativo:', repos.dialogues.getActive(sessionId)?.npc_name ?? 'nenhum');
 await app.close();

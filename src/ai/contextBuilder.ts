@@ -1,4 +1,4 @@
-import type { NarrativeBlock, Session } from '../db/types.js';
+import type { Page, Session } from '../db/types.js';
 
 export interface NarratorRequestParts {
   /** Item 1 do pipeline (§2.1): regras de narração, enviadas como system instruction. */
@@ -12,13 +12,13 @@ const CORPUS_HEADER = '# CORPUS NARRATIVO (história até aqui)';
 const INPUT_HEADER = '# AÇÃO / ESBOÇO DO JOGADOR PARA A PRÓXIMA CENA';
 
 /**
- * Corpus narrativo: concatenação cronológica do `generated_text` dos blocos informados.
+ * Corpus narrativo: concatenação cronológica do `generated_text` das páginas informadas.
  *
- * Por desenho (§2.2), o `player_instruction` dos blocos NUNCA entra aqui — o corpus é prosa
- * pura. Quem chama deve passar apenas blocos ativos e anteriores ao ponto de geração.
+ * Por desenho (§2.2), o `player_instruction` das páginas NUNCA entra aqui — o corpus é prosa
+ * pura. Quem chama deve passar apenas páginas ativas e anteriores ao ponto de geração.
  */
-export function buildCorpus(blocks: Pick<NarrativeBlock, 'generated_text' | 'order_index'>[]): string {
-  return [...blocks]
+export function buildCorpus(pages: Pick<Page, 'generated_text' | 'order_index'>[]): string {
+  return [...pages]
     .sort((a, b) => a.order_index - b.order_index)
     .map((b) => b.generated_text.trim())
     .filter((t) => t.length > 0)
@@ -41,11 +41,11 @@ export function buildStoryPrefix(session: Pick<Session, 'world_context'>, corpus
  */
 export function buildNarratorRequest(input: {
   session: Pick<Session, 'system_rules' | 'world_context'>;
-  /** Blocos ativos que precedem o ponto de geração, em qualquer ordem. */
-  precedingBlocks: Pick<NarrativeBlock, 'generated_text' | 'order_index'>[];
+  /** Páginas ativas que precedem o ponto de geração, em qualquer ordem. */
+  precedingPages: Pick<Page, 'generated_text' | 'order_index'>[];
   playerInstruction: string;
 }): NarratorRequestParts {
-  const prefix = buildStoryPrefix(input.session, buildCorpus(input.precedingBlocks));
+  const prefix = buildStoryPrefix(input.session, buildCorpus(input.precedingPages));
   return {
     systemInstruction: input.session.system_rules,
     userText: `${prefix}\n\n${INPUT_HEADER}\n${input.playerInstruction.trim()}`,
