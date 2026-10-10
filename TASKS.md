@@ -107,32 +107,42 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
 
 ## Fase 13 — Páginas (branch `feature/paginas`) 🚧
-Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft aprovado? **Aguardando decisões** (profundidade da renomeação, numeração, export `.md`).
+Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft v2 revisado com as decisões do autor: renomeação completa **sem migração** (pré-pré-alpha, atualizações não suportadas), numeração absoluta (`Página N` = `order_index`), `---` entre páginas no export, páginas arquivadas legíveis e exportáveis, "Editar prompt" mantém o aviso destrutivo.
 
-### 13.1 Renomeação bloco → página (código, API, banco)
-- [ ] Migração SQLite v2 (`SCHEMA_VERSION` 2): `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice renomeado; transacional, bancos novos já nascem v2
-- [ ] Teste de migração com banco v1 real (dados preservados) e de banco mais novo que o suportado
-- [ ] Repositório `blocks` → `pages`; tipos `Block` → `Page`
-- [ ] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…`; JSON (`blocks` → `pages`, `pages_to_archive/keep`, `covered_page_*`) e evento SSE `block` → `page`
+### 13.1 Renomeação bloco → página (código, API, banco; sem migração)
+- [ ] Schema: `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice `idx_pages_order`; `SCHEMA_VERSION` 2
+- [ ] Banco de versão antiga (v1) falha com mensagem clara (apague `./data`) em vez de `no such table`; teste cobrindo
+- [ ] Repositório `blocks` → `pages`; tipos `NarrativeBlock`/`Block` → `Page`
+- [ ] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…` (sem alias); JSON (`blocks` → `pages`, `pages_to_archive/keep`, `pages_to_discard`, `covered_page_*`) e evento SSE `block` → `page`
 - [ ] Mensagens de erro, prompts de compactação e textos da UI: "bloco(s)" → "página(s)"
 - [ ] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
 
 ### 13.2 Interface — cartão de página
-- [ ] Ícones novos em `client/icons.ts`: lápis, prompt editável, ramificar
-- [ ] Cartão separado por página (cabeçalho "Página N", folha com borda/sombra, espaçamento) no lugar da prosa contínua
-- [ ] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, com aviso de descarte), Ramificar (desabilitado na última página)
-- [ ] Estados: edição dentro do cartão, página fantasma (streaming), páginas esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
+- [ ] Ícones novos em `client/icons.ts`: lápis (editar texto), prompt editável, ramificar
+- [ ] Componente `pageCard` (cartão separado por página, cabeçalho "Página N" absoluto, folha com borda/sombra, espaçamento) no lugar da prosa contínua; modo `readonly` reutilizável
+- [ ] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, **com aviso de descarte**), Ramificar (desabilitado na última página)
+- [ ] Estados: edição dentro do cartão, página fantasma (streaming), esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
 - [ ] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
 
-### 13.3 Os 8 temas (4 temas × claro/escuro)
+### 13.3 Páginas consumidas continuam legíveis e exportáveis
+- [ ] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes
+- [ ] Painel Contexto → Crônica: "Volume N — páginas X a Y", sinopse, botão **Ler as N páginas** e ícone **Salvar volume em .md**
+- [ ] Leitor de volume (modal largo rolável) com `pageCard` somente leitura; arquivadas não são editáveis nem ponto de ramificação na UI
+- [ ] Teste: páginas arquivadas ficam **fora** do contexto da IA/HP/compactação e **dentro** do que o jogador lê e exporta
+- [ ] Exportador: `---` entre páginas (linhas em branco ao redor), metadados "N páginas"; prompts do jogador continuam fora
+- [ ] `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`)
+- [ ] `GET /api/archives/:id/export?include_summary=` (volume: `# Título — Volume N`, sinopse opcional, páginas)
+- [ ] Modal "Salvar em Markdown" com escopo (completa · só no Tome · só em volumes) + checkbox de contexto
+
+### 13.4 Os 8 temas (4 temas × claro/escuro)
 - [ ] Tokens de "folha" por tema/modo em `client/styles.css`
 - [ ] `test/pageThemes.test.ts` (vitest): contraste WCAG de texto, texto esmaecido e ícones, e distinção folha × fundo nas 8 combinações
-- [ ] `npm run check:paginas` (Chromium headless): para as 8 combinações em 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste calculado no DOM renderizado
+- [ ] `npm run check:paginas` (Chromium headless): 8 combinações × 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste no DOM renderizado, leitor de volume
 - [ ] Capturas das 8 combinações em `docs/screenshots/paginas/` inspecionadas uma a uma
-- [ ] Testes de UI (jsdom) atualizados para o novo vocabulário e para ícones sempre visíveis
+- [ ] Testes de UI (jsdom): rótulos novos, ícones sempre visíveis (sem `opacity-0`), número da página, leitor, modal de exportação
 
-### 13.4 Documentação e entrega
-- [ ] Design document: nova §11.22 (conceito, mapa de renomeação, migração v2) + notas remissivas nas seções antigas
-- [ ] README: vocabulário e capturas novos (galeria dos 8 temas)
+### 13.5 Documentação e entrega
+- [ ] Design document: nova §11.22 (conceito, mapa de renomeação, leitor de volumes, formato do export, sem migração) + notas remissivas nas seções antigas
+- [ ] README: vocabulário novo, aviso "pré-pré-alpha: atualizações não suportadas, apague `./data`", galeria dos 8 temas
 - [ ] Suíte completa + typecheck (servidor e cliente) + rebuild da imagem e verificação
 - [ ] Merge de `feature/paginas` em `main` (publica a imagem no GHCR)
