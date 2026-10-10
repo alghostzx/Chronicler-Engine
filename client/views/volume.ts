@@ -1,4 +1,5 @@
 import { api, type Archive, type Page, type SessionDetail } from '../api';
+import { audioPlayer } from '../audioPlayer';
 import { createModeControl, fullscreenButton, iconButton } from '../controls';
 import { h, mount, paragraphs } from '../dom';
 import { pageCard } from '../pageCard';
@@ -67,7 +68,7 @@ export async function renderVolume(root: HTMLElement, sessionId: string, volumeN
             ...paragraphs(archive.summary_text).map((p) => h('p', { class: 'mb-2 last:mb-0' }, p)),
             h('p', { class: 'mt-3 text-xs text-muted' }, `Somente leitura. Estas ${pageCount} páginas já foram resumidas na crônica e não fazem mais parte do contexto da IA.`),
           ),
-          ...pages.map((p) => pageCard({ page: p, readonly: true, dropCap: p.order_index === 1 })),
+          ...pages.map((p) => pageCard({ page: p, readonly: true, sessionTitle: title, dropCap: p.order_index === 1 })),
           h('nav', { class: 'flex flex-wrap items-center justify-between gap-2 pb-4', 'aria-label': 'Navegação entre volumes' }, neighbour(volumeNumber - 1, '← Volume anterior') ?? h('span', null), back('Voltar ao Tome'), neighbour(volumeNumber + 1, 'Próximo volume →') ?? h('span', null)),
         ),
       ),
@@ -75,6 +76,7 @@ export async function renderVolume(root: HTMLElement, sessionId: string, volumeN
   );
 
   return () => {
+    audioPlayer.stop();
     document.title = 'Chronicler Engine';
   };
 }

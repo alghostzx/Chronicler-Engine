@@ -9,10 +9,11 @@ export interface CreateSessionInput {
   active_theme?: string;
   token_limit?: number;
   model?: string | null;
+  tts_auto?: boolean | null;
 }
 
 export type UpdateSessionInput = Partial<
-  Pick<Session, 'title' | 'system_rules' | 'world_context' | 'active_theme' | 'token_limit' | 'model'>
+  Pick<Session, 'title' | 'system_rules' | 'world_context' | 'active_theme' | 'token_limit' | 'model' | 'tts_auto'>
 >;
 
 const UPDATABLE: (keyof UpdateSessionInput)[] = [
@@ -22,7 +23,20 @@ const UPDATABLE: (keyof UpdateSessionInput)[] = [
   'active_theme',
   'token_limit',
   'model',
+  'tts_auto',
 ];
+
+type SessionRow = Omit<Session, 'tts_auto'> & { tts_auto: number | null };
+
+const toSession = (row: SessionRow): Session => ({
+  ...row,
+  tts_auto: row.tts_auto === null || row.tts_auto === undefined ? null : row.tts_auto !== 0,
+});
+
+const toColumn = (value: unknown): string | number | null => {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  return value as string | number | null;
+};
 
 export class SessionsRepository {
   constructor(private readonly db: Db) {}
@@ -31,8 +45,8 @@ export class SessionsRepository {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, system_rules, world_context, active_theme, token_limit, model)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, system_rules, world_context, active_theme, token_limit, model, tts_auto)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -42,16 +56,20 @@ export class SessionsRepository {
         input.active_theme ?? 'medieval',
         input.token_limit ?? 1_000_000,
         input.model ?? null,
+        toColumn(input.tts_auto ?? null),
       );
     return this.get(id)!;
   }
 
   get(id: string): Session | undefined {
-    return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session | undefined;
+    const row = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
+    return row && toSession(row);
   }
 
   list(): Session[] {
-    return this.db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC, created_at DESC').all() as Session[];
+    return (
+      this.db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC, created_at DESC').all() as SessionRow[]
+    ).map(toSession);
   }
 
   update(id: string, patch: UpdateSessionInput): Session | undefined {
@@ -60,7 +78,7 @@ export class SessionsRepository {
       const sets = keys.map((k) => `${k} = ?`).join(', ');
       this.db
         .prepare(`UPDATE sessions SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-        .run(...keys.map((k) => patch[k] as string | number | null), id);
+        .run(...keys.map((k) => toColumn(patch[k])), id);
     }
     return this.get(id);
   }

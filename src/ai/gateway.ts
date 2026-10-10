@@ -37,6 +37,38 @@ export class GenerationError extends Error {
   }
 }
 
+export interface SynthesizeRequest {
+  /** Modelo de TTS (ex.: `gemini-3.8-flash-tts`). */
+  model: string;
+  /** Texto lido literalmente (o modelo não interpreta instruções contidas nele). */
+  text: string;
+  /** Voz pré-definida (ex.: `Gacrux`) ou id de voz da biblioteca. */
+  voice: string;
+  /** Ritmo/tom sustentado da leitura (`speech_metadata.style`). Opcional. */
+  style?: string;
+  signal?: AbortSignal;
+}
+
+/** Áudio devolvido pela API: WAV com cabeçalho (padrão) ou PCM cru `audio/l16;rate=…`. */
+export interface SynthesizedAudio {
+  data: Buffer;
+  mimeType: string;
+}
+
+/**
+ * Falha na síntese de voz. `retryable` indica falha transitória (limite de cota, 5xx, rede):
+ * o serviço tenta de novo com espera crescente antes de desistir.
+ */
+export class SynthesisError extends GenerationError {
+  constructor(
+    message: string,
+    public readonly retryable = false,
+  ) {
+    super(message);
+    this.name = 'SynthesisError';
+  }
+}
+
 /**
  * Fronteira com a API do Gemini. Toda a lógica de negócio depende desta interface,
  * o que permite testar sem rede (mock) e concentrar o uso do SDK em um só lugar.
@@ -52,6 +84,11 @@ export interface GeminiGateway {
   streamGenerate(req: GenerateRequest): AsyncIterable<string>;
   /** Conta com precisão os tokens do payload (`ai.models.countTokens`). */
   countTokens(req: Pick<GenerateRequest, 'model' | 'systemInstruction' | 'userText'>): Promise<number>;
+  /**
+   * Sintetiza voz (Gemini TTS, via Interactions API) e devolve o áudio bruto da API.
+   * Lança `SynthesisError` (com `retryable` para falhas transitórias).
+   */
+  synthesize(req: SynthesizeRequest): Promise<SynthesizedAudio>;
 }
 
 export type GatewayProvider = () => GeminiGateway;
@@ -132,6 +169,77 @@ export class GeminiGatewayImpl implements GeminiGateway {
     }
     return res.totalTokens;
   }
+
+  /**
+   * O Gemini 3.8 TTS só aceita estilo/voz pela Interactions API: em `generateContent` ele lê em
+   * voz alta qualquer instrução escrita no texto e rejeita `systemInstruction`. O estilo vai em
+   * `speech_metadata.style` (ritmo e tom; idade/sotaque vêm da escolha da voz). A resposta
+   * unária é um WAV 24 kHz mono 16 bits em `output_audio`. Os tipos do SDK ainda não cobrem
+   * `speech_metadata`, daí os casts.
+   */
+  async synthesize(req: SynthesizeRequest): Promise<SynthesizedAudio> {
+    const style = req.style?.trim();
+    let interaction: {
+      status?: string;
+      output_audio?: { data?: string; mime_type?: string };
+    };
+    try {
+      interaction = (await this.ai.interactions.create(
+        {
+          model: req.model,
+          input: [
+            {
+              type: 'user_input',
+              content: [
+                {
+                  type: 'text',
+                  text: req.text,
+                  ...(style ? { annotations: [{ type: 'speech_metadata', style }] } : {}),
+                },
+              ],
+            },
+          ],
+          response_format: { type: 'audio' },
+          generation_config: { speech_config: [{ voice: req.voice }] },
+        } as never,
+        { signal: req.signal, timeout_ms: SYNTHESIS_TIMEOUT_MS },
+      )) as never;
+    } catch (err) {
+      if (req.signal?.aborted) throw err;
+      throw toSynthesisError(err);
+    }
+    const data = interaction.output_audio?.data;
+    if (!data) {
+      throw new SynthesisError(
+        `A API não devolveu áudio${interaction.status ? ` (${interaction.status})` : ''}. O texto pode ter sido bloqueado pelos filtros de segurança.`,
+      );
+    }
+    return { data: Buffer.from(data, 'base64'), mimeType: interaction.output_audio?.mime_type ?? 'audio/wav' };
+  }
+}
+
+/** Tempo máximo de uma única chamada de síntese (trechos de ~1,5 mil caracteres levam ~10–30 s). */
+const SYNTHESIS_TIMEOUT_MS = 180_000;
+
+/** Traduz erros do SDK/rede para mensagens em pt-BR e decide se vale tentar de novo. */
+export function toSynthesisError(err: unknown): SynthesisError {
+  if (err instanceof SynthesisError) return err;
+  const e = err as { status?: number; statusCode?: number; message?: string; name?: string };
+  const message = typeof e?.message === 'string' ? e.message : String(err);
+  const status = e?.status ?? e?.statusCode ?? Number(/\b([45]\d\d)\b/.exec(message)?.[1] ?? NaN);
+  if (status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(message)) {
+    return new SynthesisError('O limite de uso da API do Gemini foi atingido. Tente de novo em instantes.', true);
+  }
+  if (status === 401 || status === 403) {
+    return new SynthesisError('A chave da API não tem permissão para usar o modelo de voz.');
+  }
+  if (status === 400 || status === 404) {
+    return new SynthesisError(`A API recusou o pedido de áudio: ${message.slice(0, 200)}`);
+  }
+  if (status >= 500 || /timeout|timed out|fetch failed|ECONN|ENOTFOUND|socket|network/i.test(message) || e?.name === 'RequestTimeoutError') {
+    return new SynthesisError('A API de voz está indisponível ou não respondeu a tempo.', true);
+  }
+  return new SynthesisError(`Falha ao gerar o áudio: ${message.slice(0, 200)}`);
 }
 
 

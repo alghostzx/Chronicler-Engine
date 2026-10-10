@@ -2,6 +2,7 @@ import type { GatewayFactory, GatewayProvider } from './ai/gateway.js';
 import type { ModelService } from './ai/models.js';
 import type { TokenCounter } from './ai/tokens.js';
 import type { Repositories } from './db/index.js';
+import type { AudioService } from './tts/service.js';
 import type { TurnRunner } from './routes/turnRunner.js';
 
 /** Dependências compartilhadas pelas rotas. */
@@ -12,6 +13,8 @@ export interface AppContext {
   gatewayFactory: GatewayFactory;
   models: ModelService;
   tokens: TokenCounter;
+  /** Narração por voz das páginas (jobs em segundo plano + MP3 no SQLite). */
+  audio: AudioService;
   /** Executor de turnos do Narrador e travas de concorrência. */
   turns: TurnRunner;
 }

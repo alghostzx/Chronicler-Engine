@@ -1,5 +1,6 @@
 import { openDatabase, type Db } from './connection.js';
 import { ArchivesRepository } from './repositories/archives.js';
+import { AudioRepository } from './repositories/audio.js';
 import { PagesRepository } from './repositories/pages.js';
 import { DialoguesRepository } from './repositories/dialogues.js';
 import { SessionsRepository } from './repositories/sessions.js';
@@ -12,6 +13,7 @@ export interface Repositories {
   pages: PagesRepository;
   archives: ArchivesRepository;
   dialogues: DialoguesRepository;
+  audio: AudioRepository;
   /** Executa `fn` numa transação SQLite (rollback automático se lançar exceção). */
   transaction<T>(fn: () => T): T;
 }
@@ -24,6 +26,7 @@ export function createRepositories(db: Db): Repositories {
     pages: new PagesRepository(db),
     archives: new ArchivesRepository(db),
     dialogues: new DialoguesRepository(db),
+    audio: new AudioRepository(db),
     transaction: <T>(fn: () => T): T => db.transaction(fn)(),
   };
 }

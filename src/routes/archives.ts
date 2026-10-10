@@ -27,7 +27,7 @@ export function registerArchiveRoutes(app: FastifyInstance, ctx: AppContext): vo
   // Páginas que este volume consumiu (somente leitura).
   app.get<{ Params: { id: string } }>('/api/archives/:id/pages', { schema: { params: idParams } }, async (req) => {
     const { archive, pages } = requireArchive(req.params.id);
-    return { archive, pages };
+    return { archive, pages: ctx.audio.decorate(pages) };
   });
 
   // Exporta um volume como Markdown: título, sinopse (opcional) e as páginas separadas por `---`.

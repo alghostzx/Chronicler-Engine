@@ -7,6 +7,8 @@ export interface Session {
   token_limit: number;
   /** Modelo Gemini da sessão; null = usar o padrão global. */
   model: string | null;
+  /** Narração automática das páginas novas: true/false, ou null = usar o padrão global. */
+  tts_auto: boolean | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import type { GeminiGateway, GenerateRequest, ModelInfo } from '../src/ai/gateway.js';
+import type { GeminiGateway, GenerateRequest, ModelInfo, SynthesizedAudio, SynthesizeRequest } from '../src/ai/gateway.js';
+import { encodeWav } from '../src/tts/pcm.js';
 import { loadConfig } from '../src/config.js';
 import { createRepositories, type Repositories } from '../src/db/index.js';
 import { openDatabase } from '../src/db/connection.js';
-import { buildApp } from '../src/server.js';
+import { buildApp, type BuildAppOptions } from '../src/server.js';
 
 export const FAKE_KEY = 'chave-de-teste-1234567890';
 
@@ -22,6 +23,8 @@ export interface MockGateway extends GeminiGateway {
   countRequests: Parameters<GeminiGateway['countTokens']>[0][];
   /** Enfileira respostas (texto bruto) para as próximas chamadas de `streamGenerate`. */
   queue(...replies: string[]): void;
+  /** Todas as requisições de síntese de voz recebidas, em ordem. */
+  synthRequests: SynthesizeRequest[];
 }
 
 export interface MockGatewayOptions {
@@ -33,15 +36,26 @@ export interface MockGatewayOptions {
   /** Contagem de tokens fictícia (padrão: ~1 token a cada 4 caracteres). */
   countTokens?: (req: Parameters<GeminiGateway['countTokens']>[0]) => number;
   countTokensFails?: boolean;
+  /** Substitui a síntese de voz simulada (padrão: WAV 24 kHz com ~10 ms de tom por caractere). */
+  synthesize?: (req: SynthesizeRequest, call: number) => Promise<SynthesizedAudio>;
+}
+
+/** WAV 24 kHz mono com duração proporcional ao texto (10 ms por caractere): barato e determinístico. */
+export function fakeWav(text: string): SynthesizedAudio {
+  const samples = new Int16Array(Math.max(240, text.length * 240));
+  for (let i = 0; i < samples.length; i++) samples[i] = Math.round(Math.sin(i / 12) * 6000);
+  return { data: encodeWav({ samples, sampleRate: 24000 }), mimeType: 'audio/wav' };
 }
 
 export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
   const replies: string[] = [];
   const requests: GenerateRequest[] = [];
   const countRequests: MockGateway['countRequests'] = [];
+  const synthRequests: SynthesizeRequest[] = [];
   return {
     requests,
     countRequests,
+    synthRequests,
     queue: (...r) => replies.push(...r),
     listModels: opts.listModels ?? (async () => SAMPLE_MODELS),
     async *streamGenerate(req) {
@@ -58,6 +72,10 @@ export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
       countRequests.push(req);
       if (opts.countTokensFails) throw new Error('countTokens indisponível');
       return opts.countTokens ? opts.countTokens(req) : Math.ceil(((req.systemInstruction ?? '') + req.userText).length / 4);
+    },
+    async synthesize(req) {
+      synthRequests.push(req);
+      return opts.synthesize ? opts.synthesize(req, synthRequests.length) : fakeWav(req.text);
     },
   };
 }
@@ -99,11 +117,16 @@ export interface TestApp {
 }
 
 /** App com SQLite em memória e Gemini mockado. */
-export async function makeApp(gateway: MockGateway = mockGateway()): Promise<TestApp> {
+export async function makeApp(
+  gateway: MockGateway = mockGateway(),
+  extra: Pick<BuildAppOptions, 'audio'> = {},
+): Promise<TestApp> {
   const repos = createRepositories(openDatabase(':memory:'));
   const app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), {
     repos,
     gatewayFactory: () => gateway,
+    // Sem espera real entre as tentativas de síntese nos testes.
+    audio: { retryDelaysMs: [0, 0], ...extra.audio },
   });
   return { app, repos, gateway };
 }

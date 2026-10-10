@@ -88,6 +88,37 @@ const ICONS = {
     ['path', { d: 'M3 16h3a2 2 0 0 1 2 2v3' }],
     ['path', { d: 'M16 21v-3a2 2 0 0 1 2-2h3' }],
   ],
+  /** Ouvir a página (narração): alto-falante com ondas. */
+  volume: [
+    ['path', { d: 'M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z' }],
+    ['path', { d: 'M16 9a5 5 0 0 1 0 6' }],
+    ['path', { d: 'M19.364 18.364a9 9 0 0 0 0-12.728' }],
+  ],
+  /** Tocar. */
+  play: [['path', { d: 'M6 4v16l14-8z' }]],
+  /** Pausar. */
+  pause: [
+    ['rect', { x: '6', y: '4', width: '4', height: '16', rx: '1' }],
+    ['rect', { x: '14', y: '4', width: '4', height: '16', rx: '1' }],
+  ],
+  /** Gerar de novo / tentar de novo: seta circular. */
+  refresh: [
+    ['path', { d: 'M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8' }],
+    ['path', { d: 'M21 3v5h-5' }],
+  ],
+  /** Apagar. */
+  trash: [
+    ['path', { d: 'M3 6h18' }],
+    ['path', { d: 'M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6' }],
+    ['path', { d: 'M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2' }],
+  ],
+  /** Cancelar / fechar. */
+  close: [
+    ['path', { d: 'M18 6 6 18' }],
+    ['path', { d: 'm6 6 12 12' }],
+  ],
+  /** Trabalhando (gira por CSS). */
+  loader: [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]],
   /** Voltar. */
   back: [
     ['path', { d: 'm12 19-7-7 7-7' }],

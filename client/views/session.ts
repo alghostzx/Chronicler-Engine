@@ -12,6 +12,7 @@ import {
 } from '../api';
 import { downloadStoryMarkdown, type ExportScope } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
+import { audioPlayer } from '../audioPlayer';
 import { icon } from '../icons';
 import { applyTheme } from '../theme';
 import { createModeControl, createThemeControl, fullscreenButton, iconButton } from '../controls';
@@ -196,6 +197,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   async function reloadDetail(): Promise<void> {
     detail = await api<SessionDetail>('GET', `/api/sessions/${sessionId}`);
+    // Página regenerada ou descartada (ramificação): o áudio dela, se estava tocando, deixa de valer.
+    audioPlayer.stopUnless(new Set(detail.pages.map((p) => p.id)));
     drawer.refresh();
   }
 
@@ -242,6 +245,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const laterCount = detail.pages.filter((x) => x.order_index > b.order_index).length;
     return pageCard({
       page: b,
+      sessionTitle: session().title,
       dimmed,
       dropCap: b.order_index === 1,
       busy: busy || !!dlg,
@@ -668,6 +672,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   return () => {
     disposed = true;
     controller?.abort();
+    audioPlayer.stop();
     document.title = 'Chronicler Engine';
   };
 }

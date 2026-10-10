@@ -19,6 +19,7 @@ const sessionFields = {
   active_theme: { type: 'string', enum: THEMES },
   token_limit: { type: 'integer', minimum: 1000, maximum: 10_000_000 },
   model: { type: ['string', 'null'], maxLength: 200 },
+  tts_auto: { type: ['boolean', 'null'] },
 };
 
 export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -40,6 +41,7 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
       active_theme?: string;
       token_limit?: number;
       model?: string | null;
+      tts_auto?: boolean | null;
     };
   }>(
     '/api/sessions',
@@ -57,6 +59,7 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
         active_theme: b.active_theme,
         token_limit: b.token_limit,
         model: b.model,
+        tts_auto: b.tts_auto,
       });
       return reply.code(201).send({ session });
     },
@@ -67,7 +70,7 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
     const active = repos.dialogues.getActive(session.id);
     return {
       session,
-      pages: repos.pages.listActive(session.id),
+      pages: ctx.audio.decorate(repos.pages.listActive(session.id)),
       archives: repos.archives.list(session.id),
       active_dialogue: active ? publicDialogue(active) : null,
     };
@@ -129,7 +132,9 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
 
   app.delete<{ Params: { id: string } }>('/api/sessions/:id', { schema: { params: idParams } }, async (req, reply) => {
     requireSession(req.params.id);
+    ctx.audio.cancelMany(repos.pages.listAll(req.params.id).map((p) => p.id));
     repos.sessions.delete(req.params.id);
+    repos.audio.reclaim();
     return reply.code(204).send();
   });
 }

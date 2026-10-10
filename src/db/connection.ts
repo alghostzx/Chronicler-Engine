@@ -15,6 +15,12 @@ export function openDatabase(databasePath: string): Db {
   }
   const db = new Database(databasePath);
   db.pragma('foreign_keys = ON');
+  if ((db.pragma('user_version', { simple: true }) as number) === 0) {
+    // Banco novo. Só tem efeito antes de qualquer escrita (inclusive a troca para WAL): permite
+    // devolver ao disco o espaço dos áudios apagados (`incremental_vacuum`) em vez de o arquivo
+    // só crescer.
+    db.pragma('auto_vacuum = INCREMENTAL');
+  }
   if (databasePath !== ':memory:') {
     db.pragma('journal_mode = WAL');
   }
