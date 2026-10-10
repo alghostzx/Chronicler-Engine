@@ -280,18 +280,4 @@
       visibility: hidden;
     }
   }
-
-  /* Modo pseudo-tela cheia para navegadores móveis sem Fullscreen API (ex.: iPhone Safari) */
-  html.pseudo-fullscreen {
-    overflow: hidden !important;
-    height: 100% !important;
-  }
-  html.pseudo-fullscreen body {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    height: 100dvh !important;
-    overflow: hidden !important;
-  }
 }

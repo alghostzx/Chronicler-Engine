@@ -103,14 +103,5 @@ Plano completo: ver seção 11 do [design document](chronicler_engine_design_doc
 - [x] README: subir com Docker, Podman+compose e Podman puro (testado), primeiro uso, atualização, backup, solução de problemas, arquitetura
 - [x] `npm run screenshots` (Chromium headless + Gemini simulado) gera 8 capturas em `docs/screenshots/` (desktop e celular; 0 px de rolagem horizontal)
 - [x] Correção encontrada nas capturas: barra de HP no celular
-- [x] Docker com Compose testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
-
-## Fase 13 — Botão de Tela Cheia (Fullscreen no celular e desktop) ✅
-- [x] Ícones SVG inline de maximizar e minimizar em `client/icons.ts`
-- [x] Módulo `client/fullscreen.ts` com suporte à Fullscreen API padrão e prefixada (WebKit/Moz/MS)
-- [x] Fallback de pseudo-tela cheia para navegadores móveis sem Fullscreen API para elementos arbitrários (ex.: Safari no iPhone), com classes CSS e dicas visuais
-- [x] Meta tags para Web App móvel (`viewport-fit=cover`, `mobile-web-app-capable`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`) em `public/index.html`
-- [x] Botão de tela cheia acessível (`aria-label`, tooltip com `data-tip`, ícone reativo) integrado no cabeçalho do Tome e na tela inicial
-- [x] Ajuste de viewport dinâmico com `h-dvh` para celulares
-- [x] Suíte de testes: 7 testes unitários em `test/fullscreen.test.ts` e integração com a UI em `test/ui.test.ts`; 153 testes passando
-
+- [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
+- [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo

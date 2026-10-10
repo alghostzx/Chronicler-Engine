@@ -13,7 +13,7 @@ import {
 import { downloadStoryMarkdown } from '../download';
 import { confirmModal, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
 import { applyTheme } from '../theme';
-import { createFullscreenButton, createModeControl, createThemeControl, iconButton } from '../controls';
+import { createModeControl, createThemeControl, iconButton } from '../controls';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
 
@@ -108,7 +108,6 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   const drawerBtn = iconButton({ icon: 'panel', label: 'Contexto da sessão', tip: 'Mostrar ou ocultar o contexto (mundo, personagens e crônica)', align: 'end', onClick: () => toggleDrawer() });
   drawerBtn.setAttribute('aria-expanded', 'false');
   const exportBtn = iconButton({ icon: 'download', label: 'Salvar em Markdown', tip: 'Salvar a crônica como arquivo Markdown (.md)', align: 'end', onClick: () => openExport() });
-  const fullscreenBtn = createFullscreenButton();
 
   function openExport(): void {
     const withContext = h('input', { type: 'checkbox', id: 'export-context', class: 'mr-2' });
@@ -147,7 +146,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     root,
     h(
       'div',
-      { class: 'flex h-screen h-dvh flex-col' },
+      { class: 'flex h-screen flex-col' },
       h(
         'header',
         { class: 'flex items-center gap-2 border-b border-line bg-panel px-3 py-2' },
@@ -155,7 +154,6 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         titleEl,
         themeControl.el,
         createModeControl(),
-        fullscreenBtn,
         exportBtn,
         drawerBtn,
       ),
