@@ -83,7 +83,7 @@ export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
 /** JSON de resposta do Narrador. */
 export function narratorJson(
   text: string,
-  trigger: { activate: boolean; npc_name?: string; dynamic_system_prompt?: string } = { activate: false },
+  trigger: { activate: boolean; npc_name?: string; player_name?: string; dynamic_system_prompt?: string } = { activate: false },
 ): string {
   return JSON.stringify({ narrative_text: text, dialogue_trigger: trigger });
 }

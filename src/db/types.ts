@@ -9,9 +9,14 @@ export interface Session {
   model: string | null;
   /** Narração automática das páginas novas: true/false, ou null = usar o padrão global. */
   tts_auto: boolean | null;
+  /** Narração automática das páginas de diálogo: true/false, ou null = usar o padrão global (desligado de fábrica). */
+  tts_auto_dialogue: boolean | null;
   created_at: string;
   updated_at: string;
 }
+
+/** `narrative`: prosa do Narrador; `dialogue`: a transcrição de uma conversa com um NPC, gravada como está. */
+export type PageKind = 'narrative' | 'dialogue';
 
 export interface Page {
   id: string;
@@ -21,6 +26,9 @@ export interface Page {
   generated_text: string;
   model_identifier: string | null;
   is_archived: boolean;
+  kind: PageKind;
+  /** Nome do NPC (somente `kind = 'dialogue'`). A persona secreta do NPC nunca está na página. */
+  npc_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +52,12 @@ export interface DialogueSession {
   dynamic_system_prompt: string;
   status: DialogueStatus;
   created_at: string;
+  /** Como o protagonista é chamado na conversa (inferido pelo Narrador); null = "Protagonista". */
+  player_name: string | null;
+  /** Página gerada por este diálogo (preenchida ao encerrar; o diálogo some junto com a página). */
+  page_id: string | null;
+  /** Página de diálogo que este diálogo ativo vai substituir ao ser encerrado ("refazer diálogo"). */
+  redo_page_id: string | null;
 }
 
 export interface DialogueMessage {

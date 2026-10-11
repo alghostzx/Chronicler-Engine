@@ -35,6 +35,18 @@ export function createTtsSettingsCard(): HTMLElement {
       }
     });
 
+    const autoDlg = h('input', { type: 'checkbox', id: 'tts-auto-dialogue', class: 'mr-2', checked: tts.auto_dialogue_default });
+    autoDlg.addEventListener('change', async () => {
+      try {
+        const r = await api<TtsSettingsInfo>('PUT', '/api/settings/tts', { auto_dialogue_default: autoDlg.checked });
+        tts = { ...tts, auto_dialogue_default: r.auto_dialogue_default };
+        toast(r.auto_dialogue_default ? 'Narração automática dos diálogos ligada por padrão.' : 'Narração automática dos diálogos desligada por padrão.', 'success');
+      } catch (err) {
+        autoDlg.checked = !autoDlg.checked;
+        toast((err as Error).message, 'error');
+      }
+    });
+
     const model = h('select', { class: 'input', 'aria-label': 'Modelo de voz' }, ...tts.models.map((m) => h('option', { value: m.id, selected: m.id === tts.model }, m.label)));
     if (!tts.models.some((m) => m.id === tts.model)) model.prepend(h('option', { value: tts.model, selected: true }, tts.model));
     const voice = h(
@@ -119,7 +131,8 @@ export function createTtsSettingsCard(): HTMLElement {
         { class: 'text-sm text-muted' },
         'Um narrador lê as páginas em voz alta (Gemini TTS, em português do Brasil). O áudio fica guardado no banco, então ouvir de novo não gasta nada; ele é descartado se a página for editada, re-gerada ou ramificada.',
       ),
-      h('label', { class: 'flex items-start text-sm text-ink', for: 'tts-auto' }, auto, h('span', null, 'Narrar automaticamente cada página nova ', h('span', { class: 'text-muted' }, '(padrão global; cada crônica pode mudar isso na gaveta de contexto → Voz). Consome tokens de voz.'))),
+      h('label', { class: 'flex items-start text-sm text-ink', for: 'tts-auto' }, auto, h('span', null, 'Narrar automaticamente cada página nova do Narrador ', h('span', { class: 'text-muted' }, '(padrão global; cada crônica pode mudar isso na gaveta de contexto → Voz). Consome tokens de voz.'))),
+      h('label', { class: 'flex items-start text-sm text-ink', for: 'tts-auto-dialogue' }, autoDlg, h('span', null, 'Narrar automaticamente as páginas de diálogo ', h('span', { class: 'text-muted' }, '(ao encerrar um Modo Diálogo; desligado de fábrica, pois as conversas costumam ser longas). Consome tokens de voz.'))),
       h(
         'div',
         { class: 'grid grid-cols-1 gap-3 sm:grid-cols-2' },

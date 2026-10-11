@@ -12,15 +12,24 @@ export class DialogueActiveError extends Error {
 export class DialoguesRepository {
   constructor(private readonly db: Db) {}
 
-  /** Cria um diálogo ativo. Falha com `DialogueActiveError` se a sessão já tiver um (§11.6). */
-  create(sessionId: string, npcName: string, dynamicSystemPrompt: string): DialogueSession {
+  /**
+   * Cria um diálogo ativo. Falha com `DialogueActiveError` se a sessão já tiver um (§11.6).
+   * `redoPageId`: página de diálogo que este diálogo vai substituir ao ser encerrado.
+   */
+  create(
+    sessionId: string,
+    npcName: string,
+    dynamicSystemPrompt: string,
+    opts: { playerName?: string | null; redoPageId?: string | null } = {},
+  ): DialogueSession {
     const id = randomUUID();
     try {
       this.db
         .prepare(
-          `INSERT INTO dialogue_sessions (id, session_id, npc_name, dynamic_system_prompt) VALUES (?, ?, ?, ?)`,
+          `INSERT INTO dialogue_sessions (id, session_id, npc_name, dynamic_system_prompt, player_name, redo_page_id)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, sessionId, npcName, dynamicSystemPrompt);
+        .run(id, sessionId, npcName, dynamicSystemPrompt, opts.playerName ?? null, opts.redoPageId ?? null);
     } catch (err) {
       if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
         throw new DialogueActiveError(sessionId);
@@ -40,8 +49,25 @@ export class DialoguesRepository {
       .get(sessionId) as DialogueSession | undefined;
   }
 
-  conclude(id: string): void {
-    this.db.prepare(`UPDATE dialogue_sessions SET status = 'concluded' WHERE id = ?`).run(id);
+  /** Diálogo concluído que gerou a página (guarda a persona do NPC, necessária para refazê-lo). */
+  getByPage(pageId: string): DialogueSession | undefined {
+    return this.db.prepare('SELECT * FROM dialogue_sessions WHERE page_id = ?').get(pageId) as DialogueSession | undefined;
+  }
+
+  /**
+   * Encerra o diálogo e o liga à página que ele gerou. As mensagens são apagadas: a partir daqui o
+   * texto da página (editável) é a fonte da verdade.
+   */
+  conclude(id: string, pageId: string): void {
+    this.db
+      .prepare(`UPDATE dialogue_sessions SET status = 'concluded', page_id = ?, redo_page_id = NULL WHERE id = ?`)
+      .run(pageId, id);
+    this.db.prepare('DELETE FROM dialogue_messages WHERE dialogue_session_id = ?').run(id);
+  }
+
+  /** Remove o diálogo concluído de uma página (ao ser substituído por um refeito). */
+  deleteByPage(pageId: string): boolean {
+    return this.db.prepare('DELETE FROM dialogue_sessions WHERE page_id = ?').run(pageId).changes > 0;
   }
 
   /** Remove o diálogo e suas mensagens (cascata). Usado no cancelamento. */

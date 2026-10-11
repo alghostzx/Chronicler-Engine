@@ -343,6 +343,34 @@
   .page-card-title {
     @apply font-display text-xs uppercase tracking-widest text-muted;
   }
+  /* Selos do cabeçalho (página de diálogo; página que será substituída). */
+  .page-card-header {
+    @apply flex-wrap gap-x-3 gap-y-1;
+  }
+  .page-badge {
+    @apply inline-flex min-w-0 items-center gap-1.5 rounded-full border border-accent px-2.5 py-0.5 font-sans text-xs text-ink;
+    overflow-wrap: anywhere;
+  }
+  .page-badge svg {
+    @apply text-accent;
+  }
+  .page-badge.is-warning {
+    @apply border-hp-warn;
+  }
+  .page-badge.is-warning svg {
+    @apply text-hp-warn;
+  }
+  .page-card.is-replaced {
+    @apply ring-1 ring-hp-warn;
+  }
+  /* Páginas de diálogo: cada fala numa linha própria, sem o recuo da prosa, com o falante em destaque. */
+  .prose-tome p.dialogue-line {
+    @apply mb-3 leading-7;
+    text-indent: 0;
+  }
+  .dialogue-speaker {
+    @apply font-display font-bold text-strong;
+  }
   .page-card-body {
     @apply px-4 py-5 sm:px-6 sm:py-6;
     overflow-wrap: anywhere;

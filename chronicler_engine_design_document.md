@@ -107,8 +107,8 @@ O Modo Diálogo é uma sub-rotina transitória. Não existe um botão na interfa
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
-                  [Turno de Costura do Narrador]
- (Narrador consome o histórico da conversa e transcreve em prosa)
+                 [Encerrar: a conversa vira uma Página]
+ (a transcrição é salva como está; o Narrador não é chamado)
 ```
 
 ### 3.2 O Prompt Dinâmico do NPC (`dynamic_system_prompt`)
@@ -120,12 +120,9 @@ Produzido pelo próprio Narrador durante a ativação, contendo:
 * **Regras Estritas:** Responder em 1ª pessoa; não narrar ações do jogador; respostas concisas e reativas.
 
 ### 3.3 Fechamento e Incorporação
-Quando a conversa termina, o backend submete ao Gemini (com a persona do Narrador):
-> *"A cena de diálogo entre o protagonista e [Nome do NPC] se encerrou. A transcrição literal da conversa segue abaixo:*  
-> *[Mensagens trocadas]*  
-> *Escreva agora a página narrativa subsequente em prosa, incorporando os acontecimentos, a linguagem corporal dos interlocutores, o ambiente ao redor e a resolução dramática da conversa."*
+> **Revisado (§11.26):** o desenho original mandava o Narrador "costurar" a conversa em prosa. Isso foi removido: **a conversa executada é, ela mesma, a página**.
 
-O texto gerado torna-se a próxima `Page` padrão, e a sub-sessão é encerrada.
+Quando o jogador encerra a conversa, o backend grava uma `Page` do tipo `dialogue` cujo texto é a transcrição, uma fala por parágrafo (`**Rótulo do jogador:** fala` / `**Nome do NPC:** fala`), sem nenhuma chamada ao Gemini. O Narrador infere os dois rótulos ao abrir o diálogo (`player_name` e `npc_name` do `dialogue_trigger`; sem nome, "Protagonista"). A página de diálogo é editável como qualquer outra, **sem** descartar as seguintes, e o botão "editar prompt e re-gerar" vira **Refazer diálogo** (§11.26).
 
 ---
 
@@ -215,6 +212,7 @@ CREATE TABLE IF NOT EXISTS dialogue_sessions (
     status TEXT CHECK(status IN ('active', 'concluded')) DEFAULT 'active',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    -- schema v4 (§11.26) acrescenta: player_name, page_id e redo_page_id (→ narrative_pages ON DELETE CASCADE)
 );
 
 -- Mensagens do Modo Diálogo
@@ -270,7 +268,7 @@ O layout é dividido em três áreas principais:
 3. **Action Dock (Barra Inferior de Comando):**
    * **Barra de HP do Narrador:** Localizada no topo da barra de comando, com medidor percentual e indicação visual de saturação.
    * **Campo de Entrada Principal:** Área expansível para digitar o esboço da próxima cena ou ação.
-   * **Indicador de Modo:** Se o Modo Diálogo estiver ativo, a barra se transforma visualmente com destaque para a persona do interlocutor (*"Falando com: Elena Vance"*), incluindo um botão `[Encerrar Diálogo e Narrar]`.
+   * **Indicador de Modo:** Se o Modo Diálogo estiver ativo, a barra se transforma visualmente com destaque para a persona do interlocutor (*"Falando com: Elena Vance"*), incluindo um botão `[Encerrar diálogo]` (salva a conversa como página).
 
 ### 7.2 Motor de Temas CSS
 Os temas são implementados via classes de escopo raiz no elemento `<html>` ou `<body>` utilizando variáveis CSS customizadas:
@@ -312,7 +310,9 @@ Os temas são implementados via classes de escopo raiz no elemento `<html>` ou `
   * Recebe: `{ "message": string }`
   * Processamento: Executa chamada rápida ao Gemini com a persona do NPC e retorna a resposta imediata em primeira pessoa.
 * `POST /api/dialogue/:dialogueId/conclude`  
-  * Processamento: Aciona o Narrador para transcrever o diálogo acumulado em uma nova página narrativa e encerra a sub-sessão.
+  * Processamento: grava a própria conversa como uma página de diálogo (sem IA) e encerra a sub-sessão; devolve `{ page, discarded }` (§11.26).
+* `POST /api/narrative/pages/:pageId/redo-dialogue`  
+  * Abre um novo diálogo ativo com a mesma persona; a página só é substituída ao encerrá-lo (§11.26).
 
 ### 8.4 Compactação de Memória
 * `POST /api/sessions/:id/compact/preview`  
@@ -384,7 +384,7 @@ Ao alimentar este documento no Antigravity, garanta que as seguintes premissas s
 2. [x] Garantir que o endpoint de geração force o modelo a responder com o `responseSchema` JSON exigido. *(`responseJsonSchema` em `src/ai/narrator.ts`; `test/narrative.test.ts`; verificado ao vivo)*
 3. [x] Confirmar truncamento via `DELETE ... WHERE order_index > ?` quando o usuário re-gerar uma página passada. *(`src/db/repositories/pages.ts`; `test/narrative.test.ts`, `test/ui.test.ts`)*
 4. [x] Implementar a chamada de contagem de tokens (`ai.models.countTokens`) para cálculo real da barra de HP. *(`src/ai/gateway.ts`, `src/ai/tokens.ts`; verificado ao vivo)*
-5. [x] Garantir que a sub-sessão de diálogo não altere as páginas da história até que o endpoint de conclusão (`/conclude`) sintetize as falas em prosa pelo Narrador. *(`test/dialogue.test.ts`)*
+5. [x] Garantir que a sub-sessão de diálogo não altere as páginas da história até que o endpoint de conclusão (`/conclude`) grave a transcrição como página (sem IA); "refazer" só substitui a página antiga ao encerrar. *(`test/dialogue.test.ts`)*
 
 ---
 
@@ -465,9 +465,9 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 
 ### 11.14 Modo Diálogo implementado (§3, §8.3)
 * **Ativação:** só pelo `dialogue_trigger` do Narrador (§11.12). Cria `dialogue_sessions` com status `active`; o índice único parcial garante um diálogo ativo por sessão. Enquanto houver diálogo ativo, `narrative/next` e `regenerate` respondem `409`.
-* **Sigilo do NPC:** o `dynamic_system_prompt` (que pode conter segredos do NPC) **nunca** é devolvido pela API e **não** é enviado ao Narrador na costura. Os endpoints expõem apenas `{id, session_id, npc_name, status, created_at}`.
-* `POST /api/dialogue/:id/message` `{message}` → `{player_message, npc_message, npc_wants_to_end}`. Chamada ao Gemini com o prompt dinâmico + regras fixas de interpretação como `systemInstruction` e **somente** as falas da cena como histórico multi-turno (`user` = protagonista, `model` = NPC); nem o corpus nem meta-instruções do Narrador entram. A resposta usa JSON estruturado `{reply, end_conversation}`; `end_conversation` vira o sinal `npc_wants_to_end`, que a UI usa apenas para destacar o botão `[Encerrar Diálogo e Narrar]` (a decisão continua sendo do autor). As duas falas só são gravadas juntas, após sucesso, mantendo o histórico sempre alternado. Uma mensagem por vez por diálogo (`409` caso contrário).
-* `POST /api/dialogue/:id/conclude` (SSE, mesmos eventos do §11.12): envia ao Narrador regras + mundo + corpus ativo + o texto do §3.3 com a transcrição literal (`Protagonista: …` / `<NPC>: …`). Numa única transação, grava a página de costura e marca o diálogo como `concluded` — **este é o único ponto em que o diálogo altera `narrative_pages`** (checklist §10 nº 5). O `player_instruction` da página guarda `[Diálogo com <NPC>]` + transcrição, preservando a origem para auditoria. Se a costura falhar, nada é gravado e o diálogo continua ativo. O Narrador pode encadear um novo diálogo no mesmo turno.
+* **Sigilo do NPC:** o `dynamic_system_prompt` (que pode conter segredos do NPC) **nunca** é devolvido pela API e **não** é enviado ao Narrador depois do gatilho. Os endpoints expõem apenas `{id, session_id, npc_name, player_name, redo_page_id, status, created_at}`.
+* `POST /api/dialogue/:id/message` `{message}` → `{player_message, npc_message, npc_wants_to_end}`. Chamada ao Gemini com o prompt dinâmico + regras fixas de interpretação como `systemInstruction` e **somente** as falas da cena como histórico multi-turno (`user` = protagonista, `model` = NPC); nem o corpus nem meta-instruções do Narrador entram. A resposta usa JSON estruturado `{reply, end_conversation}`; `end_conversation` vira o sinal `npc_wants_to_end`, que a UI usa apenas para destacar o botão `[Encerrar diálogo]` (a decisão continua sendo do autor). As duas falas só são gravadas juntas, após sucesso, mantendo o histórico sempre alternado. Uma mensagem por vez por diálogo (`409` caso contrário).
+* `POST /api/dialogue/:id/conclude` *(revisado no §11.26)*: JSON simples, sem SSE nem Narrador; grava a transcrição como página de diálogo e marca o diálogo `concluded` — **este é o único ponto em que o diálogo altera `narrative_pages`** (checklist §10 nº 5).
 * `POST /api/dialogue/:id/cancel` *(extensão do design)*: descarta o diálogo e suas mensagens sem narrar, para o caso de um gatilho indesejado deixar a sessão "presa". Concluir sem nenhuma fala trocada retorna `409` sugerindo o cancelamento.
 * `GET /api/sessions/:id/dialogue/active` → `{dialogue, messages}` para reconexão após reload (§11.6); `GET /api/sessions/:id` também inclui `active_dialogue` (sem o prompt).
 
@@ -489,7 +489,7 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * **Tome:** *(layout substituído pelo §11.22: uma folha por página)* prosa em parágrafos recuados; capitular só na primeira página. Durante o streaming uma "página fantasma" recebe os `chunk` (texto + cursor piscante); no evento `page`/`done` a sessão é recarregada do servidor (única fonte da verdade, inclusive após truncamento). Em re-geração o fantasma ocupa o lugar da página e as posteriores aparecem esmaecidas. Se a geração falhar, o texto digitado na Doca é preservado.
 * **Ações de página** *(hoje ícones sempre visíveis, §11.22; descrição original:)* visíveis no hover em telas largas e sempre em telas estreitas: `[Editar Texto]` (preserva as páginas seguintes), `[Ver Prompt de Origem / Re-gerar]` (modal pré-preenchido com `player_instruction`; avisa quantas páginas serão descartadas e envia `confirm_truncate`), `[Ramificar a partir daqui]` (§11.16).
 * **HP:** a Doca consulta `token-count` apenas nos eventos de §11.7 (abrir sessão, página gerada/regenerada, edição, contexto salvo, compactação, ramificação). "Compactar Crônica" pulsa quando `state = red`.
-* **Modo Diálogo:** a Doca troca para "Falando com: NPC"; a transcrição aparece num cartão no fim do Tome; `[Encerrar Diálogo e Narrar]` ganha destaque quando `npc_wants_to_end`; `[Descartar]` chama `cancel`. Ao recarregar, `dialogue/active` restaura a cena. Compactar fica desabilitado durante o diálogo.
+* **Modo Diálogo:** a Doca troca para "Falando com: NPC"; a transcrição aparece num cartão no fim do Tome; `[Encerrar diálogo]` ganha destaque quando `npc_wants_to_end`; `[Descartar]` chama `cancel`. Ao recarregar, `dialogue/active` restaura a cena. Compactar fica desabilitado durante o diálogo.
 * **Testes:** `test/clientSse.test.ts` (parser), `test/static.test.ts` (index/fontes/sem CDN) e `test/ui.test.ts` (jsdom executa o bundle real do cliente contra o servidor Fastify numa porta de loopback com Gemini mockado: chave → sessão → narrar → editar → re-gerar com descarte → diálogo → reconexão → compactação → ramificação → erro do Narrador).
 
 ### 11.18 Docker implementado (§9)
@@ -521,7 +521,7 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * **Docker validado (Docker 29.7.2 + Compose 5.5.1, Fedora 44):** `docker compose up -d --build` (override temporário com `ports: !override` na 3100 e volume em `/tmp`, para não colidir com o Podman), build em ~100 s sem cache, contêiner `healthy`, `/api/health`, `/`, `/assets/*`, `/favicon.svg` e `/api/settings` = 200, criação de sessão via API, volume inexistente criado como root pelo Docker e corrigido pelo *entrypoint* (arquivos do SQLite pertencem ao usuário), processo do servidor sem root (`docker top`), dados mantidos após `docker restart` (0,5 s, graças ao tratamento de `SIGTERM`) e `down` limpo. Pré-requisito observado: usuário no grupo `docker` (`sudo usermod -aG docker $USER`), documentado no README.
 
 ### 11.22 Páginas: cartão por página, volumes legíveis e exportação por escopo (§2, §4.3, §6, §7)
-* **Conceito e nomenclatura:** o texto gerado por cada prompt é uma **página** do Tome (antes "bloco"). A renomeação é completa e **sem migração**: tabela `narrative_pages`, índice `idx_pages_order`, campos `covered_page_start_index`/`covered_page_end_index`, rotas `/api/narrative/pages/:id[/regenerate|/branch]` (sem alias das antigas), JSON `pages`, `pages_to_archive`/`pages_to_keep`/`pages_to_discard`, evento SSE `page`, tipo `Page`, repositório `repos.pages`. O projeto é um "pré-pré-alpha": **atualizações não são suportadas**. `SCHEMA_VERSION` passou a 2 e um banco de versão anterior falha na abertura com mensagem clara (apague `./data`), em vez de `no such table`.
+* **Conceito e nomenclatura:** o texto gerado por cada prompt é uma **página** do Tome (antes "bloco"). A renomeação é completa e **sem migração**: tabela `narrative_pages`, índice `idx_pages_order`, campos `covered_page_start_index`/`covered_page_end_index`, rotas `/api/narrative/pages/:id[/regenerate|/branch]` (sem alias das antigas), JSON `pages`, `pages_to_archive`/`pages_to_keep`/`pages_to_discard`, evento SSE `page`, tipo `Page`, repositório `repos.pages`. O projeto era então um "pré-pré-alpha": **atualizações não eram suportadas** *(a partir do schema v4 há migrações, §11.26)*. `SCHEMA_VERSION` passou a 2 e um banco de versão anterior falha na abertura com mensagem clara (apague `./data`), em vez de `no such table`.
 * **Numeração absoluta:** o título do cartão é `Página N`, com `N = order_index` (começa em 1 e nunca é reaproveitado). Após uma compactação o Tome pode começar na "Página 4"; o total de páginas da crônica não se perde. A letra capitular aparece só na página 1 (visível no leitor de volume).
 * **Cartão de página** ([`client/pageCard.ts`](client/pageCard.ts)): cada página é uma folha separada (`.page-card`: cabeçalho "Página N", corpo em prosa e rodapé de ações), com os tokens por tema `--page-bg`, `--page-border` e `--page-shadow` em [`client/styles.css`](client/styles.css). O rodapé tem **três botões só de ícone SVG, um símbolo por ação, sempre visíveis** (nunca dependem de hover), com `aria-label` e tooltip: **lápis** = *Editar texto da página* (edita dentro do cartão; preserva as seguintes); **balão com linhas de texto** = *Editar prompt e re-gerar* (modal com o prompt de origem; se houver páginas posteriores, o aviso destrutivo continua e o envio manda `confirm_truncate`); **bifurcação** = *Ramificar a partir desta página* (desabilitado na última página; descarta as posteriores, com confirmação). Estados: edição no cartão (`.is-editing`), página fantasma durante o streaming (cabeçalho com o número que a página terá), páginas esmaecidas (`.is-dimmed`) quando uma re-geração descartará as posteriores. O mesmo componente roda em modo `readonly` (sem rodapé) no leitor de volume. Os tooltips do rodapé ancoram na borda direita do botão e têm largura máxima de 60 vw (tooltips invisíveis também contam para o `scrollWidth`; sem isso o celular ganhava rolagem horizontal).
 * **Páginas consumidas continuam legíveis:** a compactação segue marcando as páginas como `is_archived` (saem do contexto da IA, do HP e da próxima compactação), mas elas **permanecem no banco** e o jogador pode relê-las e exportá-las. `GET /api/archives/:id/pages` devolve `{archive, pages}` (somente as páginas arquivadas entre `covered_page_start_index` e `covered_page_end_index`, sob demanda). Páginas arquivadas não são editáveis nem pontos de ramificação (`409`).
@@ -540,7 +540,7 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * **Limites da verificação:** não há celular real nem iOS no ambiente: o teclado é emulado reduzindo a altura do viewport, e a barra do navegador idem; a diferença `100vh` × `100dvh` só existe em navegador móvel real (por isso há um teste estático contra `h-screen`). A confirmação final é no aparelho.
 
 ### 11.24 Narração por voz (TTS Gemini 3.8) (§2, §5, §6, §7)
-* **Escopo e decisões do autor:** cada página pode ser lida em voz alta (pt-BR) por um narrador velho de voz grossa. Voz padrão **Gacrux** (pré-definida, "Mature": as vozes testadas antes tinham sotaque carioca indesejado), estilo editável (`voz grave, rouca e pausada de um velho narrador`). **Geração automática por sessão**, herdando um padrão global **desligado**. **Sem reprodução contínua** ("ler daqui até o fim"): um clique em "ler tudo" poderia gerar centenas de páginas e gastar tokens sem o usuário perceber; cada geração é um pedido explícito (ou automático, se ligado). **O Modo Diálogo nunca é narrado**: só páginas (inclusive a página em prosa criada ao encerrar um diálogo, que segue a regra automática).
+* **Escopo e decisões do autor:** cada página pode ser lida em voz alta (pt-BR) por um narrador velho de voz grossa. Voz padrão **Gacrux** (pré-definida, "Mature": as vozes testadas antes tinham sotaque carioca indesejado), estilo editável (`voz grave, rouca e pausada de um velho narrador`). **Geração automática por sessão**, herdando um padrão global **desligado**. **Sem reprodução contínua** ("ler daqui até o fim"): um clique em "ler tudo" poderia gerar centenas de páginas e gastar tokens sem o usuário perceber; cada geração é um pedido explícito (ou automático, se ligado). **O Modo Diálogo nunca é narrado**: só páginas. *(Revisado no §11.26: a página que a conversa vira pode ser ouvida; a geração automática dela tem opção própria.)*
 * **API do Gemini:** os modelos `gemini-3.8-flash-tts` (padrão) e `gemini-3.8-flash-lite-tts` só funcionam bem pela **Interactions API** (`ai.interactions.create`, `response_format: {type:'audio'}`, voz em `generation_config.speech_config`, estilo como anotação `speech_metadata` no texto). Em `generateContent` o estilo escrito no texto é lido em voz alta e `systemInstruction` é rejeitado. A resposta unária é WAV 24 kHz mono 16 bits. `GeminiGateway.synthesize` ([`src/ai/gateway.ts`](src/ai/gateway.ts)) normaliza erros (`SynthesisError`, com `retryable` para 429/5xx/rede) em mensagens pt-BR. As vozes da *Voice Library* e do *Voice Design* foram experimentadas e **não** são usadas (o Voice Design criaria recursos persistentes na conta do usuário).
 * **Armazenamento (schema v3, sem migração):** tabela `page_audio` (`page_id` PK → `narrative_pages` `ON DELETE CASCADE`, `text_sha256`, `voice`, `model`, `style`, `mime`, `duration_ms`, `bytes`, `audio` BLOB, `created_at`) e `sessions.tts_auto` (`NULL` = herda o padrão global). Os blobs **nunca** vão nas listagens de páginas (o JSON traz só metadados em `page.audio`). Para o arquivo do banco realmente encolher após descartes, o banco novo é criado com `auto_vacuum = INCREMENTAL` (definido em `openDatabase` antes do pragma WAL, só quando `user_version = 0`) e o `AudioRepository.reclaim()` roda `incremental_vacuum` fora de transações. A leitura confere o `text_sha256`: áudio de um texto que já mudou é tratado como inexistente.
 * **Descarte (sem inflar o banco):** editar o texto (`audio.discard`), re-gerar (apaga o da página e cancela jobs dela e das seguintes, na mesma transação do descarte das páginas), ramificar (cancela os jobs das páginas removidas) e excluir a sessão (CASCADE + cancelamento). Páginas de volumes continuam narráveis.
@@ -559,3 +559,14 @@ Endpoints adicionados/ajustados em relação ao §8.1:
 * **Opções** ([`client/views/options.ts`](client/views/options.ts), `#/opcoes`): página própria, no mesmo escopo Srcery, com *Conexão com o Gemini* (chave e modelo padrão — antes na biblioteca) e o cartão *Narração por voz* (`createTtsSettingsCard`), seta de voltar para `#/` e Tela cheia. Os rótulos “Voltar à biblioteca” da sessão e do leitor viraram **Voltar ao menu inicial**.
 * **Testes:** [`test/logo.test.ts`](test/logo.test.ts) (conversor e SVGs versionados), [`test/ui.test.ts`](test/ui.test.ts) (menu, tema Srcery sem persistência, Continuar desabilitado, aviso/pulso sem chave, quadros com Esc/*Fechar*/histórico, exclusão, Opções, fluxo da chave) e `npm run check:inicio` ([`scripts/check-inicio.ts`](scripts/check-inicio.ts)): estados vazio × completo em 320/390/768/1280/1920 px, no Chromium **e** no Firefox — variante e altura do logo, imagem carregada, contraste, alvos de 44 px, teclado, quadros, foco devolvido, tema da crônica após *Nova Crônica* e retorno ao escopo Srcery; capturas em `docs/screenshots/inicio/`. `check:mobile`, `check:paginas` e `check:audio` foram ajustados à nova tela (cartão de voz em `#/opcoes`).
 * **Limites da verificação:** testado só em navegadores headless (Chromium/Firefox); não há aparelho Android real aqui. A aparência foi julgada por inspeção das capturas.
+
+### 11.26 Diálogo como página e migrações do banco (§3, §5, §8.3)
+* **Decisão do autor:** um diálogo executado **permanece como página** (a transcrição), em vez de o Narrador reinterpretá-lo. Removidos `buildBridgeRequest`/`bridgeInstruction` e o turno de "costura".
+* **Schema v4:** `narrative_pages.kind` (`narrative`|`dialogue`, padrão `narrative`) e `npc_name`; `dialogue_sessions.player_name`, `page_id` e `redo_page_id` (FK → `narrative_pages` `ON DELETE CASCADE`; índice único parcial `idx_dialogue_page` em `page_id`); `sessions.tts_auto_dialogue` (`NULL` = herda o padrão global).
+* **Rótulos:** o Narrador infere `player_name` ao abrir o diálogo (mais `npc_name`); `cleanSpeakerName` remove marcadores de Markdown e limita o tamanho; sem nome, "Protagonista". `formatDialoguePage` gera um parágrafo por fala, `**Rótulo:** fala`.
+* **Encerrar:** `POST /api/dialogue/:id/conclude` é JSON simples (`{page, discarded}`), sem chamada ao Gemini. Apaga as `dialogue_messages` (a página é a fonte da verdade) e guarda o vínculo em `dialogue_sessions.page_id`, que preserva a persona para "Refazer".
+* **Editar:** o texto da página de diálogo é editável como qualquer outro e **não** descarta as seguintes. `regenerate` responde `409` para páginas de diálogo.
+* **Refazer diálogo** (`POST /api/narrative/pages/:id/redo-dialogue`, `201 {dialogue, messages: []}`): **não destrutivo**. Abre um diálogo ativo com a mesma persona e `redo_page_id`; a página antiga e as seguintes só mudam ao **encerrar** o novo (substitui a página, descarta as seguintes e o áudio da antiga); **Descartar** mantém tudo como estava. Se há páginas seguintes, exige `confirm_truncate` (`409 truncation_required` com `pages_to_discard`, como no regenerar). Na UI, a página alvo ganha o selo "Será substituída ao encerrar o novo diálogo" e as seguintes ficam esmaecidas.
+* **Voz:** *Ouvir* manual vale para páginas de diálogo (as falas soltas durante a conversa continuam sem áudio). A geração automática tem opção própria, **desligada de fábrica** (`tts_auto_dialogue_default` global + `tts_auto_dialogue` por sessão, herdando o global), separada da narrativa.
+* **Migrações:** `PRAGMA user_version` agora é migrado ([`src/db/migrations.ts`](src/db/migrations.ts)): cada migração roda numa transação, com backup prévio `<banco>.v<antiga>.bak` (após `wal_checkpoint(TRUNCATE)`). A v3→v4 faz os `ALTER TABLE` e apaga os diálogos já concluídos (não há página para vinculá-los). Bancos v1/v2 continuam recusados (apague `./data`), assim como bancos de versão mais nova. Política (alpha): **só quebrar o banco quando migrar for muito trabalhoso ou inchar o programa**.
+* **Testes:** [`test/dialogue.test.ts`](test/dialogue.test.ts), [`test/audio.test.ts`](test/audio.test.ts), [`test/migrations.test.ts`](test/migrations.test.ts) (esquema migrado == esquema novo, dados preservados, backup, rollback), [`test/ui.test.ts`](test/ui.test.ts) (fluxo completo) e [`scripts/check-pages.ts`](scripts/check-pages.ts) (selo, falantes, ações, estado de refazer em 8 temas × desktop/celular).

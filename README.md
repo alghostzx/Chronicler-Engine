@@ -6,7 +6,7 @@
 Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o Gemini atua como **Narrador**, escrevendo a prosa em um *Tome* (sem balões de chat): cada instrução sua gera uma **página**, e cada página é uma folha separada do livro. Tudo roda localmente, com SQLite — só a geração de texto sai da sua máquina, rumo à API do Gemini.
 
 > [!WARNING]
-> **Pré-pré-alpha: atualizações não são suportadas.** O formato do banco de dados ainda muda entre versões, sem migração. Ao atualizar, **apague a pasta `./data`** (ou copie suas crônicas antes, com *Salvar em Markdown*). Um banco de uma versão anterior é recusado na abertura, com uma mensagem explicando isso.
+> **Alpha:** o formato do banco de dados ainda pode mudar. Desde o schema v4 as atualizações costumam ser **migradas automaticamente** (com cópia de segurança `.bak` ao lado do banco), mas bancos anteriores (v1/v2) e eventuais mudanças futuras caras demais para migrar exigem **apagar a pasta `./data`** (copie suas crônicas antes, com *Salvar em Markdown*). Um banco incompatível é recusado na abertura, com uma mensagem explicando isso.
 
 > Especificação completa e decisões de implementação: [`chronicler_engine_design_document.md`](chronicler_engine_design_document.md) (a seção 11 prevalece em caso de conflito). Andamento: [`TASKS.md`](TASKS.md).
 
@@ -34,9 +34,9 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 ## Recursos
 
 - **Tela inicial de jogo**: logo em arte ASCII (SVG na paleta [Srcery](https://srcery.sh), que se ajusta a qualquer largura — empilhado em duas linhas no celular), a legenda e o menu **Continuar** / **Nova Crônica** (os dois abrem um quadro sobre o menu, com o fundo escurecido; o botão *Voltar* do navegador fecha o quadro) / **Opções** (página com a conexão com o Gemini e a narração por voz).
-- **Tome em páginas**: cada texto gerado por um prompt é uma *página*, numerada (`Página 1`, `Página 2`…, numeração absoluta que não recomeça após compactar) e exibida como uma folha separada. Streaming da narrativa e, no rodapé de cada página, quatro ações em **ícones sempre visíveis** (com tooltip): 🔊 *ouvir a página* (ver [Narração por voz](#narração-por-voz)), ✎ *editar o texto*, 💬 *editar o prompt e re-gerar* (descartando as páginas posteriores, com aviso) e ⑂ *ramificar a partir daquela página*.
-- **Narração por voz** (opcional): um narrador de voz grave lê as páginas em português do Brasil (Gemini TTS). O áudio fica guardado no SQLite (ouvir de novo é grátis), é descartado se a página mudar, pode ser gerado de novo ou baixado em MP3, e funciona também nas páginas já coletadas em volumes. Geração automática por crônica, desligada por padrão.
-- **Modo Diálogo**: o Narrador pode abrir uma conversa com um NPC (persona isolada, que não conhece o resto da história). Quem encerra é você (`Encerrar Diálogo e Narrar`, que costura a cena em prosa, ou `Descartar`); o NPC apenas *sinaliza* que quer terminar, destacando o botão. Recarregar a página retoma a cena.
+- **Tome em páginas**: cada texto gerado por um prompt é uma *página*, numerada (`Página 1`, `Página 2`…, numeração absoluta que não recomeça após compactar) e exibida como uma folha separada. Streaming da narrativa e, no rodapé de cada página, quatro ações em **ícones sempre visíveis** (com tooltip): 🔊 *ouvir a página* (ver [Narração por voz](#narração-por-voz)), ✎ *editar o texto*, 💬 *editar o prompt e re-gerar* (descartando as páginas posteriores, com aviso) e ⑂ *ramificar a partir daquela página*. Nas páginas de diálogo (abaixo), o 💬 vira *Refazer diálogo*.
+- **Narração por voz** (opcional): um narrador de voz grave lê as páginas em português do Brasil (Gemini TTS). O áudio fica guardado no SQLite (ouvir de novo é grátis), é descartado se a página mudar, pode ser gerado de novo ou baixado em MP3, e funciona também nas páginas já coletadas em volumes. Geração automática por crônica, desligada por padrão (para as páginas de diálogo há uma opção própria, também desligada).
+- **Modo Diálogo**: o Narrador pode abrir uma conversa com um NPC (persona isolada, que não conhece o resto da história); ele mesmo escolhe o nome do NPC e como você será chamado na cena. Quem encerra é você (`Encerrar diálogo` ou `Descartar`); o NPC apenas *sinaliza* que quer terminar, destacando o botão. **A conversa vira, ela mesma, uma página** (selo *Diálogo com …*, uma fala por parágrafo), sem o Narrador reescrevê-la; ela pode ser editada sem afetar as páginas seguintes. O ícone *Refazer diálogo* abre uma nova conversa com o mesmo NPC **sem apagar nada**: a página antiga (e as seguintes) só são substituídas quando você encerra o novo diálogo; *Descartar* mantém tudo como estava. Recarregar a página retoma a cena.
 - **HP do Narrador**: barra de contexto (tokens usados × limite configurável por sessão) e **Compactação de Crônica**, que gera uma sinopse revisável por você antes de transformar as páginas antigas em um *volume*. As páginas consumidas saem do contexto da IA, mas **continuam legíveis** (botão *Ler as N páginas*, em uma tela própria) e exportáveis.
 - **4 temas**, cada um em variação clara e escura (Medieval, Cyberpunk, Pós-apocalíptico, Contemporâneo — 8 combinações, todas verificadas em um navegador headless), com fontes empacotadas localmente (nenhum CDN). O modo segue o sistema por padrão.
 - **Salvar em Markdown** (`.md`): as páginas saem separadas por `---`. Escolha entre a crônica completa, só o que está no Tome ou só as páginas já em volumes, com a opção de incluir mundo e sinopses; cada volume também pode ser salvo sozinho. Seus prompts nunca vão no arquivo.
@@ -160,7 +160,7 @@ O Chronicler Engine é um **PWA instalável** (tem manifesto web e ícones): dá
 
 - **Backup:** todos os dados (SQLite + chave) estão na pasta `./data`. Pare o contêiner e copie a pasta (`cp -a data data.bak`).
 - **Recomeçar do zero:** pare o contêiner e apague `./data`.
-- **Atualizando de uma versão anterior:** o formato do banco mudou (blocos viraram páginas; depois chegou a narração por voz, schema v3) e não há migração; pare o contêiner, apague `./data` e suba de novo. Antes, salve as crônicas que quiser guardar com *Salvar em Markdown*.
+- **Atualizando de uma versão anterior:** a partir do schema v4 (diálogo como página) o banco é **migrado automaticamente** ao subir, depois de salvar uma cópia ao lado, `chronicler.db.v3.bak` (nome da versão antiga). Bancos mais antigos (v1/v2, de antes das páginas e da narração por voz) não são migráveis: pare o contêiner, apague `./data` e suba de novo (antes, salve as crônicas que quiser guardar com *Salvar em Markdown*). Como o projeto está em alpha, uma versão futura pode voltar a exigir isso se migrar for inviável; o aviso vem na mensagem de erro da inicialização.
 - **Outra porta:** mude `127.0.0.1:3000:3000` no `docker-compose.yml` (ex.: `127.0.0.1:8080:3000`).
 
 ## Solução de problemas
@@ -189,8 +189,10 @@ As imagens abaixo são geradas por script (veja [Desenvolvimento local](#desenvo
 | **Tooltips** em todos os botões de ícone | **Volumes**: a numeração das páginas continua (aqui, Página 4 e 5) e o volume pode ser lido ou salvo |
 | ![Quadro Continuar sobre o menu](docs/screenshots/09-continuar.png) | ![Quadro Nova Crônica sobre o menu](docs/screenshots/10-nova-cronica.png) |
 | **Continuar**: lista de crônicas em um quadro sobre o menu | **Nova Crônica**: formulário em um quadro sobre o menu |
-| ![Página de Opções](docs/screenshots/11-opcoes.png) | |
-| **Opções**: conexão com o Gemini e narração por voz | |
+| ![Página de Opções](docs/screenshots/11-opcoes.png) | ![Página de diálogo, com o selo e as falas em destaque](docs/screenshots/paginas/dialogo-medieval-light.png) |
+| **Opções**: conexão com o Gemini e narração por voz | **Página de diálogo**: a conversa vira a própria página (selo, falas em destaque, ícone *Refazer diálogo*) |
+| ![Refazendo um diálogo: página alvo marcada, seguintes esmaecidas](docs/screenshots/paginas/dialogo-refazendo-desktop.png) | |
+| **Refazer diálogo**: nada é apagado até encerrar o novo diálogo | |
 
 **As páginas nos 8 temas** (4 temas × claro e escuro; gerado por `npm run check:paginas`):
 

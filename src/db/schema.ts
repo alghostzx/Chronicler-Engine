@@ -13,8 +13,18 @@
  * Versão 3: narração por voz. `page_audio` guarda o MP3 (BLOB) de cada página narrada, em tabela
  * separada para que listar páginas nunca carregue áudio; `sessions.tts_auto` liga/desliga a geração
  * automática por sessão (NULL = herda o padrão global).
+ *
+ * Versão 4: o diálogo executado vira uma página (`narrative_pages.kind = 'dialogue'`, com `npc_name`).
+ * `dialogue_sessions.page_id` liga o diálogo concluído à sua página (some junto com ela) e guarda a
+ * persona do NPC para refazer o diálogo; `redo_page_id` marca o diálogo ativo que vai substituir uma
+ * página; `player_name` é o nome do protagonista na conversa (inferido pelo Narrador);
+ * `sessions.tts_auto_dialogue` liga/desliga a narração automática das páginas de diálogo.
+ *
+ * A partir da versão 4 o projeto (alpha) migra bancos existentes: ver `migrations.ts`. Esta constante
+ * descreve o schema de um banco NOVO; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE`
+ * da migração (um teste confere que os dois caminhos geram o mesmo schema).
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -33,7 +43,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     model TEXT,
     tts_auto INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    tts_auto_dialogue INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS narrative_pages (
@@ -46,6 +57,8 @@ CREATE TABLE IF NOT EXISTS narrative_pages (
     is_archived BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    kind TEXT NOT NULL DEFAULT 'narrative' CHECK (kind IN ('narrative', 'dialogue')),
+    npc_name TEXT,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
     UNIQUE (session_id, order_index)
 );
@@ -69,6 +82,9 @@ CREATE TABLE IF NOT EXISTS dialogue_sessions (
     dynamic_system_prompt TEXT NOT NULL,
     status TEXT CHECK(status IN ('active', 'concluded')) DEFAULT 'active',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    player_name TEXT,
+    page_id TEXT REFERENCES narrative_pages(id) ON DELETE CASCADE,
+    redo_page_id TEXT REFERENCES narrative_pages(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
@@ -99,4 +115,6 @@ CREATE INDEX IF NOT EXISTS idx_pages_order ON narrative_pages(session_id, order_
 CREATE INDEX IF NOT EXISTS idx_dialogue_msgs ON dialogue_messages(dialogue_session_id, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_dialogue
     ON dialogue_sessions(session_id) WHERE status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dialogue_page
+    ON dialogue_sessions(page_id) WHERE page_id IS NOT NULL;
 `;

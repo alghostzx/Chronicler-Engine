@@ -448,22 +448,57 @@ describe('geração automática', () => {
     expect(t.repos.pages.listActive(sessionId)).toHaveLength(1);
   });
 
-  it('NUNCA gera áudio no Modo Diálogo; ao encerrar, a página de costura segue a regra automática', async () => {
-    await t.app.inject({ method: 'PUT', url: '/api/settings/tts', payload: { auto_default: true } });
+  // Conversa e encerra um diálogo (a página de diálogo é criada sem IA); devolve a página.
+  async function dialoguePage(): Promise<{ id: string; generated_text: string }> {
     t.repos.pages.append(sessionId, { player_instruction: 'x', generated_text: 'Prosa anterior.' });
     const dialogue = t.repos.dialogues.create(sessionId, 'Elena', 'Você é Elena.');
     t.gateway.queue(npcJson('Quem pergunta?'), npcJson('Hum.'));
     await t.app.inject({ method: 'POST', url: `/api/dialogue/${dialogue.id}/message`, payload: { message: 'Oi' } });
     await t.app.inject({ method: 'POST', url: `/api/dialogue/${dialogue.id}/message`, payload: { message: 'Tchau' } });
     await new Promise((r) => setTimeout(r, 30));
+    expect(t.gateway.synthRequests).toHaveLength(0); // as falas soltas do diálogo nunca são narradas
+    const res = await t.app.inject({ method: 'POST', url: `/api/dialogue/${dialogue.id}/conclude` });
+    expect(res.statusCode).toBe(200);
+    return res.json().page;
+  }
+
+  it('NUNCA narra as falas do Modo Diálogo; a página de diálogo só segue a opção PRÓPRIA (desligada de fábrica)', async () => {
+    await t.app.inject({ method: 'PUT', url: '/api/settings/tts', payload: { auto_default: true } }); // só vale para a prosa
+    const page = await dialoguePage();
+    await new Promise((r) => setTimeout(r, 30));
     expect(t.gateway.synthRequests).toHaveLength(0);
     expect(audioRows()).toBe(0);
+    expect(page).toMatchObject({ audio: null });
+  });
 
-    t.gateway.queue(narratorJson('Elena suspirou e se afastou.'));
-    const res = await t.app.inject({ method: 'POST', url: `/api/dialogue/${dialogue.id}/conclude` });
-    const page = JSON.parse(pageOf(res as never)).page;
+  it('com a opção global de diálogos ligada, a página de diálogo é narrada ao ser criada (texto sem marcações)', async () => {
+    await t.app.inject({ method: 'PUT', url: '/api/settings/tts', payload: { auto_dialogue_default: true } });
+    const page = await dialoguePage();
     expect((await settle(page.id)).status).toBe('ready');
-    expect(t.gateway.synthRequests.map((r) => r.text)).toEqual(['Elena suspirou e se afastou.']);
+    expect(t.gateway.synthRequests).toHaveLength(1);
+    expect(t.gateway.synthRequests[0]!.text).toContain('Elena');
+    expect(t.gateway.synthRequests[0]!.text).not.toContain('**');
+  });
+
+  it('a opção da sessão manda mais que a global (liga ou desliga só os diálogos)', async () => {
+    await t.app.inject({ method: 'PUT', url: '/api/settings/tts', payload: { auto_dialogue_default: true } });
+    t.repos.sessions.update(sessionId, { tts_auto_dialogue: false });
+    await dialoguePage();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(t.gateway.synthRequests).toHaveLength(0);
+
+    t.repos.sessions.update(sessionId, { tts_auto_dialogue: true });
+    await t.app.inject({ method: 'PUT', url: '/api/settings/tts', payload: { auto_dialogue_default: false } });
+    const page = await dialoguePage();
+    expect((await settle(page.id)).status).toBe('ready');
+    expect(t.gateway.synthRequests).toHaveLength(1);
+  });
+
+  it('páginas de diálogo também podem ser narradas sob demanda', async () => {
+    const page = await dialoguePage();
+    const res = await t.app.inject({ method: 'POST', url: `/api/narrative/pages/${page.id}/audio` });
+    expect(res.statusCode).toBe(202);
+    expect((await settle(page.id)).status).toBe('ready');
   });
 });
 
@@ -472,6 +507,7 @@ describe('configurações de voz', () => {
     const get = (await t.app.inject({ method: 'GET', url: '/api/settings/tts' })).json();
     expect(get).toMatchObject({
       auto_default: false,
+      auto_dialogue_default: false,
       model: 'gemini-3.8-flash-tts',
       voice: 'Gacrux',
       usage: { count: 0, bytes: 0 },
@@ -485,7 +521,7 @@ describe('configurações de voz', () => {
     expect(put.json()).toMatchObject({ voice: 'Charon', auto_default: true, model: 'gemini-3.8-flash-tts' });
     expect((await t.app.inject({ method: 'GET', url: '/api/settings/tts' })).json().voice).toBe('Charon');
 
-    for (const bad of [{}, { voice: 'com espaço' }, { style: 'x'.repeat(301) }, { extra: 1 }, { auto_default: 'sim' }]) {
+    for (const bad of [{}, { voice: 'com espaço' }, { style: 'x'.repeat(301) }, { extra: 1 }, { auto_default: 'sim' }, { auto_dialogue_default: 'sim' }]) {
       expect((await t.app.inject({ method: 'PUT', url: '/api/settings/tts', payload: bad as never })).statusCode).toBe(400);
     }
   });

@@ -62,6 +62,17 @@ const ICONS = {
     ['path', { d: 'M7 8h10' }],
     ['path', { d: 'M7 12h6' }],
   ],
+  /** Página de diálogo (selo do cabeçalho): dois balões de fala. */
+  dialogue: [
+    ['path', { d: 'M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z' }],
+    ['path', { d: 'M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1' }],
+  ],
+  /** Refazer o diálogo: balão de fala com seta circular. */
+  redoDialogue: [
+    ['path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }],
+    ['path', { d: 'M15.5 10a3.5 3.5 0 1 1-1.03-2.47' }],
+    ['polyline', { points: '14.5 5.5 14.5 7.5 12.5 7.5' }],
+  ],
   /** Ramificar a história a partir da página: bifurcação. */
   branch: [
     ['line', { x1: '6', y1: '3', x2: '6', y2: '15' }],

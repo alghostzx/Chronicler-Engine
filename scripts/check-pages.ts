@@ -12,7 +12,7 @@ import { loadConfig } from '../src/config.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
-import { FAKE_KEY, mockGateway, narratorJson } from '../test/helpers.js';
+import { FAKE_KEY, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
 import { findChrome } from './chrome.js';
 
 const OUT = 'docs/screenshots/paginas';
@@ -66,7 +66,29 @@ async function newSession(title: string, withVolume: boolean): Promise<string> {
   }
   return id;
 }
+/** Crônica com uma página de diálogo no meio: narrativa (gatilho) → conversa salva como página → narrativa. */
+async function newDialogueSession(): Promise<string> {
+  const r = await app.inject({ method: 'POST', url: '/api/sessions', payload: { title: 'O Corvo Cego', active_theme: 'medieval', world_context: 'Reino de Valdoria.', token_limit: 100_000 } });
+  const id = r.json().session.id as string;
+  gateway.queue(narratorJson(STORY[0][1], { activate: true, npc_name: 'Elena', player_name: 'Aldric', dynamic_system_prompt: 'Você é Elena, taverneira de Varn.' }));
+  const t = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: STORY[0][0] } });
+  const dialogueId = /"dialogue_id":"([^"]+)"/.exec(t.body)?.[1];
+  if (!dialogueId) throw new Error(`Diálogo não iniciou: ${t.body.slice(0, 300)}`);
+  for (const [line, reply] of [
+    ['Procuro um navio que parta para o norte esta noite. Sabe de algum?', 'O Corvo Cego não faz perguntas, forasteiro, mas o último barco parte na maré da meia-noite.'],
+    ['Quanto custa a passagem até um nome que ninguém ousa dizer em voz alta, como o do rei morto?', 'Mais do que você carrega na bolsa. Beba, e esqueça o que ouviu.'],
+  ] as const) {
+    gateway.queue(npcJson(reply, false));
+    await app.inject({ method: 'POST', url: `/api/dialogue/${dialogueId}/message`, payload: { message: line } });
+  }
+  const done = await app.inject({ method: 'POST', url: `/api/dialogue/${dialogueId}/conclude`, payload: {} });
+  if (done.statusCode !== 200) throw new Error(`Encerrar diálogo falhou: ${done.body}`);
+  gateway.queue(narratorJson(STORY[3][1], { activate: false }));
+  await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: STORY[3][0] } });
+  return id;
+}
 const tomeId = await newSession('A Queda de Valdoria', false);
+const dialogueSessionId = await newDialogueSession();
 const volumeId = await newSession('Crônica dos Volumes', true);
 
 // --- Verificações no DOM renderizado ----------------------------------------------------------
@@ -139,7 +161,14 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
     };
     checkText(card.querySelector('.page-card-title'), 'título', 4.5);
     checkText(card.querySelector('.page-card-body p, .page-card-body'), 'texto', 4.5);
+    for (const badge of Array.from(card.querySelectorAll('.page-badge'))) {
+      checkText(badge, 'selo', 4.5);
+      const br = badge.getBoundingClientRect();
+      if (br.left < rect.left - 0.5 || br.right > rect.right + 0.5) problems.push(`${label}: selo fora do cartão`);
+    }
+    for (const speaker of Array.from(card.querySelectorAll('.dialogue-speaker'))) checkText(speaker, 'falante', 4.5);
 
+    const dimmedCard = card.classList.contains('is-dimmed'); // páginas a descartar ficam propositalmente esmaecidas
     const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button.page-action'));
     if (kind === 'volume') {
       const names = actions.map((a) => a.getAttribute('aria-label'));
@@ -155,8 +184,8 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
       if (r.left < rect.left - 0.5 || r.right > rect.right + 0.5 || r.top < rect.top || r.bottom > rect.bottom) problems.push(`${label}/${name}: fora do cartão`);
       if (getComputedStyle(b).visibility !== 'visible' || getComputedStyle(b).display === 'none') problems.push(`${label}/${name}: invisível`);
       const op = effectiveOpacity(b);
-      if (!disabled && op < 0.99) problems.push(`${label}/${name}: opacidade ${op.toFixed(2)} (deveria estar sempre visível)`);
-      if (disabled && op < 0.45) problems.push(`${label}/${name}: desabilitado apagado demais (${op.toFixed(2)})`);
+      if (!dimmedCard && !disabled && op < 0.99) problems.push(`${label}/${name}: opacidade ${op.toFixed(2)} (deveria estar sempre visível)`);
+      if (!dimmedCard && disabled && op < 0.45) problems.push(`${label}/${name}: desabilitado apagado demais (${op.toFixed(2)})`);
       if (b.querySelectorAll('svg').length !== 1) problems.push(`${label}/${name}: deve ter exatamente um ícone`);
       if (b.textContent?.trim()) problems.push(`${label}/${name}: tem texto visível`);
       const c = parse(getComputedStyle(b).color);
@@ -193,6 +222,7 @@ async function open(page: Page, hash: string, ready: string): Promise<void> {
 for (const theme of THEMES) {
   await app.inject({ method: 'PUT', url: `/api/sessions/${tomeId}/context`, payload: { active_theme: theme } });
   await app.inject({ method: 'PUT', url: `/api/sessions/${volumeId}/context`, payload: { active_theme: theme } });
+  await app.inject({ method: 'PUT', url: `/api/sessions/${dialogueSessionId}/context`, payload: { active_theme: theme } });
   for (const mode of MODES) {
     for (const vp of VIEWPORTS) {
       const tag = `${theme}-${mode}-${vp.name}`;
@@ -286,6 +316,57 @@ for (const theme of THEMES) {
         await page.mouse.move(5, 5);
         await page.waitForTimeout(300);
         await page.screenshot({ path: path.join(OUT, 'volumes-gaveta.png') });
+      }
+
+      // 3) Página de diálogo: selo, falantes em destaque, "Refazer diálogo" no lugar de "Editar prompt"
+      //    e o estado de refazer (página marcada, seguintes esmaecidas), sem perder nada ao descartar.
+      await open(page, `#/s/${dialogueSessionId}`, '.page-card[data-page-id]');
+      const dlgTome = await page.evaluate(inspect, 'tome');
+      mark('diálogo', dlgTome.problems);
+      if (dlgTome.cards !== 3) report.problems.push(`[diálogo] esperava 3 cartões, achou ${dlgTome.cards}`);
+      const dlgCard = page.locator('.page-card[data-page-index="2"]');
+      const badgeText = await dlgCard.locator('[data-badge="dialogue"]').textContent().catch(() => null);
+      if (badgeText !== 'Diálogo com Elena') report.problems.push(`[diálogo] selo inesperado: ${JSON.stringify(badgeText)}`);
+      const speakers = await dlgCard.locator('.dialogue-speaker').allTextContents();
+      if (speakers.join('|') !== 'Aldric:|Elena:|Aldric:|Elena:') report.problems.push(`[diálogo] falantes inesperados: ${JSON.stringify(speakers)}`);
+      const dlgActions = await dlgCard.locator('.page-card-actions button.page-action').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
+      if (dlgActions.join('|') !== 'Ouvir esta página|Editar texto da página|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo] ações inesperadas: ${JSON.stringify(dlgActions)}`);
+      if (await page.locator('.page-card[data-page-index="1"] [data-badge]').count()) report.problems.push('[diálogo] página narrativa não deveria ter selo de diálogo');
+      try {
+        await dlgCard.getByRole('button', { name: 'Refazer diálogo' }).click({ trial: true, timeout: 3000 });
+      } catch (e) {
+        report.problems.push(`[diálogo] Refazer diálogo não clicável (${(e as Error).message.split('\n')[0]})`);
+      }
+      if ((theme === 'medieval' && mode === 'light') || (theme === 'cyberpunk' && mode === 'dark')) {
+        await page.evaluate(() => (document.getElementById('tome-scroll')!.scrollTop = 0));
+        await page.screenshot({ path: path.join(OUT, `dialogo-${theme}-${mode}${vp.mobile ? '-celular' : ''}.png`) });
+      }
+      await dlgCard.getByRole('button', { name: 'Refazer diálogo' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Refazer diálogo' }).click();
+      try {
+        await page.getByText('Refazendo diálogo — Falando com: Elena').waitFor({ timeout: 4000 });
+        const redo = await page.evaluate(inspect, 'tome');
+        mark('refazer diálogo', redo.problems);
+        const state = await page.evaluate(() => ({
+          replacing: !!document.querySelector('.page-card.is-replaced [data-badge="replacing"]'),
+          dimmed: document.querySelector('.page-card[data-page-index="3"]')?.classList.contains('is-dimmed') ?? false,
+          cards: document.querySelectorAll('.page-card[data-page-id]').length,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        }));
+        if (!state.replacing) report.problems.push('[refazer] página alvo sem o selo “Será substituída”');
+        if (!state.dimmed) report.problems.push('[refazer] página seguinte não está esmaecida');
+        if (state.cards !== 3) report.problems.push(`[refazer] nada deveria ser apagado antes de encerrar (cartões: ${state.cards})`);
+        if (state.overflow > 0) report.problems.push(`[refazer] rolagem horizontal ${state.overflow}px`);
+        if (theme === 'cyberpunk' && mode === 'dark') {
+          await page.locator('.page-card[data-page-index="2"]').evaluate((c) => c.scrollIntoView({ block: 'start' }));
+          await page.screenshot({ path: path.join(OUT, `dialogo-refazendo-${vp.mobile ? 'celular' : 'desktop'}.png`) });
+        }
+        await page.getByRole('button', { name: 'Descartar', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Descartar' }).click();
+        await page.getByText('Refazendo diálogo — Falando com: Elena').waitFor({ state: 'detached', timeout: 4000 });
+        if ((await page.locator('.page-card[data-page-id]').count()) !== 3) report.problems.push('[refazer] descartar deveria manter as 3 páginas');
+      } catch (e) {
+        report.problems.push(`[refazer] fluxo falhou (${(e as Error).message.split('\n')[0]})`);
       }
 
       checked++;

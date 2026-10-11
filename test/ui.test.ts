@@ -286,21 +286,92 @@ describe('UI — sessão', () => {
     expect(document.querySelectorAll('section[data-page-id]').length).toBe(1);
   });
 
-  it('conduz um diálogo com NPC do gatilho até a costura em prosa', async () => {
+  it('conduz um diálogo com NPC do gatilho até virar uma página, sem chamar o Narrador', async () => {
     await openNewSession();
-    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', dynamic_system_prompt: 'Você é um mercador astuto.' }));
+    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', player_name: 'Aldric', dynamic_system_prompt: 'Você é um mercador astuto.' }));
     await send('Entro na feira');
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
 
     gateway.queue(npcJson('Olá, viajante!', true));
     await send('Bom dia', 'Falar');
     await waitFor(() => text().includes('Mercador: Olá, viajante!'), 'resposta do NPC');
+    expect(text()).toContain('Aldric: Bom dia'); // rótulo do jogador inferido pelo Narrador
     expect(text()).toContain('Mercador deseja encerrar a conversa.');
     expect(button('Compactar Crônica')!.disabled).toBe(true);
 
-    gateway.queue(narratorJson('O mercador acenou e partiu.'));
-    click(button('Encerrar Diálogo e Narrar')!);
-    await waitFor(() => text().includes('O mercador acenou e partiu.') && !text().includes('Falando com'), 'diálogo encerrado');
+    // Encerrar salva a própria conversa como página: nenhuma chamada extra ao Narrador.
+    const callsBefore = gateway.requests.length;
+    click(button('Encerrar diálogo')!);
+    await waitFor(() => document.querySelectorAll('section.page-card[data-page-id]').length === 2 && !text().includes('Falando com'), 'diálogo encerrado');
+    expect(gateway.requests.length).toBe(callsBefore);
+
+    const card = document.querySelectorAll<HTMLElement>('section.page-card[data-page-id]')[1]!;
+    expect(card.querySelector('.page-card-title')!.textContent).toBe('Página 2');
+    expect(card.querySelector('[data-badge="dialogue"]')!.textContent).toBe('Diálogo com Mercador');
+    expect(Array.from(card.querySelectorAll('.dialogue-speaker')).map((e) => e.textContent)).toEqual(['Aldric:', 'Mercador:']);
+    expect(card.textContent).toContain('Olá, viajante!');
+    // A ação "editar prompt" vira "Refazer diálogo" (glifo próprio) nas páginas de diálogo.
+    const labels = Array.from(card.querySelectorAll('.page-card-actions button')).map((b) => b.getAttribute('aria-label'));
+    expect(labels).toEqual(['Ouvir esta página', 'Editar texto da página', 'Refazer diálogo', 'Ramificar a partir desta página']);
+    const first = document.querySelector('section.page-card[data-page-index="1"]')!;
+    expect(first.querySelector('[data-badge]')).toBeNull();
+    expect(first.querySelector('[aria-label="Editar prompt e re-gerar"]')).not.toBeNull();
+    expect(first.querySelector('[aria-label="Refazer diálogo"]')).toBeNull();
+  });
+
+  it('refaz um diálogo sem perdas até encerrar o novo; descartar mantém tudo; editar não mexe nas seguintes', async () => {
+    await openNewSession();
+    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', dynamic_system_prompt: 'Você é um mercador astuto.' }));
+    await send('Entro na feira');
+    await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
+    gateway.queue(npcJson('Olá, viajante!', false));
+    await send('Bom dia', 'Falar');
+    await waitFor(() => text().includes('Protagonista: Bom dia'), 'rótulo padrão do jogador');
+    click(button('Encerrar diálogo')!);
+    await waitFor(() => document.querySelector('[data-badge="dialogue"]'), 'página de diálogo');
+    gateway.queue(narratorJson('A feira ficou para trás.'));
+    await send('Sigo caminho');
+    await waitFor(() => text().includes('A feira ficou para trás.'), 'página seguinte');
+
+    // Editar o texto da página de diálogo preserva a seguinte (não há re-geração).
+    click(document.querySelector<HTMLElement>('section[data-page-index="2"] [aria-label="Editar texto da página"]')!);
+    const editor = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-page-id] textarea'), 'editor');
+    type(editor, '**Protagonista:** Bom dia!\n\n**Mercador:** Salve!');
+    click(await waitFor(() => button('Salvar edição'), 'salvar edição'));
+    await waitFor(() => text().includes('Salve!'), 'texto editado');
+    expect(text()).toContain('A feira ficou para trás.');
+
+    // Refazer: confirmação avisa da página seguinte; o novo diálogo começa sem apagar nada.
+    click(document.querySelector<HTMLElement>('[aria-label="Refazer diálogo"]')!);
+    await waitFor(() => document.querySelector('[role=dialog]'), 'confirmação');
+    expect(text()).toContain('a página seguinte será descartada');
+    click(await waitFor(() => button('Refazer diálogo'), 'confirmar'));
+    await waitFor(() => text().includes('Refazendo diálogo — Falando com: Mercador'), 'novo diálogo ativo');
+    expect(text()).toContain('Será substituída ao encerrar o novo diálogo');
+    expect(document.querySelectorAll('section.page-card[data-page-id]').length).toBe(3); // nada foi apagado ainda
+    expect(document.querySelector('section[data-page-index="3"]')!.classList.contains('is-dimmed')).toBe(true);
+
+    // Descartar: tudo continua como estava.
+    click(button('Descartar')!);
+    click(await waitFor(() => Array.from(document.querySelectorAll('[role=dialog] button')).find((b) => b.textContent === 'Descartar'), 'confirmar descarte') as HTMLElement);
+    await waitFor(() => !text().includes('Refazendo diálogo'), 'diálogo descartado');
+    expect(text()).toContain('Salve!');
+    expect(text()).toContain('A feira ficou para trás.');
+    expect(document.querySelector('[data-badge="replacing"]')).toBeNull();
+
+    // Refazer de novo e dessa vez encerrar: a página é substituída e a seguinte descartada.
+    click(document.querySelector<HTMLElement>('[aria-label="Refazer diálogo"]')!);
+    click(await waitFor(() => button('Refazer diálogo'), 'confirmar'));
+    await waitFor(() => text().includes('Refazendo diálogo — Falando com: Mercador'), 'novo diálogo');
+    gateway.queue(npcJson('Que tal esta mercadoria?', false));
+    await send('Mostre-me algo', 'Falar');
+    await waitFor(() => text().includes('Mercador: Que tal esta mercadoria?'), 'resposta');
+    click(await waitFor(() => button(/Encerrar e substituir a página 2/), 'encerrar e substituir'));
+    await waitFor(() => !text().includes('Refazendo diálogo') && !text().includes('A feira ficou para trás.'), 'página substituída');
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card[data-page-id]'));
+    expect(cards.length).toBe(2);
+    expect(cards[1]!.textContent).toContain('Que tal esta mercadoria?');
+    expect(cards[1]!.textContent).not.toContain('Salve!');
   });
 
   it('reconecta ao diálogo ativo ao recarregar a página', async () => {

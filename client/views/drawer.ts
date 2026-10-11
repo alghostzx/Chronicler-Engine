@@ -174,7 +174,7 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
           },
           'Salvar',
         ),
-        h('p', { class: 'text-xs text-muted' }, 'A chave da API e o modelo padrão global ficam na tela inicial.'),
+        h('p', { class: 'text-xs text-muted' }, 'A chave da API e o modelo padrão global ficam em “Opções”, no menu inicial.'),
       ),
     );
   }
@@ -197,27 +197,43 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
       h('option', { value: 'on', selected: current === 'on' }, 'Ligada: narrar cada página nova'),
       h('option', { value: 'off', selected: current === 'off' }, 'Desligada: só narrar quando eu pedir'),
     );
+    const currentDlg = session.tts_auto_dialogue === null ? 'inherit' : session.tts_auto_dialogue ? 'on' : 'off';
+    const selectDlg = h(
+      'select',
+      { class: 'input', 'aria-label': 'Narração automática dos diálogos desta sessão' },
+      h('option', { value: 'inherit', selected: currentDlg === 'inherit' }, `Herdar o padrão global (${tts?.auto_dialogue_default ? 'ligada' : 'desligada'})`),
+      h('option', { value: 'on', selected: currentDlg === 'on' }, 'Ligada: narrar cada página de diálogo'),
+      h('option', { value: 'off', selected: currentDlg === 'off' }, 'Desligada: só narrar quando eu pedir'),
+    );
     mount(
       content,
       h(
         'div',
         { class: 'space-y-4' },
         h('div', null, h('label', { class: 'label' }, 'Narração automática'), select),
+        h('div', null, h('label', { class: 'label' }, 'Narração automática dos diálogos'), selectDlg),
         h(
           'p',
           { class: 'text-xs text-muted' },
-          'Ligada, o áudio de cada página nova do Narrador (inclusive a que fecha um diálogo) é gerado em segundo plano pela voz configurada, e consome tokens de voz da API. Desligada, use o ícone de alto-falante de cada página para gerar o áudio quando quiser. O Modo Diálogo nunca é narrado.',
+          'Ligada, o áudio de cada página nova é gerado em segundo plano pela voz configurada, e consome tokens de voz da API. Desligada, use o ícone de alto-falante de cada página para gerar o áudio quando quiser. As falas soltas do Modo Diálogo nunca são narradas: só a página que a conversa vira, depois de encerrada.',
         ),
         h(
           'button',
           {
             class: 'btn btn-primary',
             type: 'button',
-            onClick: () => void save({ tts_auto: select.value === 'inherit' ? null : select.value === 'on' }, 'Narração automática salva.'),
+            onClick: () =>
+              void save(
+                {
+                  tts_auto: select.value === 'inherit' ? null : select.value === 'on',
+                  tts_auto_dialogue: selectDlg.value === 'inherit' ? null : selectDlg.value === 'on',
+                },
+                'Narração automática salva.',
+              ),
           },
           'Salvar',
         ),
-        h('p', { class: 'text-xs text-muted' }, 'A voz, o estilo, o modelo de voz e o padrão global ficam em “Narração por voz”, na tela inicial.'),
+        h('p', { class: 'text-xs text-muted' }, 'A voz, o estilo, o modelo de voz e o padrão global ficam em “Narração por voz”, em “Opções” no menu inicial.'),
       ),
     );
   }

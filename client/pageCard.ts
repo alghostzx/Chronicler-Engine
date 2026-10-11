@@ -2,11 +2,13 @@ import type { Page } from './api';
 import { h, paragraphs } from './dom';
 import { audioControls } from './audioUi';
 import { iconButton } from './controls';
+import { icon } from './icons';
 
 /** Rótulos (aria-label) das ações de página: um ícone por ação, sempre visível. */
 export const PAGE_ACTIONS = {
   editText: 'Editar texto da página',
   editPrompt: 'Editar prompt e re-gerar',
+  redoDialogue: 'Refazer diálogo',
   branch: 'Ramificar a partir desta página',
   listen: 'Ouvir esta página',
 } as const;
@@ -27,20 +29,44 @@ export interface PageCardOptions {
   laterCount?: number;
   onEditText?: () => void;
   onEditPrompt?: () => void;
+  /** Páginas de diálogo: abre um novo diálogo que, ao ser encerrado, substitui esta página. */
+  onRedoDialogue?: () => void;
+  /** Esta página será substituída ao encerrar o diálogo refeito em andamento. */
+  replacing?: boolean;
   onBranch?: () => void;
 }
 
-/** Cabeçalho comum: "Página N" (número absoluto, nunca reaproveitado). */
-export function pageHeader(index: number): HTMLElement {
-  return h('header', { class: 'page-card-header' }, h('h2', { class: 'page-card-title' }, `Página ${index}`));
+/** Cabeçalho comum: "Página N" (número absoluto, nunca reaproveitado) e, se houver, o selo da página. */
+export function pageHeader(index: number, ...badges: (HTMLElement | null)[]): HTMLElement {
+  return h('header', { class: 'page-card-header' }, h('h2', { class: 'page-card-title' }, `Página ${index}`), ...badges);
+}
+
+/** Selo de página de diálogo (cabeçalho): "Diálogo com {NPC}". */
+export function dialogueBadge(npcName: string | null): HTMLElement {
+  return h('span', { class: 'page-badge', 'data-badge': 'dialogue' }, icon('dialogue', 14), npcName ? `Diálogo com ${npcName}` : 'Diálogo');
+}
+
+/** Parágrafo de página: nas de diálogo, o rótulo inicial `**Falante:**` vira destaque (tolera edições). */
+function pageParagraph(text: string, dialogue: boolean): HTMLElement {
+  const m = dialogue ? /^\*\*(.{1,80}?):\*\*\s*([\s\S]*)$/.exec(text) : null;
+  if (!m) return h('p', null, text);
+  return h('p', { class: 'dialogue-line' }, h('strong', { class: 'dialogue-speaker' }, `${m[1]}:`), ' ', m[2]);
 }
 
 /** Cartão de uma página: folha separada, cabeçalho numerado, prosa e ações em ícones. */
 export function pageCard(o: PageCardOptions): HTMLElement {
   const { page } = o;
   const children: HTMLElement[] = [
-    pageHeader(page.order_index),
-    h('div', { class: `prose-tome page-card-body ${o.dropCap ? 'drop-cap' : ''}` }, ...paragraphs(page.generated_text).map((p) => h('p', null, p))),
+    pageHeader(
+      page.order_index,
+      page.kind === 'dialogue' ? dialogueBadge(page.npc_name) : null,
+      o.replacing ? h('span', { class: 'page-badge is-warning', 'data-badge': 'replacing' }, 'Será substituída ao encerrar o novo diálogo') : null,
+    ),
+    h(
+      'div',
+      { class: `prose-tome page-card-body ${o.dropCap ? 'drop-cap' : ''}` },
+      ...paragraphs(page.generated_text).map((p) => pageParagraph(p, page.kind === 'dialogue')),
+    ),
   ];
   // Narração: o botão "Ouvir" fica sempre no rodapé (inclusive em páginas somente leitura, como as
   // de volumes) e o painel (gerando/erro/player) logo acima dele.
@@ -50,11 +76,14 @@ export function pageCard(o: PageCardOptions): HTMLElement {
   audio.button.classList.add('mr-auto');
   if (!o.readonly) {
     const last = (o.laterCount ?? 0) === 0;
-    const action = (icon: 'pencil' | 'prompt' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
+    const dialogue = page.kind === 'dialogue';
+    const action = (icon: 'pencil' | 'prompt' | 'redoDialogue' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
       iconButton({ icon, label, tip, align: 'end', up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });
     footer.push(
       action('pencil', PAGE_ACTIONS.editText, 'Editar o texto desta página', o.onEditText),
-      action('prompt', PAGE_ACTIONS.editPrompt, 'Editar o prompt de origem e re-gerar esta página', o.onEditPrompt),
+      dialogue
+        ? action('redoDialogue', PAGE_ACTIONS.redoDialogue, 'Refazer este diálogo do zero (só substitui a página, e descarta as seguintes, ao encerrar o novo)', o.onRedoDialogue)
+        : action('prompt', PAGE_ACTIONS.editPrompt, 'Editar o prompt de origem e re-gerar esta página', o.onEditPrompt),
       action(
         'branch',
         PAGE_ACTIONS.branch,
@@ -65,5 +94,5 @@ export function pageCard(o: PageCardOptions): HTMLElement {
     );
   }
   children.push(h('footer', { class: 'page-card-actions', role: 'group', 'aria-label': `Ações da página ${page.order_index}` }, ...footer));
-  return h('section', { class: `page-card ${o.dimmed ? 'is-dimmed' : ''}`, 'data-page-id': page.id, 'data-page-index': String(page.order_index) }, ...children);
+  return h('section', { class: `page-card ${o.dimmed ? 'is-dimmed' : ''} ${o.replacing ? 'is-replaced' : ''}`, 'data-page-id': page.id, 'data-page-index': String(page.order_index) }, ...children);
 }

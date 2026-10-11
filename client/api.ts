@@ -22,6 +22,8 @@ export interface Session {
   model: string | null;
   /** Narração automática das páginas novas: true/false, ou null = herdar o padrão global. */
   tts_auto: boolean | null;
+  /** Narração automática das páginas de diálogo: true/false, ou null = herdar o padrão global. */
+  tts_auto_dialogue: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +46,10 @@ export interface Page {
   id: string;
   session_id: string;
   order_index: number;
+  /** `dialogue`: a própria transcrição de um Modo Diálogo; `narrative`: prosa do Narrador. */
+  kind: 'narrative' | 'dialogue';
+  /** Nome do interlocutor (somente páginas de diálogo). */
+  npc_name: string | null;
   player_instruction: string | null;
   generated_text: string;
   model_identifier: string | null;
@@ -68,6 +74,10 @@ export interface Dialogue {
   id: string;
   session_id: string;
   npc_name: string;
+  /** Rótulo do jogador, inferido pelo Narrador ao abrir o diálogo (null = "Protagonista"). */
+  player_name: string | null;
+  /** Se definido, é um "Refazer diálogo": ao encerrar, substitui esta página. */
+  redo_page_id: string | null;
   status: 'active' | 'concluded';
   created_at: string;
 }
@@ -96,10 +106,11 @@ export interface SettingsInfo {
 
 export interface TtsSettingsInfo {
   auto_default: boolean;
+  auto_dialogue_default: boolean;
   model: string;
   voice: string;
   style: string;
-  defaults: { auto_default: boolean; model: string; voice: string; style: string };
+  defaults: { auto_default: boolean; auto_dialogue_default: boolean; model: string; voice: string; style: string };
   models: { id: string; label: string }[];
   voices: { id: string; trait: string }[];
   style_max: number;
