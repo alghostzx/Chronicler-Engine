@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseRange } from '../src/routes/audio.js';
 import { encodeMp3 } from '../src/tts/mp3.js';
 import { decodeAudio, durationMs, encodeWav, joinPcm } from '../src/tts/pcm.js';
-import { cleanForSpeech, splitForSpeech } from '../src/tts/text.js';
+import { cleanForSpeech, DEFAULT_CHUNK_CHARS, splitForSpeech } from '../src/tts/text.js';
 import { fakeWav } from './helpers.js';
 
 describe('cleanForSpeech', () => {
@@ -23,6 +23,14 @@ describe('cleanForSpeech', () => {
 });
 
 describe('splitForSpeech', () => {
+  it('o tamanho padrão mantém em um único trecho uma página de diálogo de ~5 mil caracteres', () => {
+    const fala = (nome: string, n: number) => `**${nome}:** ${'x'.repeat(n)}`;
+    const dialogue = Array.from({ length: 10 }, (_, i) => fala(i % 2 ? 'Elena' : 'Aldric', 480)).join('\n\n');
+    expect(DEFAULT_CHUNK_CHARS).toBe(6000);
+    expect(dialogue.length).toBeGreaterThan(4800);
+    expect(splitForSpeech(dialogue)).toHaveLength(1);
+  });
+
   const para = (n: number, c = 'a') => `${c.repeat(n)}.`;
 
   it('mantém texto curto em um único trecho, preservando os parágrafos', () => {
