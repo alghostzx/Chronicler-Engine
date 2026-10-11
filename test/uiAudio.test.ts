@@ -222,6 +222,14 @@ describe('UI — configurações de voz', () => {
     auto.dispatchEvent(new Event('change', { bubbles: true }));
     await waitFor(() => repos.settings.get('tts_auto_default') === '1', 'padrão global ligado');
 
+    // Diálogos têm opção própria (desligada de fábrica), independente da narrativa.
+    const autoDlg = document.querySelector<HTMLInputElement>('#tts-auto-dialogue')!;
+    expect(autoDlg.checked).toBe(false);
+    expect(repos.settings.get('tts_auto_dialogue_default')).toBeUndefined();
+    autoDlg.checked = true;
+    autoDlg.dispatchEvent(new Event('change', { bubbles: true }));
+    await waitFor(() => repos.settings.get('tts_auto_dialogue_default') === '1', 'padrão global dos diálogos ligado');
+
     voice.value = 'Algenib';
     click(await waitFor(() => Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Salvar voz'), 'salvar voz'));
     await waitFor(() => repos.settings.get('tts_voice') === 'Algenib', 'voz salva');
@@ -250,5 +258,14 @@ describe('UI — configurações de voz', () => {
     click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Salvar' && b.closest('aside'))!);
     await waitFor(() => repos.sessions.get(sessionId)!.tts_auto === true, 'tts_auto salvo');
     expect(repos.settings.get('tts_auto_default')).toBeUndefined();
+
+    // O seletor dos diálogos é independente: herda o padrão global (desligado) e salva à parte.
+    const dlg = byLabel('Narração automática dos diálogos desta sessão') as HTMLSelectElement;
+    expect(dlg.options[dlg.selectedIndex]!.textContent).toBe('Herdar o padrão global (desligada)');
+    expect(repos.sessions.get(sessionId)!.tts_auto_dialogue).toBeNull();
+    dlg.value = 'off';
+    click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Salvar' && b.closest('aside'))!);
+    await waitFor(() => repos.sessions.get(sessionId)!.tts_auto_dialogue === false, 'tts_auto_dialogue salvo');
+    expect(repos.sessions.get(sessionId)!.tts_auto).toBe(true);
   });
 });

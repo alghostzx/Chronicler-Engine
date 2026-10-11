@@ -240,26 +240,28 @@ Rascunho aprovado pelo autor antes de implementar (ver decisões pendentes no dr
 - [x] README (tela inicial e capturas), design document §11.25, typecheck, suíte completa, `npm run build`; merge de `feature/tela-inicial` em `main`
 
 ## Fase 17 — Diálogo como página (branch `feature/dialogo-pagina`)
-Rascunho para aprovação do autor (decisões pendentes no draft). O diálogo executado deixa de ser reinterpretado pelo Narrador: ao encerrar, a **transcrição vira a própria página** (`kind = 'dialogue'`, sem IA); ela é editável sem descartar as seguintes e o 💬 "editar prompt e re-gerar" vira **Refazer diálogo**.
+Decisões do autor aprovadas. O diálogo executado deixa de ser reinterpretado pelo Narrador: ao encerrar, a **transcrição vira a própria página** (`kind = 'dialogue'`, sem IA); ela é editável sem descartar as seguintes e o 💬 "editar prompt e re-gerar" vira **Refazer diálogo**.
 
-### 17.1 Banco e repositórios (schema v4, sem migração)
-- [ ] `narrative_pages.kind` (`narrative`|`dialogue`) e `npc_name`; `dialogue_sessions.page_id` e `redo_page_id` (FK → `narrative_pages` `ON DELETE CASCADE`), índice único parcial em `page_id`; `SCHEMA_VERSION = 4` e tipos
-- [ ] `PagesRepository.append` aceita `kind`/`npc_name`; `DialoguesRepository`: vincular página, apagar mensagens ao encerrar, `redo_page_id`
-- [ ] Prompt dinâmico do NPC nunca no JSON de páginas (só `kind` e `npc_name`)
+### 17.1 Banco e repositórios (schema v4, com migração)
+- [x] `narrative_pages.kind` (`narrative`|`dialogue`) e `npc_name`; `dialogue_sessions.page_id` e `redo_page_id` (FK → `narrative_pages` `ON DELETE CASCADE`), índice único parcial em `page_id`; `SCHEMA_VERSION = 4` e tipos
+- [x] `PagesRepository.append` aceita `kind`/`npc_name`; `DialoguesRepository`: vincular página, apagar mensagens ao encerrar, `redo_page_id`
+- [x] Prompt dinâmico do NPC nunca no JSON de páginas (só `kind` e `npc_name`)
+- [x] **Migrações reais** (`src/db/migrations.ts`): cada passo numa transação, backup `<banco>.v<antiga>.bak`, v3→v4 automática; v1/v2 e bancos mais novos recusados; política: só quebrar o banco quando migrar for inviável
+- [x] `dialogue_sessions.player_name` (rótulo do jogador inferido pelo Narrador; padrão "Protagonista") e `sessions.tts_auto_dialogue`
 
 ### 17.2 Servidor
-- [ ] `formatDialoguePage` (`**Protagonista:** …` / `**Nome:** …`, uma fala por parágrafo); remover `buildBridgeRequest`/`bridgeInstruction`
-- [ ] `POST /api/dialogue/:id/conclude` sem IA: grava a página de diálogo (JSON `{page, discarded}`), apaga as mensagens, marca `concluded`
-- [ ] `POST /api/narrative/pages/:id/redo-dialogue` (confirmação de truncamento): cria diálogo ativo com a mesma persona e `redo_page_id`; encerrar substitui a página, trunca as seguintes, troca o diálogo da página e descarta o áudio; descartar não altera nada
-- [ ] `regenerate` de página de diálogo → 409; `active` e detalhe da sessão informam `redo_page_id`
-- [ ] Voz: *Ouvir* manual permitido em páginas de diálogo; geração automática as pula
+- [x] `formatDialoguePage` (`**Protagonista:** …` / `**Nome:** …`, uma fala por parágrafo); remover `buildBridgeRequest`/`bridgeInstruction`
+- [x] `POST /api/dialogue/:id/conclude` sem IA: grava a página de diálogo (JSON `{page, discarded}`), apaga as mensagens, marca `concluded`
+- [x] `POST /api/narrative/pages/:id/redo-dialogue` (confirmação de truncamento): cria diálogo ativo com a mesma persona e `redo_page_id`; encerrar substitui a página, trunca as seguintes, troca o diálogo da página e descarta o áudio; descartar não altera nada
+- [x] `regenerate` de página de diálogo → 409; `active` e detalhe da sessão informam `redo_page_id`
+- [x] Voz: *Ouvir* manual permitido em páginas de diálogo; geração automática com opção **própria** (global `tts_auto_dialogue_default` + por sessão, desligada de fábrica), separada da narrativa
 
 ### 17.3 Interface
-- [ ] `pageCard`: selo "Diálogo com …", rótulos de fala em destaque, ícone novo **Refazer diálogo** no lugar do 💬 (aria-label, tooltip, um ícone por ação)
-- [ ] Dock: "Encerrar diálogo" (sem SSE), modo refazer ("Encerrar e substituir a página N"), página esmaecida com selo "será substituída"; confirmação de Refazer com contagem de páginas descartadas
-- [ ] Cliente: conclude como POST simples, `Page.kind`/`npc_name`, `Dialogue.redo_page_id`
+- [x] `pageCard`: selo "Diálogo com …", rótulos de fala em destaque, ícone novo **Refazer diálogo** no lugar do 💬 (aria-label, tooltip, um ícone por ação)
+- [x] Dock: "Encerrar diálogo" (sem SSE), modo refazer ("Encerrar e substituir a página N"), página esmaecida com selo "será substituída"; confirmação de Refazer com contagem de páginas descartadas
+- [x] Cliente: conclude como POST simples, `Page.kind`/`npc_name`, `Dialogue.redo_page_id`
 
 ### 17.4 Testes e entrega
-- [ ] Vitest backend (conclude sem gateway, formato, CASCADE, 409 do regenerate, edição preserva as seguintes, refazer: intacto até encerrar / descartar / substituir+truncar, áudio, auto-TTS, schema v4) e UI jsdom (selo, rótulos, ícone, dock, fluxo completo)
-- [ ] `check:paginas` com página de diálogo (8 temas × desktop/celular) + regressões `check:mobile`/`check:audio`; `scripts/live-dialogue.ts` adaptado
-- [ ] README, design document (§3.3, §8.3, checklist nº 5, §11.26), capturas, typecheck, suíte completa, `npm run build`; merge de `feature/dialogo-pagina` em `main`
+- [x] Vitest backend (conclude sem gateway, formato, CASCADE, 409 do regenerate, edição preserva as seguintes, refazer: intacto até encerrar / descartar / substituir+truncar, áudio, auto-TTS, schema v4) e UI jsdom (selo, rótulos, ícone, dock, fluxo completo)
+- [x] `check:paginas` com página de diálogo (8 temas × desktop/celular) + regressões `check:mobile`/`check:audio`; `scripts/live-dialogue.ts` adaptado
+- [x] README, design document (§3.3, §8.3, checklist nº 5, §11.26), capturas, typecheck, suíte completa, `npm run build`; merge de `feature/dialogo-pagina` em `main`

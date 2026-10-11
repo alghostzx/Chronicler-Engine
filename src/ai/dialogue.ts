@@ -1,7 +1,9 @@
-import type { NarratorRequestParts } from './contextBuilder.js';
-import { buildCorpus, buildStoryPrefix } from './contextBuilder.js';
 import type { ChatTurn, GenerateRequest } from './gateway.js';
-import type { DialogueMessage, DialogueSession, Page, Session } from '../db/types.js';
+import type { DialogueMessage, DialogueSession } from '../db/types.js';
+import { cleanSpeakerName } from './narratorSchema.js';
+
+/** Rótulo do jogador quando o Narrador não informou como o protagonista é chamado. */
+export const DEFAULT_PLAYER_LABEL = 'Protagonista';
 
 /** Esquema de resposta do NPC: a fala e o sinal de fim de conversa (§3.1, passo 4). */
 export const NPC_RESPONSE_SCHEMA = {
@@ -41,8 +43,10 @@ REGRAS DE INTERPRETAÇÃO (sempre válidas):
 - Seja conciso e reativo: responda apenas ao que foi dito, em poucas frases.
 - Responda exclusivamente no formato JSON especificado. Defina "end_conversation" como true apenas se a conversa chegou a um fim natural; caso contrário, false.`;
 
-export function buildNpcSystemInstruction(dynamicSystemPrompt: string): string {
-  return dynamicSystemPrompt.trim() + NPC_GUARD_RULES;
+export function buildNpcSystemInstruction(dynamicSystemPrompt: string, playerName?: string | null): string {
+  const who = cleanSpeakerName(playerName ?? undefined);
+  const interlocutor = who ? `\n- Seu interlocutor (o jogador) é chamado de "${who}" nesta cena; trate-o assim quando fizer sentido.` : '';
+  return dynamicSystemPrompt.trim() + NPC_GUARD_RULES + interlocutor;
 }
 
 /** Histórico isolado da cena (apenas as falas deste diálogo) em turnos user/model. */
@@ -52,13 +56,13 @@ export function toChatHistory(messages: Pick<DialogueMessage, 'sender' | 'conten
 
 export function buildNpcRequest(input: {
   model: string;
-  dialogue: Pick<DialogueSession, 'dynamic_system_prompt'>;
+  dialogue: Pick<DialogueSession, 'dynamic_system_prompt'> & Partial<Pick<DialogueSession, 'player_name'>>;
   messages: Pick<DialogueMessage, 'sender' | 'content'>[];
   playerMessage: string;
 }): GenerateRequest {
   return {
     model: input.model,
-    systemInstruction: buildNpcSystemInstruction(input.dialogue.dynamic_system_prompt),
+    systemInstruction: buildNpcSystemInstruction(input.dialogue.dynamic_system_prompt, input.dialogue.player_name),
     history: toChatHistory(input.messages),
     userText: input.playerMessage,
     responseJsonSchema: NPC_RESPONSE_SCHEMA,
@@ -79,39 +83,16 @@ export function parseNpcReply(raw: string): NpcReply {
   return { reply: obj.reply.trim(), end_conversation: obj.end_conversation === true };
 }
 
-/** Transcrição literal da conversa ("Protagonista: ..." / "<NPC>: ..."). */
-export function formatTranscript(npcName: string, messages: Pick<DialogueMessage, 'sender' | 'content'>[]): string {
-  return messages.map((m) => `${m.sender === 'player' ? 'Protagonista' : npcName}: ${m.content}`).join('\n');
-}
-
 /**
- * Turno de Costura (§3.3): o Narrador consome o corpus + a transcrição do diálogo e a
- * transforma em prosa. Usa o mesmo pipeline do §2.1 (regras, mundo, corpus), com a
- * transcrição no lugar do input do jogador.
+ * Texto da página de diálogo: cada fala vira um parágrafo com o rótulo de quem fala em negrito
+ * (`**Nome:** fala`). O jogador usa o nome que o Narrador deu ao protagonista (ou "Protagonista").
+ * Depois de gravada, a página é a fonte da verdade (editável); o Narrador a lê no corpus como está.
  */
-export function buildBridgeRequest(input: {
-  session: Pick<Session, 'system_rules' | 'world_context'>;
-  precedingPages: Pick<Page, 'generated_text' | 'order_index'>[];
-  npcName: string;
-  messages: Pick<DialogueMessage, 'sender' | 'content'>[];
-}): NarratorRequestParts {
-  const prefix = buildStoryPrefix(input.session, buildCorpus(input.precedingPages));
-  const transcript = formatTranscript(input.npcName, input.messages);
-  return {
-    systemInstruction: input.session.system_rules,
-    userText:
-      `${prefix}\n\n# DIÁLOGO CONCLUÍDO\n` +
-      `A cena de diálogo entre o protagonista e ${input.npcName} se encerrou. ` +
-      `A transcrição literal da conversa segue abaixo:\n\n${transcript}\n\n` +
-      `Escreva agora a página narrativa subsequente em prosa, incorporando os acontecimentos, ` +
-      `a linguagem corporal dos interlocutores, o ambiente ao redor e a resolução dramática da conversa.`,
-  };
-}
-
-/**
- * Texto guardado em `player_instruction` da página de costura: a "origem" da página é a
- * própria conversa (útil para auditoria e para regenerar a cena).
- */
-export function bridgeInstruction(npcName: string, messages: Pick<DialogueMessage, 'sender' | 'content'>[]): string {
-  return `[Diálogo com ${npcName}]\n${formatTranscript(npcName, messages)}`;
+export function formatDialoguePage(
+  dialogue: Pick<DialogueSession, 'npc_name' | 'player_name'>,
+  messages: Pick<DialogueMessage, 'sender' | 'content'>[],
+): string {
+  const player = cleanSpeakerName(dialogue.player_name ?? undefined) ?? DEFAULT_PLAYER_LABEL;
+  const npc = cleanSpeakerName(dialogue.npc_name) ?? dialogue.npc_name;
+  return messages.map((m) => `**${m.sender === 'player' ? player : npc}:** ${m.content.trim()}`).join('\n\n');
 }

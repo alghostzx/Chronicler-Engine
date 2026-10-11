@@ -25,8 +25,8 @@ describe('versão do schema', () => {
     return file;
   }
 
-  it('recusa banco de versão anterior com instrução clara (sem migração)', () => {
-    expect(() => openDatabase(bancoComVersao(1))).toThrow(/apague/);
+  it('recusa banco de versão anterior à primeira migrável com instrução clara', () => {
+    expect(() => openDatabase(bancoComVersao(1))).toThrow(/Apague/);
   });
 
   it('recusa banco de versão mais nova que a suportada', () => {
@@ -140,8 +140,13 @@ describe('dialogues', () => {
     expect(repos.dialogues.getActive(sessionId)!.id).toBe(d.id);
     expect(() => repos.dialogues.create(sessionId, 'Outro', 'p')).toThrow(DialogueActiveError);
 
-    repos.dialogues.conclude(d.id);
+    const page = repos.pages.append(sessionId, { player_instruction: null, generated_text: 'Falas.', kind: 'dialogue', npc_name: 'Elena' });
+    repos.dialogues.addMessage(d.id, 'player', 'oi');
+    repos.dialogues.conclude(d.id, page.id);
     expect(repos.dialogues.getActive(sessionId)).toBeUndefined();
+    expect(repos.dialogues.get(d.id)).toMatchObject({ status: 'concluded', page_id: page.id });
+    expect(repos.dialogues.listMessages(d.id)).toEqual([]); // a página é a fonte da verdade
+    expect(repos.dialogues.getByPage(page.id)!.id).toBe(d.id);
     expect(repos.dialogues.create(sessionId, 'Outro', 'p').status).toBe('active');
   });
 

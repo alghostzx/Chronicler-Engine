@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { buildNarratorRequest } from '../ai/contextBuilder.js';
 import { HttpError, type AppContext } from '../context.js';
+import { publicDialogue } from './dialogue.js';
 import type { Session } from '../db/types.js';
 
 const idParams = {
@@ -116,6 +117,9 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       const page = repos.pages.get(req.params.id);
       if (!page) throw new HttpError(404, 'Página não encontrada.');
       if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser regeneradas.');
+      if (page.kind === 'dialogue') {
+        throw new HttpError(409, 'Páginas de diálogo não têm prompt para re-gerar. Use “Refazer diálogo” ou edite o texto.');
+      }
       const session = requireSession(page.session_id);
       assertNoActiveDialogue(session.id);
 
@@ -162,6 +166,46 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
           return outcome;
         },
       });
+    },
+  );
+
+  // --- Refazer um diálogo (não destrutivo) ------------------------------------------------------
+  // Abre um novo diálogo ativo com a mesma persona. A página só é substituída (e as seguintes só são
+  // descartadas) quando esse diálogo for encerrado; descartá-lo não altera nada.
+  app.post<{ Params: { id: string }; Body: { confirm_truncate?: boolean } }>(
+    '/api/narrative/pages/:id/redo-dialogue',
+    {
+      schema: {
+        params: idParams,
+        body: { type: 'object', additionalProperties: false, properties: { confirm_truncate: { type: 'boolean' } } },
+      },
+    },
+    async (req, reply) => {
+      const page = repos.pages.get(req.params.id);
+      if (!page) throw new HttpError(404, 'Página não encontrada.');
+      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser refeitas.');
+      if (page.kind !== 'dialogue') throw new HttpError(409, 'Só páginas de diálogo podem ser refeitas.');
+      const session = requireSession(page.session_id);
+      assertNoActiveDialogue(session.id);
+      if (turns.isBusy(session.id)) {
+        throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
+      }
+      const previous = repos.dialogues.getByPage(page.id);
+      if (!previous) throw new HttpError(409, 'Esta página não guarda a persona do NPC; não é possível refazer o diálogo.');
+
+      const following = repos.pages.listActive(session.id).filter((p) => p.order_index > page.order_index);
+      if (following.length > 0 && req.body?.confirm_truncate !== true) {
+        return reply.code(409).send({
+          error: `Ao encerrar o novo diálogo, ${following.length === 1 ? 'a página posterior será descartada' : `as ${following.length} páginas posteriores serão descartadas`}. Confirme para continuar.`,
+          code: 'truncation_required',
+          pages_to_discard: following.length,
+        });
+      }
+      const dialogue = repos.dialogues.create(session.id, previous.npc_name, previous.dynamic_system_prompt, {
+        playerName: previous.player_name,
+        redoPageId: page.id,
+      });
+      return reply.code(201).send({ dialogue: publicDialogue(dialogue), messages: [] });
     },
   );
 

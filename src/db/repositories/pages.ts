@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../connection.js';
-import type { Page } from '../types.js';
+import type { Page, PageKind } from '../types.js';
 
 type PageRow = Omit<Page, 'is_archived'> & { is_archived: number | null };
 
@@ -10,6 +10,9 @@ export interface AppendPageInput {
   player_instruction: string | null;
   generated_text: string;
   model_identifier?: string | null;
+  /** Padrão `narrative`. Páginas de diálogo guardam a transcrição e o nome do NPC. */
+  kind?: PageKind;
+  npc_name?: string | null;
 }
 
 export class PagesRepository {
@@ -26,10 +29,19 @@ export class PagesRepository {
       .get(sessionId) as { max: number };
     this.db
       .prepare(
-        `INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text, model_identifier)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text, model_identifier, kind, npc_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, sessionId, row.max + 1, input.player_instruction, input.generated_text, input.model_identifier ?? null);
+      .run(
+        id,
+        sessionId,
+        row.max + 1,
+        input.player_instruction,
+        input.generated_text,
+        input.model_identifier ?? null,
+        input.kind ?? 'narrative',
+        input.npc_name ?? null,
+      );
     return this.get(id)!;
   }
 

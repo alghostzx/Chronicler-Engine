@@ -1,12 +1,20 @@
 import type { FastifyInstance } from 'fastify';
-import { buildBridgeRequest, bridgeInstruction, buildNpcRequest, parseNpcReply } from '../ai/dialogue.js';
+import { buildNpcRequest, formatDialoguePage, parseNpcReply } from '../ai/dialogue.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { DialogueSession } from '../db/types.js';
 import { friendlyError } from './turnRunner.js';
 
 /** Visão pública do diálogo: o `dynamic_system_prompt` do NPC (segredos do NPC) nunca sai do servidor. */
 export function publicDialogue(d: DialogueSession) {
-  return { id: d.id, session_id: d.session_id, npc_name: d.npc_name, status: d.status, created_at: d.created_at };
+  return {
+    id: d.id,
+    session_id: d.session_id,
+    npc_name: d.npc_name,
+    player_name: d.player_name,
+    status: d.status,
+    redo_page_id: d.redo_page_id,
+    created_at: d.created_at,
+  };
 }
 
 const idParams = {
@@ -92,45 +100,55 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     },
   );
 
-  // --- Fechamento e costura em prosa (§3.3, §8.3) ---------------------------------------------
+  // --- Encerramento: a conversa vira uma página (§3.3, §8.3) ------------------------------------
+  // Sem IA: a transcrição, como foi falada, é gravada como página `dialogue`. Se este diálogo estava
+  // refazendo uma página, ela é substituída e as seguintes são descartadas (só agora, não ao abrir).
   app.post<{ Params: { id: string } }>(
     '/api/dialogue/:id/conclude',
     { schema: { params: idParams } },
-    async (req, reply) => {
+    async (req) => {
       const dialogue = requireActiveDialogue(req.params.id);
       const session = repos.sessions.get(dialogue.session_id)!;
       const messages = repos.dialogues.listMessages(dialogue.id);
       if (messages.length === 0) {
-        throw new HttpError(409, 'Nenhuma fala foi trocada. Cancele o diálogo em vez de narrá-lo.');
+        throw new HttpError(409, 'Nenhuma fala foi trocada. Cancele o diálogo em vez de encerrá-lo.');
       }
       if (turns.isBusy(`d:${dialogue.id}`)) {
         throw new HttpError(409, 'Aguarde a resposta do NPC antes de encerrar o diálogo.');
       }
-      turns.claim(session.id);
+      if (turns.isBusy(session.id)) {
+        throw new HttpError(409, 'Há uma operação em andamento nesta sessão.');
+      }
 
-      await turns.run(req, reply, {
-        session,
-        request: buildBridgeRequest({
-          session,
-          precedingPages: repos.pages.listActive(session.id),
-          npcName: dialogue.npc_name,
-          messages,
-        }),
-        // A página de costura é o ÚNICO ponto em que o diálogo altera a história (checklist §10 nº 5).
-        persist: (result, model) =>
-          repos.transaction(() => {
-            const page = repos.pages.append(session.id, {
-              player_instruction: bridgeInstruction(dialogue.npc_name, messages),
-              generated_text: result.narrative_text,
-              model_identifier: model,
-            });
-            repos.dialogues.conclude(dialogue.id);
-            // O Narrador pode encadear outro diálogo; a sub-sessão anterior já está concluída.
-            const next = turns.maybeCreateDialogue(session.id, result);
-            repos.sessions.touch(session.id);
-            return { page, discarded: 0, dialogue: next };
-          }),
+      const text = formatDialoguePage(dialogue, messages);
+      const redo = dialogue.redo_page_id ? repos.pages.get(dialogue.redo_page_id) : undefined;
+      if (dialogue.redo_page_id && (!redo || redo.is_archived || redo.kind !== 'dialogue')) {
+        throw new HttpError(409, 'A página que este diálogo substituiria já não está disponível. Descarte o diálogo.');
+      }
+      const following = redo ? repos.pages.listActive(session.id).filter((p) => p.order_index > redo.order_index) : [];
+
+      const outcome = repos.transaction(() => {
+        let page;
+        let discarded = 0;
+        if (redo) {
+          discarded = repos.pages.deleteAfter(session.id, redo.order_index);
+          repos.dialogues.deleteByPage(redo.id);
+          page = repos.pages.replaceGeneration(redo.id, { player_instruction: null, generated_text: text, model_identifier: null })!;
+          repos.audio.delete(redo.id); // o áudio narrava a conversa antiga
+        } else {
+          page = repos.pages.append(session.id, { player_instruction: null, generated_text: text, kind: 'dialogue', npc_name: dialogue.npc_name });
+        }
+        repos.dialogues.conclude(dialogue.id, page.id);
+        repos.sessions.touch(session.id);
+        return { page, discarded };
       });
+      if (redo) {
+        ctx.audio.cancelMany([redo.id, ...following.map((p) => p.id)]);
+        repos.audio.reclaim();
+      }
+      // Narração automática dos diálogos (opção própria, desligada de fábrica), em segundo plano.
+      ctx.audio.autoStart(session, outcome.page);
+      return { page: ctx.audio.decorate([outcome.page])[0], discarded: outcome.discarded };
     },
   );
 

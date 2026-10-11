@@ -27,6 +27,8 @@ interface DialogueState {
   wantsEnd: boolean;
   /** Aguardando a resposta do NPC. */
   waiting: boolean;
+  /** Encerrando (salvando a página): trava os botões contra duplo clique. */
+  closing?: boolean;
 }
 
 interface Ghost {
@@ -255,6 +257,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         renderTome(false);
       },
       onEditPrompt: () => openRegenerate(b),
+      onRedoDialogue: () => void redoDialogue(b, laterCount),
+      replacing: dlg?.dialogue.redo_page_id === b.id,
       onBranch: () => void branchFrom(b, laterCount),
     });
   }
@@ -306,13 +310,22 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     );
   }
 
+  /** Página que o diálogo em andamento (se for um "Refazer") substituirá ao ser encerrado. */
+  function redoTarget(): Page | undefined {
+    const id = dlg?.dialogue.redo_page_id;
+    return id ? detail.pages.find((x) => x.id === id) : undefined;
+  }
+
   function dialogueCard(): HTMLElement | null {
     if (!dlg) return null;
     const d = dlg;
+    const redoing = redoTarget();
+    const playerLabel = d.dialogue.player_name ?? 'Protagonista';
     return h(
       'section',
-      { class: 'card border-accent font-sans text-base', 'aria-label': `Diálogo com ${d.dialogue.npc_name}` },
-      h('h3', { class: 'mb-3 font-display text-sm uppercase tracking-wider text-accent' }, `Diálogo — ${d.dialogue.npc_name}`),
+      { class: 'card border-accent font-sans text-base', 'aria-label': `${redoing ? 'Refazendo diálogo' : 'Diálogo'} com ${d.dialogue.npc_name}` },
+      h('h3', { class: 'mb-3 font-display text-sm uppercase tracking-wider text-accent' }, `${redoing ? 'Refazendo diálogo' : 'Diálogo'} — ${d.dialogue.npc_name}`),
+      redoing ? h('p', { class: 'mb-3 text-xs text-muted' }, `A página ${redoing.order_index} só é substituída quando você encerrar este novo diálogo. Descartar mantém tudo como estava.`) : null,
       d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} para começar a conversa.`) : null,
       h(
         'div',
@@ -321,7 +334,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           h(
             'p',
             { class: m.sender === 'npc' ? 'text-ink' : 'text-muted italic' },
-            h('strong', { class: m.sender === 'npc' ? 'text-accent' : 'text-strong' }, m.sender === 'npc' ? `${d.dialogue.npc_name}: ` : 'Você: '),
+            h('strong', { class: m.sender === 'npc' ? 'text-accent' : 'text-strong' }, m.sender === 'npc' ? `${d.dialogue.npc_name}: ` : `${playerLabel}: `),
             m.content,
           ),
         ),
@@ -333,7 +346,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   /** Reconstrói o Tome. `stick` força a rolagem ao fim (novo conteúdo). */
   function renderTome(stick: boolean): void {
     const follow = stick || nearBottom();
-    const target = ghost?.replaceId ? detail.pages.find((b) => b.id === ghost!.replaceId) : undefined;
+    const target = ghost?.replaceId ? detail.pages.find((b) => b.id === ghost!.replaceId) : redoTarget();
     const items: (HTMLElement | null)[] = [];
 
     if (detail.pages.length === 0 && !ghost && !dlg) {
@@ -432,18 +445,26 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       'Compactar Crônica',
     );
 
+    const redoing = redoTarget();
+    const dlgLocked = busy || !!dlg?.waiting || !!dlg?.closing;
     const dialogueBar = dlg
       ? h(
           'div',
           { class: 'mb-2 flex flex-wrap items-center gap-2' },
-          h('span', { class: 'font-display text-sm text-accent' }, `Falando com: ${dlg.dialogue.npc_name}`),
+          h('span', { class: 'font-display text-sm text-accent' }, `${redoing ? 'Refazendo diálogo — ' : ''}Falando com: ${dlg.dialogue.npc_name}`),
           dlg.wantsEnd ? h('span', { class: 'text-xs text-hp-warn' }, `${dlg.dialogue.npc_name} deseja encerrar a conversa.`) : null,
           h(
             'button',
-            { class: `btn ${dlg.wantsEnd ? 'btn-primary btn-pulse' : ''}`, type: 'button', disabled: busy || dlg.waiting, onClick: () => void concludeDialogue() },
-            'Encerrar Diálogo e Narrar',
+            {
+              class: `btn ${dlg.wantsEnd ? 'btn-primary btn-pulse' : ''}`,
+              type: 'button',
+              disabled: dlgLocked,
+              title: redoing ? `Salva esta conversa no lugar da página ${redoing.order_index} (e descarta as seguintes)` : 'Salva a conversa como uma página da crônica (o Narrador não é chamado)',
+              onClick: () => void concludeDialogue(),
+            },
+            redoing ? `Encerrar e substituir a página ${redoing.order_index}` : 'Encerrar diálogo',
           ),
-          h('button', { class: 'btn btn-danger', type: 'button', disabled: busy || dlg.waiting, onClick: () => void cancelDialogue() }, 'Descartar'),
+          h('button', { class: 'btn btn-danger', type: 'button', disabled: dlgLocked, onClick: () => void cancelDialogue() }, 'Descartar'),
         )
       : null;
 
@@ -502,7 +523,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         controller.signal,
       );
     } catch (err) {
-      toast(err instanceof ApiError ? (err.code === 'missing_api_key' ? 'Configure a chave da API na tela inicial.' : err.message) : 'Falha inesperada.', 'error');
+      toast(err instanceof ApiError ? (err.code === 'missing_api_key' ? 'Configure a chave da API em “Opções”, no menu inicial.' : err.message) : 'Falha inesperada.', 'error');
     }
     controller = null;
     if (disposed) return gotPage;
@@ -635,23 +656,59 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   async function concludeDialogue(): Promise<void> {
-    if (!dlg || busy) return;
+    if (!dlg || busy || dlg.closing) return;
     if (dlg.messages.length === 0) {
       toast('Troque ao menos uma fala antes de encerrar, ou use “Descartar”.', 'info');
       return;
     }
-    const id = dlg.dialogue.id;
-    const ok = await runTurn(`/api/dialogue/${id}/conclude`, {});
-    if (ok) {
-      await loadDialogue();
+    const state = dlg;
+    state.closing = true;
+    renderDock();
+    try {
+      // A conversa vira, ela mesma, uma página (sem chamar o Narrador).
+      await api('POST', `/api/dialogue/${state.dialogue.id}/conclude`, {});
+      dlg = null;
+      await reloadDetail();
       renderTome(true);
       renderDock();
+      void refreshTokens(); // evento: página criada/substituída
+    } catch (err) {
+      state.closing = false;
+      toast((err as Error).message, 'error');
+      if (!disposed) renderDock();
+    }
+  }
+
+  /** "Refazer diálogo": abre um novo diálogo; a página só é substituída ao encerrá-lo (descartar mantém tudo). */
+  async function redoDialogue(b: Page, later: number): Promise<void> {
+    if (busy || dlg) return;
+    const ok = await confirmModal(
+      'Refazer diálogo',
+      `Você conversará de novo com ${b.npc_name ?? 'o interlocutor'}, e a página ${b.order_index} só é substituída quando encerrar o novo diálogo; se descartar, tudo continua como está.${
+        later > 0 ? ` Ao encerrar, ${later === 1 ? 'a página seguinte será descartada' : `as ${countPages(later)} seguintes serão descartadas`} definitivamente.` : ''
+      }`,
+      { danger: later > 0, confirmLabel: 'Refazer diálogo' },
+    );
+    if (!ok) return;
+    try {
+      const r = await api<{ dialogue: Dialogue; messages: DialogueMessage[] }>('POST', `/api/narrative/pages/${b.id}/redo-dialogue`, { confirm_truncate: later > 0 });
+      dlg = { dialogue: r.dialogue, messages: r.messages, wantsEnd: false, waiting: false };
+      inputValue = '';
+      renderTome(true);
+      renderDock();
+    } catch (err) {
+      toast((err as Error).message, 'error');
     }
   }
 
   async function cancelDialogue(): Promise<void> {
     if (!dlg) return;
-    const yes = await confirmModal('Descartar diálogo', 'Descartar esta conversa? Nada dela será narrado na crônica.', { danger: true, confirmLabel: 'Descartar' });
+    const redoing = redoTarget();
+    const yes = await confirmModal(
+      'Descartar diálogo',
+      redoing ? `Descartar esta nova conversa? A página ${redoing.order_index} continua como está.` : 'Descartar esta conversa? Nada dela será salvo na crônica.',
+      { danger: true, confirmLabel: 'Descartar' },
+    );
     if (!yes) return;
     try {
       await api('POST', `/api/dialogue/${dlg.dialogue.id}/cancel`);

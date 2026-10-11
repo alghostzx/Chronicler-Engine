@@ -11,6 +11,8 @@ import { cleanForSpeech, DEFAULT_CHUNK_CHARS, splitForSpeech } from './text.js';
 
 export interface TtsSettings {
   auto_default: boolean;
+  /** Narração automática das páginas de diálogo (opção própria; desligada de fábrica). */
+  auto_dialogue_default: boolean;
   model: string;
   voice: string;
   style: string;
@@ -18,6 +20,7 @@ export interface TtsSettings {
 
 const KEYS = {
   auto_default: 'tts_auto_default',
+  auto_dialogue_default: 'tts_auto_dialogue_default',
   model: 'tts_model',
   voice: 'tts_voice',
   style: 'tts_style',
@@ -98,6 +101,7 @@ export class AudioService {
     const s = this.repos.settings;
     return {
       auto_default: s.get(KEYS.auto_default) === '1',
+      auto_dialogue_default: s.get(KEYS.auto_dialogue_default) === '1',
       model: s.get(KEYS.model) ?? TTS_DEFAULTS.model,
       voice: s.get(KEYS.voice) ?? TTS_DEFAULTS.voice,
       style: s.get(KEYS.style) ?? TTS_DEFAULTS.style,
@@ -107,6 +111,7 @@ export class AudioService {
   updateSettings(patch: Partial<TtsSettings>): TtsSettings {
     const s = this.repos.settings;
     if (patch.auto_default !== undefined) s.set(KEYS.auto_default, patch.auto_default ? '1' : '0');
+    if (patch.auto_dialogue_default !== undefined) s.set(KEYS.auto_dialogue_default, patch.auto_dialogue_default ? '1' : '0');
     if (patch.model !== undefined) s.set(KEYS.model, patch.model);
     if (patch.voice !== undefined) s.set(KEYS.voice, patch.voice);
     if (patch.style !== undefined) s.set(KEYS.style, patch.style.trim());
@@ -116,6 +121,11 @@ export class AudioService {
   /** A sessão usa o próprio valor; sem ele (`null`), vale o padrão global (desligado de fábrica). */
   autoEnabled(session: Pick<Session, 'tts_auto'>): boolean {
     return session.tts_auto ?? this.getSettings().auto_default;
+  }
+
+  /** Igual a `autoEnabled`, mas para páginas de diálogo (opção independente da narração das páginas de prosa). */
+  autoDialogueEnabled(session: Pick<Session, 'tts_auto_dialogue'>): boolean {
+    return session.tts_auto_dialogue ?? this.getSettings().auto_dialogue_default;
   }
 
   // --- Estado ----------------------------------------------------------------------------------
@@ -207,7 +217,7 @@ export class AudioService {
 
   /** Geração automática após uma página nova: só se ligada (sessão ou padrão global); nunca falha o turno. */
   autoStart(session: Session, page: Page): boolean {
-    if (!this.autoEnabled(session)) return false;
+    if (!(page.kind === 'dialogue' ? this.autoDialogueEnabled(session) : this.autoEnabled(session))) return false;
     try {
       this.start(page);
       return true;

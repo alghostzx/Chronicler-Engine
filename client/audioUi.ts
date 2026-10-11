@@ -109,7 +109,7 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
       startWatching();
     } catch (err) {
       const e = err as ApiError;
-      toast(e.code === 'missing_api_key' ? 'Configure a chave da API na tela inicial para gerar o áudio.' : e.message, 'error');
+      toast(e.code === 'missing_api_key' ? 'Configure a chave da API em “Opções”, no menu inicial, para gerar o áudio.' : e.message, 'error');
     }
   }
 

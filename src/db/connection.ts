@@ -1,13 +1,14 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { MIGRATIONS, MIN_MIGRATABLE_VERSION } from './migrations.js';
 import { SCHEMA_SQL, SCHEMA_VERSION } from './schema.js';
 
 export type Db = Database.Database;
 
 /**
- * Abre (criando se necessário) o banco SQLite e aplica o schema de forma idempotente.
- * Aceita `:memory:` para testes.
+ * Abre (criando se necessário) o banco SQLite. Banco novo recebe o schema atual; banco existente é
+ * migrado até `SCHEMA_VERSION` (ver `migrations.ts`). Aceita `:memory:` para testes.
  */
 export function openDatabase(databasePath: string): Db {
   if (databasePath !== ':memory:') {
@@ -24,26 +25,50 @@ export function openDatabase(databasePath: string): Db {
   if (databasePath !== ':memory:') {
     db.pragma('journal_mode = WAL');
   }
-  migrate(db);
+  try {
+    prepareSchema(db, databasePath);
+  } catch (err) {
+    db.close();
+    throw err;
+  }
   return db;
 }
 
-function migrate(db: Db): void {
+function prepareSchema(db: Db, databasePath: string): void {
   const current = db.pragma('user_version', { simple: true }) as number;
+  if (current === 0) {
+    db.exec(SCHEMA_SQL);
+    db.pragma(`user_version = ${SCHEMA_VERSION}`);
+    return;
+  }
   if (current > SCHEMA_VERSION) {
     throw new Error(
-      `Banco de dados com versão de schema (${current}) mais nova que a suportada (${SCHEMA_VERSION}).`,
+      `Banco de dados com versão de schema (${current}) mais nova que a suportada (${SCHEMA_VERSION}). ` +
+        'Atualize o Chronicler Engine.',
     );
   }
-  // Banco criado por uma versão anterior (user_version 1..SCHEMA_VERSION-1): sem migração (pré-pré-alpha).
-  if (current > 0 && current < SCHEMA_VERSION) {
+  if (current < MIN_MIGRATABLE_VERSION) {
     throw new Error(
-      `Banco de dados com versão de schema antiga (${current}); esta versão (${SCHEMA_VERSION}) não oferece migração. ` +
-        'O projeto está em fase pré-alpha: apague o arquivo do banco (a pasta ./data) e inicie novamente.',
+      `Banco de dados com versão de schema antiga (${current}); esta versão (${SCHEMA_VERSION}) só migra a partir da ` +
+        `versão ${MIN_MIGRATABLE_VERSION}. Apague o arquivo do banco (a pasta ./data) e inicie novamente.`,
     );
   }
-  db.exec(SCHEMA_SQL);
-  if (current < SCHEMA_VERSION) {
-    db.pragma(`user_version = ${SCHEMA_VERSION}`);
+  const pending = MIGRATIONS.filter((m) => m.version > current).sort((a, b) => a.version - b.version);
+  if (pending.length === 0) return;
+
+  if (databasePath !== ':memory:') {
+    // Cópia de segurança antes de alterar o banco (o WAL é esvaziado para o arquivo ficar completo).
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    fs.copyFileSync(databasePath, `${databasePath}.v${current}.bak`);
+  }
+  for (const m of pending) {
+    try {
+      db.transaction(() => {
+        m.up(db);
+        db.pragma(`user_version = ${m.version}`);
+      })();
+    } catch (err) {
+      throw new Error(`Falha ao migrar o banco para a versão ${m.version} (${m.description}): ${(err as Error).message}`, { cause: err });
+    }
   }
 }

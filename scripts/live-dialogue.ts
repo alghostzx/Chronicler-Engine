@@ -50,8 +50,8 @@ for (const line of ['Procuro um navio que parta para o norte esta noite. Sabe de
   console.log(`\nJOGADOR: ${line}\nNPC: ${res.npc_message?.content ?? JSON.stringify(res)}  [quer encerrar: ${res.npc_wants_to_end}]`);
 }
 
-const concl = sse((await app.inject({ method: 'POST', url: `/api/dialogue/${did}/conclude` })).body);
-console.log('\nEventos da costura:', concl.map((e) => e.event).filter((e, i, a) => a.indexOf(e) === i).join(','));
-console.log('\nPÁGINA DE COSTURA:\n' + concl.find((e) => e.event === 'page')?.data.page.generated_text);
-console.log('\nPáginas:', repos.pages.listActive(sessionId).length, '| diálogo ativo:', repos.dialogues.getActive(sessionId)?.npc_name ?? 'nenhum');
+const concl = (await app.inject({ method: 'POST', url: `/api/dialogue/${did}/conclude`, payload: {} })).json();
+console.log('\nPÁGINA DO DIÁLOGO (a própria conversa, sem o Narrador):\n' + concl.page.generated_text);
+console.log('\nTipo:', concl.page.kind, '| NPC:', concl.page.npc_name, '| rótulo do jogador:', repos.dialogues.get(did)!.player_name ?? '(padrão)');
+console.log('Páginas:', repos.pages.listActive(sessionId).length, '| diálogo ativo:', repos.dialogues.getActive(sessionId)?.npc_name ?? 'nenhum');
 await app.close();

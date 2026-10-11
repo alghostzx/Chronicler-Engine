@@ -11,6 +11,11 @@ export const NARRATOR_RESPONSE_SCHEMA = {
       properties: {
         activate: { type: 'boolean' },
         npc_name: { type: 'string' },
+        player_name: {
+          type: 'string',
+          description:
+            'Como o protagonista (o jogador) é chamado nesta conversa: o nome próprio do personagem, ou um título/apelido curto se ainda não tiver nome (ex.: "Kira", "o forasteiro"). Aparece como rótulo das falas do jogador.',
+        },
         dynamic_system_prompt: {
           type: 'string',
           description:
@@ -28,6 +33,8 @@ export const NARRATOR_RESPONSE_SCHEMA = {
 export interface DialogueTrigger {
   activate: boolean;
   npc_name?: string;
+  /** Nome do protagonista na conversa (opcional: sem ele, o rótulo é "Protagonista"). */
+  player_name?: string;
   dynamic_system_prompt?: string;
 }
 
@@ -65,11 +72,19 @@ export function parseNarratorResult(raw: string): NarratorResult {
   const name = typeof trigger?.npc_name === 'string' ? trigger.npc_name.trim() : '';
   const prompt = typeof trigger?.dynamic_system_prompt === 'string' ? trigger.dynamic_system_prompt.trim() : '';
   const activate = trigger?.activate === true && name.length > 0 && prompt.length > 0;
+  const playerName = cleanSpeakerName(trigger?.player_name);
 
   return {
     narrative_text: narrative,
     dialogue_trigger: activate
-      ? { activate: true, npc_name: name, dynamic_system_prompt: prompt }
+      ? { activate: true, npc_name: name, ...(playerName ? { player_name: playerName } : {}), dynamic_system_prompt: prompt }
       : { activate: false },
   };
+}
+
+/** Rótulo de quem fala: uma linha, sem marcações de Markdown nem `:`, com no máximo 60 caracteres. */
+export function cleanSpeakerName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const name = value.replace(/[*_`#>:\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+  return name.length > 0 ? name : undefined;
 }

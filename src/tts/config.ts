@@ -41,6 +41,7 @@ export const TTS_VOICES: { id: string; trait: string }[] = [
 
 export const TTS_DEFAULTS = {
   auto_default: false,
+  auto_dialogue_default: false,
   model: 'gemini-3.8-flash-tts',
   /** "Mature": a que o autor escolheu entre as amostras (sem sotaque marcado). */
   voice: 'Gacrux',
