@@ -13,6 +13,9 @@ import {
 import { downloadStoryMarkdown, type ExportScope } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
 import { audioPlayer } from '../audioPlayer';
+import { isPanelOpen, setPanelOpen, setQuietReadyToasts } from '../audioUi';
+import { ContinuousPlayback, type EndInfo, type StatusPage } from '../continuousPlayback';
+import { askGenerate, createContinuousBar } from '../continuousUi';
 import { icon } from '../icons';
 import { applyTheme } from '../theme';
 import { createModeControl, createThemeControl, fullscreenButton, iconButton } from '../controls';
@@ -86,6 +89,38 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   const tomePage = h('article', { class: 'mx-auto max-w-3xl space-y-6 px-3 py-6 font-reading text-lg text-ink sm:px-5 sm:py-8 prose-tome-host' });
   tomeScroll.appendChild(tomePage);
   const dock = h('footer', { class: 'shrink-0 border-t border-line bg-panel px-4 py-3' });
+  // Reprodução contínua (botão "Reproduzir a partir daqui"): banner entre o Tome e a Doca.
+  const modeOpened = new Set<string>(); // players de página abertos pelo modo (ele mesmo os fecha ao avançar)
+  const bar = createContinuousBar(() => continuous.stop());
+  const continuous = new ContinuousPlayback(audioPlayer, {
+    fetchStatus: async () => (await api<{ pages: StatusPage[] }>('GET', `/api/sessions/${sessionId}/audio`)).pages,
+    track: (p) => ({
+      pageId: p.page_id,
+      version: p.audio?.created_at ?? '',
+      title: `Página ${p.order_index}`,
+      artist: session().title,
+      durationMs: p.audio?.duration_ms,
+    }),
+    onPageChange: (id, previousId) => {
+      if (disposed) return;
+      if (previousId && modeOpened.delete(previousId)) setPanelOpen(previousId, false);
+      if (!isPanelOpen(id)) {
+        setPanelOpen(id, true);
+        modeOpened.add(id);
+      }
+      if (editingId === null) renderTome(false); // reconstruir joga fora o texto digitado numa edição
+      const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      tomeScroll.querySelector(`[data-page-id="${id}"]`)?.scrollIntoView?.({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    },
+    onStatus: (pages) => syncAudio(pages),
+    onEnd: (info) => {
+      modeOpened.clear();
+      setQuietReadyToasts(false);
+      continuousEnded(info);
+    },
+  });
+  continuous.subscribe((state) => bar.update(state, session().title));
+
   const titleEl = h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, session().title);
   const drawerWrap = h('div', { class: 'hidden absolute inset-y-0 right-0 z-30 w-full max-w-md lg:static lg:z-auto lg:w-[26rem] lg:max-w-none' });
 
@@ -181,7 +216,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         exportBtn,
         drawerBtn,
       ),
-      h('div', { class: 'relative flex min-h-0 flex-1' }, h('main', { class: 'flex min-w-0 flex-1 flex-col' }, tomeScroll, dock), drawerWrap),
+      h('div', { class: 'relative flex min-h-0 flex-1' }, h('main', { class: 'flex min-w-0 flex-1 flex-col' }, tomeScroll, bar.el, dock), drawerWrap),
     ),
   );
 
@@ -242,6 +277,62 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     return h('section', { class: 'page-card is-ghost', 'aria-label': 'Página sendo escrita' }, pageHeader(replaced?.order_index ?? nextPageIndex()), h('div', { class: 'page-card-body' }, ghostTextEl));
   }
 
+  /** Copia o estado de áudio do servidor para as páginas da tela (sem reconstruir o Tome). */
+  function syncAudio(pages: StatusPage[]): void {
+    const byId = new Map(pages.map((p) => [p.page_id, p.audio]));
+    for (const p of detail.pages) if (byId.has(p.id)) p.audio = byId.get(p.id) ?? null;
+  }
+
+  function continuousEnded(info: EndInfo): void {
+    if (disposed) return;
+    if (info.kind === 'finished') toast('Reprodução contínua concluída.', 'success');
+    else if (info.kind === 'blocked') {
+      if (info.reason === 'error') toast(`Parei na Página ${info.page}: a geração do áudio falhou${info.message ? ` (${info.message})` : ''}.`, 'error');
+      else toast(`Parei na Página ${info.page}: ela não tem áudio.`, 'info');
+    } else if (info.kind === 'failed') toast(`Reprodução contínua interrompida na Página ${info.page}: o áudio não pôde ser reproduzido.`, 'error');
+    // stopped / takeover / external: o próprio usuário (ou a tela) encerrou; sem aviso.
+  }
+
+  /** "Reproduzir a partir daqui": confere o que falta, pergunta (gerar custa tokens) e inicia o modo contínuo. */
+  async function playFromHere(b: Page): Promise<void> {
+    const fetchPages = async () => (await api<{ pages: StatusPage[] }>('GET', `/api/sessions/${sessionId}/audio`)).pages;
+    let pages: StatusPage[];
+    try {
+      pages = await fetchPages();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+      return;
+    }
+    syncAudio(pages);
+    const range = pages.filter((p) => p.order_index >= b.order_index);
+    const missing = range.filter((p) => !p.audio || p.audio.status === 'error');
+    const generating = range.filter((p) => p.audio?.status === 'generating').length;
+    let mode: 'all' | 'ready-prefix' = 'all';
+    if (missing.length > 0) {
+      const choice = await askGenerate({ missing: missing.map((p) => p.order_index), generating });
+      if (!choice || disposed) return;
+      if (choice === 'ready') mode = 'ready-prefix';
+      else {
+        try {
+          await api('POST', `/api/sessions/${sessionId}/audio/batch`, { from_page_id: b.id });
+          setQuietReadyToasts(true); // sem um aviso "ficou pronta" por página gerada
+          pages = await fetchPages();
+        } catch (err) {
+          const e = err as ApiError;
+          toast(e.code === 'missing_api_key' ? 'Configure a chave da API em “Opções”, no menu inicial, para gerar o áudio.' : e.message, 'error');
+          return;
+        }
+        syncAudio(pages);
+        if (editingId === null) renderTome(false); // as páginas em geração mostram o progresso
+      }
+    }
+    if (disposed) return;
+    if (!continuous.start({ pages, fromPageId: b.id, mode }).ok) {
+      setQuietReadyToasts(false);
+      toast(`A Página ${b.order_index} ainda não tem áudio: não há o que reproduzir.`, 'info');
+    }
+  }
+
   function pageArticle(b: Page, dimmed: boolean): HTMLElement {
     if (editingId === b.id) return editArticle(b);
     const laterCount = detail.pages.filter((x) => x.order_index > b.order_index).length;
@@ -261,6 +352,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       onNarrateDialogue: () => void narrateDialogue(b),
       replacing: dlg?.dialogue.redo_page_id === b.id,
       onBranch: () => void branchFrom(b, laterCount),
+      onPlayFromHere: () => void playFromHere(b),
     });
   }
 
@@ -740,6 +832,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   return () => {
     disposed = true;
     controller?.abort();
+    continuous.dispose();
+    setQuietReadyToasts(false);
     audioPlayer.stop();
     document.title = 'Chronicler Engine';
   };

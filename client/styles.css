@@ -465,6 +465,26 @@
     }
   }
 
+  /* Reprodução contínua: banner fixo acima da Doca. */
+  .continuous-bar {
+    @apply flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-accent bg-panel px-4 py-2;
+  }
+  .continuous-bar.hidden {
+    display: none;
+  }
+  .continuous-bar-icon {
+    @apply shrink-0 text-accent;
+  }
+  .continuous-bar-title {
+    @apply font-display text-sm text-strong;
+  }
+  .continuous-bar-detail {
+    @apply text-xs text-muted;
+  }
+  .continuous-bar-stop {
+    @apply shrink-0;
+  }
+
   /* Botão "Compactar Crônica" pulsa quando o HP está em exaustão (< 20%). */
   @keyframes pulse-glow {
     0%,

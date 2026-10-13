@@ -113,6 +113,15 @@ const ICONS = {
   ],
   /** Tocar. */
   play: [['path', { d: 'M6 4v16l14-8z' }]],
+  /** Reproduzir a partir daqui (reprodução contínua): lista de páginas com seta de tocar. */
+  playFrom: [
+    ['path', { d: 'M3 6h12' }],
+    ['path', { d: 'M3 12h8' }],
+    ['path', { d: 'M3 18h8' }],
+    ['path', { d: 'M15 10.5 21 14.5 15 18.5z' }],
+  ],
+  /** Interromper. */
+  stop: [['rect', { x: '6', y: '6', width: '12', height: '12', rx: '1.5' }]],
   /** Pausar. */
   pause: [
     ['rect', { x: '6', y: '4', width: '4', height: '16', rx: '1' }],

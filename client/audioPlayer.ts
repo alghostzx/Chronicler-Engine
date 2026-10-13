@@ -43,6 +43,9 @@ class AudioPlayer {
   private readonly listeners = new Set<() => void>();
   private fallbackDuration = 0;
   private track: TrackMeta | null = null;
+  private readonly endedListeners = new Set<() => void>();
+  private readonly failedListeners = new Set<() => void>();
+  private skipHandlers: { next: () => void; previous: () => void } | null = null;
   rate = savedRate();
 
   constructor() {
@@ -54,11 +57,13 @@ class AudioPlayer {
     this.el.addEventListener('ended', () => {
       this.el.currentTime = 0;
       this.emit();
+      for (const fn of [...this.endedListeners]) fn();
     });
     this.el.addEventListener('error', () => {
       if (!this.track) return;
       toast('Não foi possível reproduzir o áudio desta página.', 'error');
       this.emit();
+      for (const fn of [...this.failedListeners]) fn();
     });
   }
 
@@ -79,6 +84,24 @@ class AudioPlayer {
 
   private emit(): void {
     for (const fn of [...this.listeners]) fn();
+  }
+
+  /** A faixa terminou sozinha (usado pela reprodução contínua para encadear a próxima). */
+  onEnded(fn: () => void): () => void {
+    this.endedListeners.add(fn);
+    return () => this.endedListeners.delete(fn);
+  }
+
+  /** O navegador não conseguiu carregar/tocar a faixa. */
+  onFailed(fn: () => void): () => void {
+    this.failedListeners.add(fn);
+    return () => this.failedListeners.delete(fn);
+  }
+
+  /** Teclas de mídia / tela de bloqueio: "próxima" e "anterior" só existem com a reprodução contínua. */
+  setSkipHandlers(handlers: { next: () => void; previous: () => void } | null): void {
+    this.skipHandlers = handlers;
+    this.updateMediaSession();
   }
 
   /** Prepara a faixa (sem tocar). Trocar de página interrompe a anterior. */
@@ -143,12 +166,15 @@ class AudioPlayer {
     if (!('mediaSession' in navigator) || !this.track || typeof MediaMetadata === 'undefined') return;
     const ms = navigator.mediaSession;
     ms.metadata = new MediaMetadata({ title: this.track.title, artist: this.track.artist, album: 'Chronicler Engine' });
-    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+    const skip = this.skipHandlers;
+    const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
       ['play', () => void this.el.play()],
       ['pause', () => this.el.pause()],
       ['seekbackward', () => this.seek(this.el.currentTime - 10)],
       ['seekforward', () => this.seek(this.el.currentTime + 10)],
       ['seekto', (d) => typeof d.seekTime === 'number' && this.seek(d.seekTime)],
+      ['nexttrack', skip ? () => skip.next() : null],
+      ['previoustrack', skip ? () => skip.previous() : null],
     ];
     for (const [action, handler] of handlers) {
       try {

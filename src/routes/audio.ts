@@ -46,6 +46,77 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: AppContext): void
     return page;
   };
 
+  // --- Reprodução contínua: estado e geração em lote --------------------------------------------
+  const requireSession = (id: string) => {
+    const session = repos.sessions.get(id);
+    if (!session) throw new HttpError(404, 'Sessão não encontrada.');
+    return session;
+  };
+  /** Estado do áudio de cada página ativa da sessão, em ordem (sem os bytes). */
+  const sessionAudio = (sessionId: string) => {
+    const pages = repos.pages.listActive(sessionId);
+    return audio.decorate(pages).map((p) => ({ page_id: p.id, order_index: p.order_index, kind: p.kind, audio: p.audio }));
+  };
+
+  app.get<{ Params: { id: string } }>('/api/sessions/:id/audio', { schema: { params: idParams } }, async (req) => {
+    const session = requireSession(req.params.id);
+    return { pages: sessionAudio(session.id) };
+  });
+
+  // Agenda, EM ORDEM, o áudio das páginas de `from_page_id` até a última que ainda não têm áudio
+  // válido nem geração em andamento (as que falharam tentam de novo). A fila do serviço mantém a
+  // ordem, então as primeiras páginas ficam prontas primeiro. Sem chave: 409 antes de agendar.
+  app.post<{ Params: { id: string }; Body: { from_page_id: string } }>(
+    '/api/sessions/:id/audio/batch',
+    {
+      schema: {
+        params: idParams,
+        body: { type: 'object', required: ['from_page_id'], additionalProperties: false, properties: { from_page_id: { type: 'string', minLength: 1 } } },
+      },
+    },
+    async (req) => {
+      const session = requireSession(req.params.id);
+      const active = repos.pages.listActive(session.id);
+      const from = active.find((p) => p.id === req.body.from_page_id);
+      if (!from) throw new HttpError(404, 'Página não encontrada no Tome desta sessão.');
+      const started: string[] = [];
+      for (const page of active.filter((p) => p.order_index >= from.order_index)) {
+        const status = audio.info(page)?.status;
+        if (status === 'ready' || status === 'generating') continue;
+        try {
+          audio.start(page);
+          started.push(page.id);
+        } catch (err) {
+          if (err instanceof HttpError && err.statusCode === 409) continue; // página sem texto para narrar
+          throw err; // sem chave de API (nada foi agendado antes dela) ou erro inesperado
+        }
+      }
+      return { started, pages: sessionAudio(session.id) };
+    },
+  );
+
+  // Cancela a geração das páginas informadas (só as desta sessão); áudios já salvos continuam valendo.
+  app.post<{ Params: { id: string }; Body: { page_ids: string[] } }>(
+    '/api/sessions/:id/audio/cancel',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: 'object',
+          required: ['page_ids'],
+          additionalProperties: false,
+          properties: { page_ids: { type: 'array', maxItems: 2000, items: { type: 'string', minLength: 1 } } },
+        },
+      },
+    },
+    async (req) => {
+      const session = requireSession(req.params.id);
+      const own = new Set(repos.pages.listActive(session.id).map((p) => p.id));
+      const cancelled = req.body.page_ids.filter((id) => own.has(id) && audio.cancel(id));
+      return { cancelled, pages: sessionAudio(session.id) };
+    },
+  );
+
   // --- Gerar (ou gerar de novo) ----------------------------------------------------------------
   // Responde na hora: a geração leva de segundos a minutos. O áudio antigo (se houver) só é
   // trocado quando o novo ficar pronto, então uma falha não o perde.

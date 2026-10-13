@@ -168,6 +168,29 @@ function inspectAudio(opts: { expect: 'generating' | 'player' | 'idle' }): strin
   return problems;
 }
 
+/** Executado dentro do navegador: mede o banner da reprodução contínua. */
+function inspectBanner(): string[] {
+  const problems: string[] = [];
+  const bar = document.querySelector<HTMLElement>('[data-continuous-bar]:not(.hidden)');
+  if (!bar) return ['banner da reprodução contínua não está visível'];
+  const r = bar.getBoundingClientRect();
+  if (r.left < -0.5 || r.right > window.innerWidth + 0.5) problems.push(`banner fora da tela (${Math.round(r.left)}…${Math.round(r.right)} de ${window.innerWidth})`);
+  if (bar.scrollWidth > bar.clientWidth + 1) problems.push(`conteúdo do banner mais largo que ele (${bar.scrollWidth} > ${bar.clientWidth})`);
+  if (document.documentElement.scrollWidth > document.documentElement.clientWidth) problems.push('rolagem horizontal da página com o banner');
+  if (!/Reproduzindo «A Queda de Valdoria» em modo contínuo/.test(bar.textContent ?? '')) problems.push(`texto do banner inesperado: ${bar.textContent}`);
+  const stop = bar.querySelector<HTMLElement>('button[aria-label="Interromper a reprodução contínua"]');
+  if (!stop) problems.push('falta o botão Interromper');
+  else {
+    const sr = stop.getBoundingClientRect();
+    if (sr.height < 32 || sr.width < 32) problems.push(`Interromper pequeno (${Math.round(sr.width)}×${Math.round(sr.height)})`);
+    if (sr.right > r.right + 0.5 || sr.left < r.left - 0.5) problems.push('Interromper fora do banner');
+    if (!stop.textContent?.includes('Interromper') || stop.querySelectorAll('svg').length !== 1) problems.push('Interromper deve ter texto e um ícone');
+  }
+  const dock = document.querySelector<HTMLElement>('main > footer');
+  if (dock && r.bottom > dock.getBoundingClientRect().top + 1) problems.push('banner sobreposto à Doca');
+  return problems;
+}
+
 // --- Execução -------------------------------------------------------------------------------------
 const exe = BROWSER === 'chromium' ? findChrome() : undefined;
 if (BROWSER === 'chromium' && !exe) throw new Error('Chromium não encontrado. Defina CHROME_PATH ou instale um navegador do Playwright.');
@@ -263,6 +286,42 @@ for (const theme of THEMES) {
       await confirm.click({ timeout: 3000 }).catch(() => problems.push('[apagar] confirmação não apareceu'));
       await page.waitForTimeout(400);
       mark('após apagar', await page.evaluate(inspectAudio, { expect: 'idle' }));
+
+      // 1b) Reprodução contínua: gera as faltantes (modal), toca em sequência e encerra sozinha
+      {
+        const cards = page.locator('.page-card[data-page-id]');
+        const total = await cards.count();
+        const c3 = cards.nth(total - 2); // as duas últimas páginas: 2 de 2
+        const c4 = cards.nth(total - 1);
+        await c3.scrollIntoViewIfNeeded();
+        await c3.getByRole('button', { name: 'Reproduzir a partir daqui' }).click();
+        await page.getByRole('button', { name: 'Gerar e reproduzir' }).click({ timeout: 3000 }).catch(() => problems.push('[contínuo] modal de geração não apareceu'));
+        const seekNearEnd = (c: typeof c3) =>
+          c.locator('input.audio-seek').evaluate((el) => {
+            const input = el as HTMLInputElement;
+            input.value = String(Math.max(0, Number(input.max) - 0.6));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+        try {
+          await page.waitForSelector('[data-continuous-bar]:not(.hidden)', { timeout: SYNTH_DELAY_MS * 4 + 5000 });
+          mark('contínuo/banner', await page.evaluate(inspectBanner));
+          await c3.scrollIntoViewIfNeeded();
+          if ((theme === 'medieval' && mode === 'light') || (theme === 'cyberpunk' && mode === 'dark')) await shot('continuo');
+          await c3.locator('.audio-player').waitFor({ timeout: 5000 });
+          await seekNearEnd(c3);
+          await page.waitForFunction(() => /2 de 2/.test(document.querySelector('[data-continuous-bar]')?.textContent ?? ''), null, { timeout: SYNTH_DELAY_MS * 4 + 8000 });
+          await c4.locator('.audio-player').waitFor({ timeout: 5000 });
+          if ((await c3.locator('.audio-player').count()) !== 0) problems.push('[contínuo] o player da página anterior deveria ter fechado');
+          await seekNearEnd(c4);
+          await page.waitForSelector('[data-continuous-bar].hidden', { state: 'attached', timeout: 8000 });
+          if (!(await page.getByText('Reprodução contínua concluída.').count())) problems.push('[contínuo] faltou o aviso de conclusão');
+        } catch (e) {
+          if (BROWSER === 'firefox') console.log(`    (aviso) ${tag}: Firefox headless não encadeou o MP3 (${(e as Error).message.split('\n')[0]})`);
+          else problems.push(`[contínuo] fluxo não concluiu: ${(e as Error).message.split('\n')[0]}`);
+        }
+        await page.getByRole('button', { name: 'Interromper a reprodução contínua' }).click({ timeout: 500 }).catch(() => {});
+      }
 
       // 2) Leitor de volume: Ouvir em página já coletada em crônica
       await open(page, `#/s/${sessionId}/v/1`, '.page-card[data-page-id]');
