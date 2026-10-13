@@ -78,8 +78,15 @@ afterEach(async () => {
 
 const card = (n: number) => document.querySelector<HTMLElement>(`section.page-card[data-page-index="${n}"]`)!;
 
+const bar = () => document.querySelector<HTMLElement>('[data-player-bar]')!;
+const barVisible = () => !!bar() && !bar().classList.contains('hidden');
+const optionsMenu = (n: number) => card(n).querySelector<HTMLElement>('.page-action-menu')!;
+const menuItem = (n: number, label: string) =>
+  Array.from(card(n).querySelectorAll<HTMLElement>('[role=menu] [role=menuitem]')).find((i) => i.textContent === label)!;
+const menuHidden = (n: number) => optionsMenu(n).parentElement!.classList.contains('hidden');
+
 describe('UI — narração das páginas', () => {
-  it('gera o áudio (progresso) e abre o player; ouvir de novo não chama a API', async () => {
+  it('gera o áudio (progresso); o player é da barra e ouvir de novo não chama a API', async () => {
     await boot('#/s/<id>');
     await waitFor(() => card(1), 'cartão da página 1');
 
@@ -87,34 +94,43 @@ describe('UI — narração das páginas', () => {
     expect(listen.getAttribute('data-tip')).toContain('Gerar a narração');
     expect(listen.querySelectorAll('svg')).toHaveLength(1);
     expect(card(1).querySelector('.audio-panel')!.classList.contains('hidden')).toBe(true);
+    expect(menuHidden(1)).toBe(true); // sem áudio pronto não há opções
+    expect(barVisible()).toBe(false);
 
     click(listen);
-    await waitFor(() => card(1).querySelector('[data-audio-panel] .audio-status') || card(1).querySelector('.audio-player'), 'progresso ou player');
-    const player = await waitFor(() => card(1).querySelector<HTMLElement>('.audio-player'), 'player');
+    await waitFor(() => !menuHidden(1), 'áudio pronto (menu de opções disponível)');
     expect(gateway.synthRequests).toHaveLength(1);
     expect(gateway.synthRequests[0]).toMatchObject({ voice: 'Gacrux', text: 'A neblina subia do porto.' });
-    expect(listen.getAttribute('aria-expanded')).toBe('true');
     expect(listen.disabled).toBe(false);
+    // O cartão guarda só o status de geração: nenhum player nele; a barra continua escondida.
+    expect(card(1).querySelector('.audio-player, .audio-seek')).toBeNull();
+    expect(barVisible()).toBe(false);
 
-    // Controles do player: um ícone por ação, rótulos em pt-BR.
-    for (const label of ['Tocar', 'Gerar o áudio de novo', 'Apagar o áudio', 'Baixar o áudio (.mp3)']) {
-      const el = byLabel(label, player)!;
-      expect(el, label).not.toBeNull();
-      expect(el.querySelectorAll('svg')).toHaveLength(1);
-      expect(el.getAttribute('data-tip')).toBeTruthy();
+    // Menu do rodapé: um ícone na barra de ações, itens em pt-BR.
+    expect(optionsMenu(1).getAttribute('aria-label')).toBe('Opções do áudio');
+    expect(optionsMenu(1).querySelectorAll('svg')).toHaveLength(1);
+    for (const label of ['Baixar o áudio (.mp3)', 'Gerar o áudio de novo', 'Apagar o áudio']) {
+      expect(menuItem(1, label), label).toBeDefined();
     }
-    expect(byLabel('Baixar o áudio (.mp3)', player)!.getAttribute('href')).toBe(`/api/narrative/pages/${repos.pages.listAll(sessionId)[0]!.id}/audio?download=true`);
-    expect(player.querySelector('input[type=range]')).not.toBeNull();
-    expect(player.querySelector('.audio-time')!.textContent).toMatch(/^0:00 \/ 0:0\d$/);
+    expect(menuItem(1, 'Baixar o áudio (.mp3)').getAttribute('href')).toBe(`/api/narrative/pages/${repos.pages.listAll(sessionId)[0]!.id}/audio?download=true`);
 
-    // Tocar usa o MP3 guardado (e só ele).
-    click(byLabel('Tocar', player)!);
+    // Ouvir toca o MP3 guardado (e só ele) e a barra mostra o player.
+    click(listen);
     await waitFor(() => plays.length === 1, 'play');
     expect(plays[0]).toMatch(new RegExp(`/api/narrative/pages/${repos.pages.listAll(sessionId)[0]!.id}/audio\\?v=`));
     expect(gateway.synthRequests).toHaveLength(1);
+    await waitFor(() => barVisible(), 'barra do player');
+    expect(bar().getAttribute('data-mode')).toBe('single');
+    expect(bar().textContent).toContain('Tocando a Página 1 de «Crônica do Teste»');
+    for (const label of ['Tocar', 'Velocidade de reprodução: 1×. Clique para mudar.', 'Fechar o player']) {
+      const el = byLabel(label, bar())!;
+      expect(el, label).not.toBeNull();
+    }
+    expect(bar().querySelector('input[type=range]')).not.toBeNull();
+    expect(bar().querySelector('.audio-time')!.textContent).toMatch(/^0:00 \/ 0:0\d$/);
   });
 
-  it('o botão do rodapé abre e fecha o player (e toca/pausa)', async () => {
+  it('o botão do rodapé toca/pausa e a barra tem tocar, velocidade e fechar', async () => {
     await boot('#/s/<id>');
     await waitFor(() => card(1), 'cartão');
     const page = repos.pages.listAll(sessionId)[0]!;
@@ -127,15 +143,21 @@ describe('UI — narração das páginas', () => {
     await waitFor(() => card(1)?.querySelector('[aria-label="Ouvir esta página"]'), 'sessão reaberta');
 
     const listen = byLabel('Ouvir esta página', card(1))!;
-    expect(listen.getAttribute('aria-expanded')).toBe('false');
-    expect(card(1).querySelector('.audio-player')).toBeNull();
+    expect(listen.getAttribute('aria-pressed')).toBe('false');
+    expect(barVisible()).toBe(false);
     click(listen);
-    await waitFor(() => card(1).querySelector('.audio-player'), 'player aberto');
-    await waitFor(() => plays.length === 1, 'tocou ao abrir');
-    expect(listen.getAttribute('aria-expanded')).toBe('true');
-    click(listen);
-    await waitFor(() => !card(1).querySelector('.audio-player'), 'player fechado');
-    expect(listen.getAttribute('aria-expanded')).toBe('false');
+    await waitFor(() => plays.length === 1, 'tocou');
+    await waitFor(() => barVisible(), 'barra visível');
+
+    // Velocidade: cicla e é lembrada.
+    click(byLabel('Velocidade de reprodução: 1×. Clique para mudar.', bar())!);
+    expect(byLabel('Velocidade de reprodução: 1.25×. Clique para mudar.', bar())).not.toBeNull();
+    expect(localStorage.getItem('chronicler.audioRate')).toBe('1.25');
+
+    // Pausar pelo botão da barra e fechar: a barra some e a página volta ao estado de repouso.
+    click(byLabel('Fechar o player', bar())!);
+    await waitFor(() => !barVisible(), 'barra fechada');
+    expect(listen.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('gerar de novo pede confirmação, e apagar remove o áudio (o texto fica)', async () => {
@@ -143,22 +165,63 @@ describe('UI — narração das páginas', () => {
     await waitFor(() => card(1), 'cartão');
     const page = repos.pages.listAll(sessionId)[0]!;
     click(byLabel('Ouvir esta página', card(1))!);
-    await waitFor(() => card(1).querySelector('.audio-player'), 'player');
+    await waitFor(() => !menuHidden(1), 'áudio pronto');
 
-    click(byLabel('Gerar o áudio de novo', card(1))!);
+    click(optionsMenu(1)); // abre o menu (aria-expanded) e escolhe o item
+    expect(optionsMenu(1).getAttribute('aria-expanded')).toBe('true');
+    click(menuItem(1, 'Gerar o áudio de novo'));
+    expect(optionsMenu(1).getAttribute('aria-expanded')).toBe('false');
     const confirm = await waitFor(() => modalButton('Gerar de novo'), 'confirmação');
     expect(text()).toContain('substituirá a atual');
     click(confirm);
     await waitFor(() => gateway.synthRequests.length === 2, 'segunda síntese');
-    await waitFor(() => card(1).querySelector('.audio-player'), 'player de volta');
-    expect(repos.audio.usage().count).toBe(1);
+    await waitFor(() => !menuHidden(1) && repos.audio.usage().count === 1, 'de volta ao estado pronto');
 
-    click(byLabel('Apagar o áudio', card(1))!);
+    click(menuItem(1, 'Apagar o áudio'));
     click(await waitFor(() => modalButton('Apagar'), 'confirmar apagar'));
     await waitFor(() => !repos.audio.meta(page.id), 'áudio apagado no banco');
-    await waitFor(() => !card(1).querySelector('.audio-player'), 'player sumiu');
+    await waitFor(() => menuHidden(1), 'menu some sem áudio');
     expect(repos.pages.get(page.id)!.generated_text).toBe('A neblina subia do porto.');
     expect(byLabel('Ouvir esta página', card(1))!.getAttribute('data-tip')).toContain('Gerar a narração');
+  });
+
+  it('o menu de opções abre/fecha (botão, Esc, clique fora) e navega com as setas', async () => {
+    await boot('#/s/<id>');
+    await waitFor(() => card(1), 'cartão');
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => !menuHidden(1), 'áudio pronto');
+    const menu = card(1).querySelector<HTMLElement>('[role=menu]')!;
+    const key = (k: string) => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+
+    expect(menu.classList.contains('hidden')).toBe(true);
+    expect(menu.classList.contains('menu-up')).toBe(true); // abre para cima: o rodapé fica no fim do cartão
+    click(optionsMenu(1));
+    expect(menu.classList.contains('hidden')).toBe(false);
+    expect(document.activeElement).toBe(menuItem(1, 'Baixar o áudio (.mp3)'));
+    key('ArrowDown');
+    expect(document.activeElement).toBe(menuItem(1, 'Gerar o áudio de novo'));
+    key('ArrowUp');
+    key('ArrowUp'); // dá a volta até o último item
+    expect(document.activeElement).toBe(menuItem(1, 'Apagar o áudio'));
+    key('Escape');
+    expect(menu.classList.contains('hidden')).toBe(true);
+    expect(optionsMenu(1).getAttribute('aria-expanded')).toBe('false');
+
+    click(optionsMenu(1));
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(menu.classList.contains('hidden')).toBe(true);
+  });
+
+  it('apagar o áudio da página que está tocando esconde a barra', async () => {
+    await boot('#/s/<id>');
+    await waitFor(() => card(1), 'cartão');
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => !menuHidden(1), 'áudio pronto');
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => barVisible(), 'barra');
+    click(menuItem(1, 'Apagar o áudio'));
+    click(await waitFor(() => modalButton('Apagar'), 'confirmar apagar'));
+    await waitFor(() => !barVisible(), 'barra escondida');
   });
 
   it('mostra o erro da geração em pt-BR com opção de tentar de novo', async () => {
@@ -171,6 +234,7 @@ describe('UI — narração das páginas', () => {
     const err = await waitFor(() => card(1).querySelector('.audio-error'), 'erro');
     expect(err.textContent).toContain('Não foi possível gerar a narração');
     expect(byLabel('Tentar gerar o áudio de novo', card(1))).not.toBeNull();
+    expect(menuHidden(1)).toBe(true);
     expect(repos.audio.usage().count).toBe(0);
   });
 
@@ -178,7 +242,9 @@ describe('UI — narração das páginas', () => {
     await boot('#/s/<id>');
     await waitFor(() => card(1), 'cartão');
     click(byLabel('Ouvir esta página', card(1))!);
-    await waitFor(() => card(1).querySelector('.audio-player'), 'player');
+    await waitFor(() => !menuHidden(1), 'áudio pronto');
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => barVisible(), 'barra');
     click(byLabel('Editar texto da página', card(1))!);
     const ta = await waitFor(() => document.querySelector<HTMLTextAreaElement>('section[data-page-id] textarea'), 'editor');
     ta.value = 'Texto novo.';
@@ -186,11 +252,12 @@ describe('UI — narração das páginas', () => {
     click(await waitFor(() => Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Salvar edição'), 'salvar'));
     await waitFor(() => text().includes('Texto novo.'), 'texto salvo');
     expect(repos.audio.usage().count).toBe(0);
-    expect(card(1).querySelector('.audio-player')).toBeNull();
+    await waitFor(() => !barVisible(), 'a página perdeu o áudio: o player para');
+    expect(menuHidden(1)).toBe(true);
     expect(byLabel('Ouvir esta página', card(1))!.getAttribute('data-tip')).toContain('Gerar a narração');
   });
 
-  it('o leitor de volume também narra as páginas consumidas', async () => {
+  it('o leitor de volume também narra as páginas consumidas, com a barra fixa no rodapé', async () => {
     await boot('#/');
     // volume criado direto no banco (as duas páginas viram "consumidas")
     repos.archives.create(sessionId, { summary_text: 'Sinopse.', covered_page_start_index: 1, covered_page_end_index: 2 });
@@ -199,10 +266,19 @@ describe('UI — narração das páginas', () => {
     await new Promise((r) => setTimeout(r, 40));
     location.hash = `#/s/${sessionId}/v/1`;
     await waitFor(() => card(1), 'leitor de volume');
+    expect(barVisible()).toBe(false);
     click(byLabel('Ouvir esta página', card(1))!);
-    await waitFor(() => card(1).querySelector('.audio-player'), 'player no volume');
+    await waitFor(() => !menuHidden(1), 'áudio pronto no volume');
     expect(gateway.synthRequests[0]!.text).toBe('A neblina subia do porto.');
     expect(card(1).querySelector('[aria-label="Editar texto da página"]')).toBeNull();
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => barVisible(), 'barra no volume');
+    expect(bar().parentElement!.classList.contains('app-screen')).toBe(true);
+    expect(bar().textContent).toContain('Tocando a Página 1 de «Crônica do Teste»');
+    // Sair do volume para o áudio e solta a barra.
+    location.hash = `#/s/${sessionId}`;
+    await waitFor(() => document.querySelector('#tome-scroll'), 'de volta ao Tome');
+    expect(barVisible()).toBe(false);
   });
 });
 
