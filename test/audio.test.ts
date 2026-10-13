@@ -503,6 +503,115 @@ describe('geração automática', () => {
   });
 });
 
+describe('reprodução contínua: estado e geração em lote', () => {
+  const batch = (from: string, sid = sessionId) =>
+    t.app.inject({ method: 'POST', url: `/api/sessions/${sid}/audio/batch`, payload: { from_page_id: from } });
+  const sessionAudioStatus = async (sid = sessionId) =>
+    (await t.app.inject({ method: 'GET', url: `/api/sessions/${sid}/audio` })).json().pages as { page_id: string; order_index: number; kind: string; audio: any }[];
+  const settleAll = async (ids: string[]) => {
+    for (const id of ids) await settle(id);
+  };
+
+  it('GET /sessions/:id/audio lista as páginas ativas em ordem, com o estado do áudio de cada uma', async () => {
+    const [p1, p2, p3] = [addPage('Um.'), addPage('Dois.'), addPage('Três.')];
+    await generate(p2.id);
+    await settle(p2.id);
+    const pages = await sessionAudioStatus();
+    expect(pages.map((p) => [p.page_id, p.order_index, p.kind])).toEqual([
+      [p1.id, 1, 'narrative'],
+      [p2.id, 2, 'narrative'],
+      [p3.id, 3, 'narrative'],
+    ]);
+    expect(pages.map((p) => p.audio?.status ?? null)).toEqual([null, 'ready', null]);
+    expect(JSON.stringify(pages)).not.toContain('"audio":{"type"'); // sem bytes
+    expect((await t.app.inject({ method: 'GET', url: '/api/sessions/nao-existe/audio' })).statusCode).toBe(404);
+  });
+
+  it('batch agenda, EM ORDEM, só as páginas da escolhida em diante que não têm áudio nem geração', async () => {
+    const [p1, p2, p3, p4] = [addPage('Um.'), addPage('Dois.'), addPage('Três.'), addPage('Quatro.')];
+    await generate(p2.id);
+    await settle(p2.id);
+    const before = t.gateway.synthRequests.length;
+
+    const res = await batch(p2.id);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.started).toEqual([p3.id, p4.id]); // a 1 é anterior; a 2 já está pronta
+    expect(body.pages.find((p: any) => p.page_id === p1.id).audio).toBeNull();
+    expect(body.pages.find((p: any) => p.page_id === p3.id).audio.status).toBe('generating');
+
+    await settleAll([p3.id, p4.id]);
+    const texts = t.gateway.synthRequests.slice(before).map((r) => r.text);
+    expect(texts[0]).toContain('Três');
+    expect(texts[1]).toContain('Quatro');
+    expect((await sessionAudioStatus()).map((p) => p.audio?.status ?? null)).toEqual([null, 'ready', 'ready', 'ready']);
+  });
+
+  it('é idempotente (não duplica jobs) e retenta as páginas que falharam', async () => {
+    let fail = true;
+    await setup(
+      mockGateway({
+        synthesize: async (req) => {
+          await new Promise((r) => setTimeout(r, 15));
+          if (fail && req.text.includes('Quebra')) throw new SynthesisError('cota esgotada');
+          return fakeWav(req.text);
+        },
+      }),
+    );
+    const [a, b] = [addPage('Boa.'), addPage('Quebra.')];
+    const first = (await batch(a.id)).json();
+    expect(first.started).toEqual([a.id, b.id]);
+    expect((await batch(a.id)).json().started).toEqual([]); // ambas ainda gerando
+    await settle(a.id);
+    expect((await settle(b.id)).status).toBe('error');
+
+    fail = false;
+    expect((await batch(a.id)).json().started).toEqual([b.id]); // a pronta fica; a com erro tenta de novo
+    expect((await settle(b.id)).status).toBe('ready');
+    expect(t.gateway.synthRequests.filter((r) => r.text.includes('Boa')).length).toBe(1);
+  });
+
+  it('sem chave → 409 antes de agendar; sessão ou página fora do Tome → 404', async () => {
+    const bare = await makeApp();
+    const sid = bare.repos.sessions.create({ title: 'x', system_rules: 'r', world_context: '' }).id;
+    const page = bare.repos.pages.append(sid, { player_instruction: 'a', generated_text: 'Texto.' });
+    const res = await bare.app.inject({ method: 'POST', url: `/api/sessions/${sid}/audio/batch`, payload: { from_page_id: page.id } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('missing_api_key');
+
+    const mine = addPage('Minha.');
+    expect((await batch(mine.id, 'nao-existe')).statusCode).toBe(404);
+    const other = t.repos.sessions.create({ title: 'Outra', system_rules: 'r', world_context: '' }).id;
+    expect((await batch(mine.id, other)).statusCode).toBe(404); // a página não é desta sessão
+    expect((await batch('nao-existe')).statusCode).toBe(404);
+    expect((await t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/audio/batch`, payload: {} })).statusCode).toBe(400);
+  });
+
+  it('cancel interrompe só as gerações informadas e desta sessão', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    await setup(mockGateway({ synthesize: async (req) => (await gate, fakeWav(req.text)) }), { audio: { maxConcurrent: 1 } });
+    const [a, b, c] = [addPage('Um.'), addPage('Dois.'), addPage('Três.')];
+    await batch(a.id);
+    const foreignSession = t.repos.sessions.create({ title: 'Outra', system_rules: 'r', world_context: '' }).id;
+    const foreign = t.repos.pages.append(foreignSession, { player_instruction: 'x', generated_text: 'Alheia.' });
+    await generate(foreign.id);
+
+    const res = await t.app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/audio/cancel`,
+      payload: { page_ids: [b.id, c.id, foreign.id, 'nao-existe'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().cancelled).toEqual([b.id, c.id]);
+    expect((await status(a.id)).status).toBe('generating'); // não pedida: continua
+    expect(await status(b.id)).toBeNull();
+    expect((await status(foreign.id)).status).toBe('generating'); // de outra sessão: intocada
+    release();
+    expect((await settle(a.id)).status).toBe('ready');
+  });
+});
+
 describe('configurações de voz', () => {
   it('GET traz padrões, modelos, vozes e uso; PUT valida e persiste', async () => {
     const get = (await t.app.inject({ method: 'GET', url: '/api/settings/tts' })).json();
