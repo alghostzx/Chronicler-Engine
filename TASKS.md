@@ -292,3 +292,22 @@ Decisões do autor aprovadas (transcrição crua em `player_instruction`; sem "e
 - [x] README, design document (§3.3, §8.3, checklist nº 5, §11.27), typecheck, suíte completa, `npm run build`
 - [ ] Merge de `feature/dialogo-narrado` em `main` (push e remoção da branch só com confirmação do autor)
 
+## Fase 19 — Reprodução contínua (branch `feature/reproducao-continua`)
+**Rascunho — aguardando aprovação do autor.** Botão *Reproduzir a partir daqui*: lê as páginas da clicada até o fim; se faltar áudio, pergunta se gera (geração em segundo plano, em ordem, enquanto reproduz) ou se só reproduz até a primeira página sem áudio (sem pular); banner "Reproduzindo «crônica» em modo contínuo" com *Interromper*; o player é o da página que está tocando.
+
+### 19.1 Servidor (sem migração)
+- [ ] `GET /api/sessions/:id/audio` (estado do áudio de todas as páginas ativas)
+- [ ] `POST /api/sessions/:id/audio/batch` `{ from_page_id }`: agenda em ordem as páginas sem áudio válido nem job (retenta as com erro); `409` sem chave antes de agendar; idempotente
+- [ ] `POST /api/sessions/:id/audio/cancel` `{ page_ids }` (só páginas da sessão)
+
+### 19.2 Cliente
+- [ ] `client/continuousPlayback.ts`: controlador (faixa fixada ao iniciar, faltantes, encadeamento no `ended` do mesmo `<audio>`, esperar geração, parar na 1ª sem áudio / no erro, pausa, takeover, sair da sessão)
+- [ ] Botão no rodapé do cartão (ícone novo, aria-label, tooltip; desabilitado na última página) e modal de faltantes (aviso reforçado acima de 10)
+- [ ] Banner "Reproduzindo «crônica» em modo contínuo" com estado e *Interromper* (pergunta cancelar/deixar gerando se houver geração pendente)
+- [ ] Painel da página atual abre/fecha e o Tome rola até ela; `nexttrack`/`previoustrack` da Media Session
+
+### 19.3 Testes e entrega
+- [ ] Vitest: rotas, controlador (player falso), UI jsdom
+- [ ] `check:audio`/`check:mobile`: fluxo contínuo em Chromium real (encadeamento, banner em 390 px, rodapé em uma linha)
+- [ ] README (inclusive a nota "não existe reprodução contínua"), design document §11.28, typecheck, suíte completa, `npm run build`; merge em `main`
+
