@@ -69,7 +69,7 @@ O jsdom não calcula layout, então há scripts que abrem um **Chromium headless
 | --- | --- | --- |
 | `check:paginas` | Cartão de página nos 8 temas (claro/escuro × 1280 px e 390 px): numeração, ações visíveis, clicáveis e distintas, contraste calculado no DOM, sem rolagem horizontal, sem sobreposição, tooltip, edição no cartão, leitor de volume, página de diálogo (narrada × crua) | `docs/screenshots/paginas/` |
 | `check:mobile` | Layout do celular (390 px; alturas de tela cheia, com barra do navegador e com teclado) na sessão e no leitor, nos 8 temas: cabeçalho no topo, doca embaixo, só a área das páginas rola, campo visível, `theme-color`, manifesto instalável | `docs/screenshots/mobile/` |
-| `check:audio` | Narração por voz nos 8 temas × desktop/celular: ícone *Ouvir*, progresso, player (reprodução real do MP3), tooltips, leitor de volume, aba *Voz*, cartão em *Opções* e o fluxo de reprodução contínua | `docs/screenshots/audio/` |
+| `check:audio` | Narração por voz nos 8 temas × desktop/celular: ícone *Ouvir*, progresso, menu *Opções do áudio*, barra do player (reprodução real do MP3, uma página e modo contínuo com anterior/próxima), tooltips, leitor de volume, aba *Voz*, cartão em *Opções*. `ONLY=medieval-light-desktop` roda só as combinações listadas | `docs/screenshots/audio/` |
 | `check:inicio` | Tela inicial e *Opções* (vazio × com chave e crônicas; 320–1920 px): logo, contraste, alvos de 44 px, teclado, quadros (Esc, *Voltar*, *Fechar*, foco) e a volta ao tema da crônica | `docs/screenshots/inicio/` (não versionadas) |
 
 > [!NOTE]

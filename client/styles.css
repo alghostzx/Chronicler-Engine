@@ -305,6 +305,7 @@
   }
   /* Variante que abre para cima (menus de rodapé de cartão). */
   .menu-up {
+    width: max-content;
     top: auto;
     bottom: calc(100% + 6px);
   }
@@ -487,10 +488,17 @@
     @apply min-w-0 flex-1;
   }
   .player-bar-title {
-    @apply truncate font-display text-sm text-strong;
+    @apply font-display text-sm text-ink;
   }
-  .player-bar-detail {
-    @apply text-xs text-muted;
+  /* Fundo da barra é o do painel (mais escuro que a folha): o texto usa a cor principal para manter o contraste em todos os temas. */
+  .player-bar-detail,
+  .player-bar .audio-time {
+    @apply text-xs text-ink;
+  }
+  /* Na barra a posição cede espaço, para tocar/pausar, tempo e velocidade caberem numa linha só no celular. */
+  .player-bar .audio-seek {
+    flex-basis: 5rem;
+    min-width: 5rem;
   }
   .player-bar-stop {
     @apply shrink-0;

@@ -101,6 +101,7 @@ export function createPlayerBar(opts: PlayerBarOptions = {}): PlayerBar {
       lastMode = mode;
       el.setAttribute('data-mode', mode);
       headIcon.replaceChildren(icon(cs ? 'playFrom' : 'volume', 20));
+      headIcon.title = cs ? 'Reprodução contínua' : 'Uma página';
       stopContinuous.classList.toggle('hidden', !cs);
       closeSingle.classList.toggle('hidden', !!cs);
       prev.classList.toggle('hidden', !cs);
@@ -108,7 +109,11 @@ export function createPlayerBar(opts: PlayerBarOptions = {}): PlayerBar {
     }
 
     if (cs) {
-      heading.textContent = `Reproduzindo «${chronicle}» em modo contínuo`;
+      // O ícone de lista com seta já diz "reprodução contínua"; o texto fica só com o nome da crônica
+      // (espaço no celular). Leitores de tela ouvem o texto completo (aria-label da região e dica).
+      heading.textContent = `«${chronicle}»`;
+      heading.title = 'Reprodução contínua';
+      el.setAttribute('aria-label', `Player de narração, reproduzindo «${chronicle}» em modo contínuo`);
       detail.textContent = `Página ${cs.currentNumber} · ${cs.index + 1} de ${cs.pageIds.length} · ${statusText(cs)}`;
       next.disabled = cs.index + 1 >= cs.pageIds.length;
       // Anúncio para leitores de tela só quando a página muda (não a cada atualização de status).
@@ -118,6 +123,8 @@ export function createPlayerBar(opts: PlayerBarOptions = {}): PlayerBar {
       }
     } else if (track) {
       heading.textContent = `Tocando a ${track.title} de «${chronicle}»`;
+      heading.removeAttribute('title');
+      el.setAttribute('aria-label', 'Player de narração');
       detail.textContent = s.playing ? 'Tocando' : 'Pausado';
       lastPage = -1;
     }

@@ -4,11 +4,22 @@ Cada página pode ser **lida em voz alta** por um narrador de voz grave e pausad
 
 ## Como ouvir
 
-Clique no ícone de alto-falante (**Ouvir esta página**) no rodapé de qualquer página, do Tome ou do leitor de volume (páginas já coletadas em crônicas também). O áudio é gerado com progresso (*gerando n/m*) e botão de cancelar; depois aparece o **player**: tocar/pausar, barra de posição e tempo, velocidade 0,75×–1,5× (lembrada no navegador), **gerar de novo**, apagar e **baixar .mp3**. O áudio fica guardado.
+Clique no ícone de alto-falante (**Ouvir esta página**) no rodapé de qualquer página, do Tome ou do leitor de volume (páginas já coletadas em crônicas também). A página mostra só o **status da geração** (*gerando n/m*, botão de cancelar, ou o erro com *tentar de novo*). Quando o áudio está pronto, o mesmo ícone passa a tocar/pausar a página, e o **player** aparece na **barra fixa** da tela (veja a seção seguinte). O áudio fica guardado.
 
-- **Gerar de novo:** se a voz não ficou boa, *Gerar o áudio de novo* (com confirmação) substitui o anterior; o antigo só é descartado quando o novo fica pronto.
+Com áudio pronto, o rodapé da página ganha o menu **Opções do áudio** (três pontos): **baixar .mp3**, **gerar de novo** e **apagar** (os dois últimos com confirmação). Sem áudio pronto o menu não existe.
+
+- **Gerar de novo:** se a voz não ficou boa, *Gerar o áudio de novo* substitui o anterior; o antigo só é descartado quando o novo fica pronto.
 - **Cache:** o MP3 (48 kbps, mono; ≈ 6 KB por segundo, ~360 KB por minuto) fica no SQLite, então ouvir de novo não gasta nada. É **descartado automaticamente** quando a página é editada, re-gerada ou removida por ramificação, e o espaço volta ao arquivo do banco.
 - Páginas de **diálogo** também podem ser ouvidas. As falas soltas durante a conversa em andamento nunca são narradas.
+
+## A barra do player
+
+Sempre que há uma faixa carregada, uma **barra fixa** aparece entre o Tome e a Doca (no leitor de volume, no fim da tela). Ela é o único lugar com controles de mídia, então é fácil de achar mesmo com a página rolada para longe:
+
+- **Uma página tocando fora do modo contínuo:** *Tocando a Página N de «crônica»*, o estado (*Tocando*/*Pausado*) e um botão de **fechar** (para o áudio). Não há *Interromper*, que é do modo contínuo.
+- **Controles:** tocar/pausar, barra de posição com tempo e velocidade 0,75×–1,5× (lembrada no navegador). No modo contínuo, mais **página anterior** e **próxima**.
+- O ícone de alto-falante da página reflete o estado: marcado enquanto aquela página toca; clicar pausa ou retoma.
+- Apagar o áudio, editar a página ou sair da tela para o áudio e esconde a barra.
 
 ## Geração automática
 
@@ -34,9 +45,10 @@ Se nada falta, começa direto (esperando só o que ainda estiver sendo gerado).
 
 Enquanto roda:
 
-- Um **banner** acima da Doca mostra *Reproduzindo «crônica» em modo contínuo*, a página atual (*Página N · i de M*) e o estado: tocando, pausado, aguardando a narração da Página N, gerando K páginas em segundo plano ou "para na Página X, que não tem áudio".
-- O botão **Interromper** do banner só para a reprodução. **As gerações já iniciadas seguem em segundo plano** (não há pergunta de cancelar).
-- O player aberto é o **da própria página que está tocando**: a cada troca ele abre (o modo fecha o que ele mesmo abriu) e o Tome rola até o cartão.
+- A [barra do player](#a-barra-do-player) mostra o ícone de lista com seta (que indica o modo contínuo, no lugar das palavras "Reproduzindo" e "em modo contínuo", para poupar espaço no celular) e o nome da crônica; leitores de tela ouvem o texto completo. Embaixo, a página atual (*Página N · i de M*) e o estado: tocando, pausado, aguardando a narração da Página N, gerando K páginas em segundo plano ou "para na Página X, que não tem áudio".
+- Além dos controles de mídia, a barra tem **página anterior** e **próxima** (a próxima fica desabilitada na última página; *anterior* volta ao início da página se já passaram 3 s, como nas teclas de mídia).
+- O botão **Interromper** só para a reprodução e esconde a barra. **As gerações já iniciadas seguem em segundo plano** (não há pergunta de cancelar).
+- A cada troca de página o Tome **rola até o cartão** que está tocando. O player em si fica na barra, não nos cartões.
 - As **teclas de mídia e a tela de bloqueio** ganham *próxima/anterior* (Media Session) enquanto o modo roda; *anterior* volta ao início da página se já passaram 3 s.
 - Tocar **outra página** pelo botão *Ouvir* dela encerra o modo; clicar *Reproduzir a partir daqui* durante o modo reinicia a partir da nova página; sair da tela encerra em silêncio.
 - Se a geração de uma página falhar, a reprodução segue até chegar nela, para e avisa o erro.
@@ -67,7 +79,7 @@ A tabela `page_audio` ([modelo de dados](modelo-de-dados.md)) guarda o MP3; os b
 
 ### Cliente
 
-Há **um único `<audio>`** no app ([`client/audioPlayer.ts`](../client/audioPlayer.ts)): tocar uma página pausa a outra; integra com a Media Session; a reprodução para ao sair da tela ou quando a página perde o áudio. Os controles de cada página ([`client/audioUi.ts`](../client/audioUi.ts)) só refletem esse estado. A reprodução contínua é uma máquina de estados sem DOM ([`client/continuousPlayback.ts`](../client/continuousPlayback.ts)) sobre o mesmo `<audio>`: encadeia no evento `ended` carregando a próxima faixa direto no evento; se a próxima ainda está em geração, **espera** (consulta `GET /api/sessions/:id/audio` a cada 1,5 s, só enquanto necessário) e toca quando ficar pronta. Termina por: conclusão, interrupção, *takeover* (o usuário tocou outra página), parada externa (página editada ou apagada), geração com erro, áudio ausente ao chegar, falha de reprodução ou saída da tela. O banner e o modal vivem em [`client/continuousUi.ts`](../client/continuousUi.ts).
+Há **um único `<audio>`** no app ([`client/audioPlayer.ts`](../client/audioPlayer.ts)): tocar uma página pausa a outra; integra com a Media Session; a reprodução para ao sair da tela ou quando a página perde o áudio. O botão e o menu de cada página ([`client/audioUi.ts`](../client/audioUi.ts)) e a barra do player ([`client/playerBar.ts`](../client/playerBar.ts)) só refletem esse estado (`audioPlayer.currentTrack`, `subscribe`); a barra não guarda áudio nenhum. A reprodução contínua é uma máquina de estados sem DOM ([`client/continuousPlayback.ts`](../client/continuousPlayback.ts)) sobre o mesmo `<audio>`: encadeia no evento `ended` carregando a próxima faixa direto no evento; se a próxima ainda está em geração, **espera** (consulta `GET /api/sessions/:id/audio` a cada 1,5 s, só enquanto necessário) e toca quando ficar pronta. Termina por: conclusão, interrupção, *takeover* (o usuário tocou outra página), parada externa (página editada ou apagada), geração com erro, áudio ausente ao chegar, falha de reprodução ou saída da tela. A barra (`createPlayerBar`) escuta o reprodutor e, na sessão, a máquina da reprodução contínua; o texto de estado e o modal de geração vivem em [`client/continuousUi.ts`](../client/continuousUi.ts).
 
 ## Limites conhecidos
 

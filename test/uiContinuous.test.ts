@@ -119,7 +119,8 @@ describe('UI — reprodução contínua', () => {
     expect(document.querySelector('[role=dialog]')).toBeNull();
     expect(barVisible()).toBe(true);
     expect(bar().getAttribute('role')).toBe('region');
-    expect(bar().textContent).toContain('Reproduzindo «Crônica do Teste» em modo contínuo');
+    expect(bar().querySelector('.player-bar-title')!.textContent).toBe('«Crônica do Teste»'); // o ícone da barra já diz "contínuo"
+    expect(bar().getAttribute('aria-label')).toContain('reproduzindo «Crônica do Teste» em modo contínuo'); // leitores de tela ouvem tudo
     expect(bar().textContent).toContain('Página 1 · 1 de 3');
     // o player mora na barra (não nas páginas): controles de mídia e anterior/próxima
     expect(bar().getAttribute('data-mode')).toBe('continuous');

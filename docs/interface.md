@@ -42,7 +42,8 @@ O rodapé tem **uma ação por ícone SVG, sempre visíveis** (nunca dependem de
 
 | Ação (aria-label) | Ícone | Efeito |
 | --- | --- | --- |
-| *Ouvir esta página* | alto-falante | Gera/abre o player da [narração](narracao-por-voz.md) |
+| *Ouvir esta página* | alto-falante | Gera a [narração](narracao-por-voz.md) (mostra só o status de geração na página); com áudio pronto, toca/pausa, e o player aparece na [barra fixa](#barra-do-player) |
+| *Opções do áudio* | três pontos | Só com áudio pronto: baixar .mp3, gerar de novo, apagar |
 | *Reproduzir a partir daqui* | lista com seta de tocar | [Reprodução contínua](narracao-por-voz.md#reprodução-contínua); desabilitado na última página |
 | *Editar texto da página* | lápis | Edita dentro do cartão; preserva as seguintes |
 | *Editar prompt e re-gerar* | balão com linhas | Modal com o prompt de origem; avisa quantas páginas serão descartadas e envia `confirm_truncate` |
@@ -50,9 +51,20 @@ O rodapé tem **uma ação por ícone SVG, sempre visíveis** (nunca dependem de
 | *Narrar diálogo* | pena | Só em páginas de diálogo cruas ([Narrar](modo-dialogo.md#narrar-diálogo-reprocessar)) |
 | *Ramificar a partir desta página* | bifurcação | Descarta as posteriores, com confirmação; desabilitado na última página |
 
-Ouvir e Reproduzir ficam à esquerda; as demais, à direita. O leitor de volume usa o mesmo componente em modo `readonly`: o rodapé tem só *Ouvir*.
+Ouvir, Opções do áudio e Reproduzir ficam à esquerda (num grupo `.page-card-actions-start`); as demais, à direita. O menu *Opções do áudio* é o `createActionMenu` de [`client/controls.ts`](../client/controls.ts) (`role=menu`, fecha com Esc/clique fora, setas navegam, abre para cima). O leitor de volume usa o mesmo componente em modo `readonly`: o rodapé tem só *Ouvir* e, com áudio pronto, *Opções do áudio*.
 
 Estados do cartão: edição no próprio cartão (`.is-editing`), página fantasma, páginas esmaecidas (`.is-dimmed`) quando uma re-geração descartará as posteriores, selo "Diálogo com {NPC}" e selo "Será substituída ao encerrar o novo diálogo". Os tooltips do rodapé ancoram na borda e têm largura máxima de 60 vw (tooltips invisíveis também contam para o `scrollWidth`; sem isso o celular ganhava rolagem horizontal).
+
+### Barra do player
+
+[`client/playerBar.ts`](../client/playerBar.ts): barra fixa (`.player-bar`, `data-player-bar`, `role=region`) entre o Tome e a Doca, **visível sempre que há uma faixa carregada** ou o modo contínuo está rodando. É onde ficam tocar/pausar, posição, tempo e velocidade; a página só mostra o status da geração. Duas formas, marcadas em `data-mode`:
+
+| Modo | Título | Botões |
+| --- | --- | --- |
+| `single` (uma página, fora do modo contínuo) | *Tocando a Página N de «crônica»* · Tocando/Pausado | fechar (para o áudio) |
+| `continuous` | ícone de lista com seta + *«crônica»* (sem as palavras "Reproduzindo"/"em modo contínuo": o ícone e o `aria-label` da região dizem isso) · *Página N · i de M · estado* | página anterior, próxima, **Interromper** |
+
+No leitor de volume a mesma barra fica fixa no fim da tela (só `single`). Detalhes de comportamento em [Narração por voz](narracao-por-voz.md#a-barra-do-player).
 
 ### Leitor de volume
 
