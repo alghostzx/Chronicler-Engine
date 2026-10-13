@@ -13,9 +13,10 @@ import {
 import { downloadStoryMarkdown, type ExportScope } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
 import { audioPlayer } from '../audioPlayer';
-import { isPanelOpen, setPanelOpen, setQuietReadyToasts } from '../audioUi';
+import { setQuietReadyToasts } from '../audioUi';
 import { ContinuousPlayback, type EndInfo, type StatusPage } from '../continuousPlayback';
-import { askGenerate, createContinuousBar } from '../continuousUi';
+import { askGenerate } from '../continuousUi';
+import { createPlayerBar } from '../playerBar';
 import { icon } from '../icons';
 import { applyTheme } from '../theme';
 import { createModeControl, createThemeControl, fullscreenButton, iconButton } from '../controls';
@@ -89,9 +90,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   const tomePage = h('article', { class: 'mx-auto max-w-3xl space-y-6 px-3 py-6 font-reading text-lg text-ink sm:px-5 sm:py-8 prose-tome-host' });
   tomeScroll.appendChild(tomePage);
   const dock = h('footer', { class: 'shrink-0 border-t border-line bg-panel px-4 py-3' });
-  // Reprodução contínua (botão "Reproduzir a partir daqui"): banner entre o Tome e a Doca.
-  const modeOpened = new Set<string>(); // players de página abertos pelo modo (ele mesmo os fecha ao avançar)
-  const bar = createContinuousBar(() => continuous.stop());
+  // Reprodução contínua (botão "Reproduzir a partir daqui"). O player (de uma página ou do modo
+  // contínuo) fica numa barra fixa entre o Tome e a Doca.
   const continuous = new ContinuousPlayback(audioPlayer, {
     fetchStatus: async () => (await api<{ pages: StatusPage[] }>('GET', `/api/sessions/${sessionId}/audio`)).pages,
     track: (p) => ({
@@ -101,25 +101,28 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       artist: session().title,
       durationMs: p.audio?.duration_ms,
     }),
-    onPageChange: (id, previousId) => {
+    onPageChange: (id) => {
       if (disposed) return;
-      if (previousId && modeOpened.delete(previousId)) setPanelOpen(previousId, false);
-      if (!isPanelOpen(id)) {
-        setPanelOpen(id, true);
-        modeOpened.add(id);
-      }
       if (editingId === null) renderTome(false); // reconstruir joga fora o texto digitado numa edição
       const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
       tomeScroll.querySelector(`[data-page-id="${id}"]`)?.scrollIntoView?.({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
     },
     onStatus: (pages) => syncAudio(pages),
     onEnd: (info) => {
-      modeOpened.clear();
       setQuietReadyToasts(false);
+      // Terminou sozinho (ou parou numa página sem áudio): esconde a barra. Interromper/outra página/tela fechada já cuidam disso.
+      if (info.kind === 'finished' || info.kind === 'blocked' || info.kind === 'failed') audioPlayer.stop();
       continuousEnded(info);
     },
   });
-  continuous.subscribe((state) => bar.update(state, session().title));
+  const bar = createPlayerBar({
+    continuous,
+    title: () => session().title,
+    onStopContinuous: () => {
+      continuous.stop();
+      audioPlayer.stop();
+    },
+  });
 
   const titleEl = h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, session().title);
   const drawerWrap = h('div', { class: 'hidden absolute inset-y-0 right-0 z-30 w-full max-w-md lg:static lg:z-auto lg:w-[26rem] lg:max-w-none' });
@@ -833,6 +836,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     disposed = true;
     controller?.abort();
     continuous.dispose();
+    bar.dispose();
     setQuietReadyToasts(false);
     audioPlayer.stop();
     document.title = 'Chronicler Engine';
