@@ -5,7 +5,7 @@ import { cleanSpeakerName } from './narratorSchema.js';
 /** Rótulo do jogador quando o Narrador não informou como o protagonista é chamado. */
 export const DEFAULT_PLAYER_LABEL = 'Protagonista';
 
-/** Esquema de resposta do NPC: a fala e o sinal de fim de conversa (§3.1, passo 4). */
+/** Esquema de resposta do NPC: a fala e o sinal de fim de conversa (docs/modo-dialogo.md#o-npc-e-o-sigilo). */
 export const NPC_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
@@ -34,7 +34,7 @@ export class NpcResponseError extends Error {
   }
 }
 
-/** Regras fixas somadas ao prompt dinâmico produzido pelo Narrador (§3.2, "Regras Estritas"). */
+/** Regras fixas somadas ao prompt dinâmico produzido pelo Narrador (docs/modo-dialogo.md#o-npc-e-o-sigilo, "Regras Estritas"). */
 const NPC_GUARD_RULES = `
 
 REGRAS DE INTERPRETAÇÃO (sempre válidas):

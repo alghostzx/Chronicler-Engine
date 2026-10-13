@@ -1,7 +1,7 @@
 import { Mp3Encoder } from '@breezystack/lamejs';
 import type { Pcm } from './pcm.js';
 
-/** MP3 mono a 48 kbps: ~8× menor que o WAV e inteligível para voz (ver design document §11.24). */
+/** MP3 mono a 48 kbps: ~8× menor que o WAV e inteligível para voz (ver docs/narracao-por-voz.md#como-o-áudio-é-feito). */
 export const MP3_KBPS = 48;
 const FRAME = 1152;
 

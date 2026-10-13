@@ -7,7 +7,7 @@ export function registerTokenRoutes(app: FastifyInstance, ctx: AppContext): void
   const { repos } = ctx;
 
   /**
-   * Contagem precisa de tokens do contexto atual e HP restante do Narrador (§4, §8.2).
+   * Contagem precisa de tokens do contexto atual e HP restante do Narrador (docs/narrador.md#hp-do-narrador).
    * Mede regras + contexto base + corpus ativo (sem input pendente do jogador).
    */
   app.get<{ Params: { id: string } }>(

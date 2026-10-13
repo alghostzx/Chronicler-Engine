@@ -13,7 +13,7 @@ export class DialoguesRepository {
   constructor(private readonly db: Db) {}
 
   /**
-   * Cria um diálogo ativo. Falha com `DialogueActiveError` se a sessão já tiver um (§11.6).
+   * Cria um diálogo ativo. Falha com `DialogueActiveError` se a sessão já tiver um (docs/modo-dialogo.md#ativação).
    * `redoPageId`: página de diálogo que este diálogo vai substituir ao ser encerrado.
    */
   create(

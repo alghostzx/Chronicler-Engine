@@ -61,7 +61,7 @@ describe('POST /dialogue/:id/message', () => {
     expect(req.responseJsonSchema).toBeDefined();
   });
 
-  it('não altera as páginas da história (checklist §10 nº 5)', async () => {
+  it('não altera as páginas da história (invariante 5 em docs/decisoes.md)', async () => {
     t.gateway.queue(npcJson('a'), npcJson('b'), npcJson('c'));
     await say('1');
     await say('2');

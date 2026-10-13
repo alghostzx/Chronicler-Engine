@@ -54,7 +54,7 @@ describe('POST /narrative/next', () => {
     expect(events.find((e) => e.event === 'page')!.data.page.id).toBe(stored[0]!.id);
   });
 
-  it('força o responseSchema e envia regras como system instruction (checklist §10 nº 2)', async () => {
+  it('força o responseSchema e envia regras como system instruction (invariante 2 em docs/decisoes.md)', async () => {
     t.gateway.queue(narratorJson('Texto.'));
     await next('Ação.');
     const req = t.gateway.requests[0]!;
@@ -64,7 +64,7 @@ describe('POST /narrative/next', () => {
     expect(req.userText).toContain('Reino de Aldor');
   });
 
-  it('não reenvia instruções passadas do jogador, apenas a prosa (checklist §10 nº 1)', async () => {
+  it('não reenvia instruções passadas do jogador, apenas a prosa (invariante 1 em docs/decisoes.md)', async () => {
     t.gateway.queue(narratorJson('Prosa um.'), narratorJson('Prosa dois.'));
     await next('PRIMEIRA-INSTRUCAO-META');
     await next('SEGUNDA-INSTRUCAO');
@@ -231,7 +231,7 @@ describe('POST /narrative/pages/:id/regenerate', () => {
     expect(sent).toContain('nova instr3');
   });
 
-  it('página intermediária sem confirmação: 409 truncation_required e nada muda (checklist §10 nº 3)', async () => {
+  it('página intermediária sem confirmação: 409 truncation_required e nada muda (invariante 3 em docs/decisoes.md)', async () => {
     const [, b] = seed();
     const res = await regen(b!.id, { player_instruction: 'nova' });
     expect(res.statusCode).toBe(409);

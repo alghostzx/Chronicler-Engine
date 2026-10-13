@@ -98,7 +98,7 @@ export class PagesRepository {
     return row && toPage(row);
   }
 
-  /** Edição manual: altera só o texto, preservando páginas posteriores (§6.1). */
+  /** Edição manual: altera só o texto, preservando páginas posteriores (docs/narrador.md#edição-direta-na-unha). */
   updateText(id: string, generatedText: string): Page | undefined {
     this.db
       .prepare('UPDATE narrative_pages SET generated_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
@@ -131,7 +131,7 @@ export class PagesRepository {
     return this.get(id);
   }
 
-  /** Remove todas as páginas com `order_index` maior que o informado (§6.2). */
+  /** Remove todas as páginas com `order_index` maior que o informado (docs/narrador.md#regeneração-com-truncamento). */
   deleteAfter(sessionId: string, orderIndex: number): number {
     return this.db
       .prepare('DELETE FROM narrative_pages WHERE session_id = ? AND order_index > ?')

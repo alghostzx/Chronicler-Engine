@@ -33,7 +33,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     return dialogue;
   };
 
-  // --- Reconexão pós-reload (§11.6) ---------------------------------------------------------
+  // --- Reconexão pós-reload (docs/modo-dialogo.md#ativação) ---------------------------------------------------------
   app.get<{ Params: { id: string } }>(
     '/api/sessions/:id/dialogue/active',
     { schema: { params: idParams } },
@@ -47,7 +47,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     },
   );
 
-  // --- Troca de mensagens (§8.3) ----------------------------------------------------------------
+  // --- Troca de mensagens (docs/api.md#diálogo) ----------------------------------------------------------------
   app.post<{ Params: { id: string }; Body: { message: string } }>(
     '/api/dialogue/:id/message',
     {
@@ -100,8 +100,8 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     },
   );
 
-  // --- Encerramento: a conversa vira uma página narrada (§3.3, §8.3) ----------------------------
-  // SSE (mesmos eventos do §11.12, mais `retry`). O Narrador escreve a prosa em volta das falas, que
+  // --- Encerramento: a conversa vira uma página narrada (docs/modo-dialogo.md#encerrar-a-conversa-vira-uma-página-narrada) ----------------------------
+  // SSE (mesmos eventos de docs/arquitetura.md#eventos-sse, mais `retry`). O Narrador escreve a prosa em volta das falas, que
   // voltam literais; reprovado 3 vezes, grava a transcrição crua (`raw_dialogue`). Se este diálogo
   // estava refazendo uma página, ela é substituída e as seguintes são descartadas (só agora, não ao
   // abrir). Erro da API: nada é gravado e o diálogo continua ativo.

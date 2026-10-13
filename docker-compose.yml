@@ -5,7 +5,7 @@ services:
     container_name: chronicler-engine
     restart: unless-stopped
     ports:
-      # Apenas loopback: a interface não tem autenticação e guarda a chave da API (§11.9).
+      # Apenas loopback: a interface não tem autenticação e guarda a chave da API (docs/instalacao-e-operacao.md#segurança).
       - "127.0.0.1:3000:3000"
     volumes:
       - ./data:/data:Z

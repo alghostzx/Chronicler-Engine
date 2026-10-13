@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ============================================================================
-   Motor de temas (design document §7.2 e §11.19): <html> recebe `theme-<tema>` e
+   Motor de temas (docs/interface.md#temas-e-modo-claroescuro): <html> recebe `theme-<tema>` e
    `mode-light|mode-dark`. Cada tema tem uma variação clara e uma escura; o modo vem da
    preferência do usuário (Automático = sistema, Claro ou Escuro).
    ============================================================================ */
@@ -322,7 +322,7 @@
     @apply font-display text-5xl font-bold float-left mr-2 leading-[0.9] text-accent;
   }
 
-  /* Cartão de página: uma folha separada por prompt (design §11.22). */
+  /* Cartão de página: uma folha separada por prompt (docs/interface.md#cartão-de-página). */
   .page-card {
     @apply relative min-w-0 rounded-xl border;
     background: var(--page-bg);

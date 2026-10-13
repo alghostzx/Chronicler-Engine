@@ -65,7 +65,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     },
   );
 
-  // --- Edição direta (§6.1) --------------------------------------------------------------
+  // --- Edição direta (docs/narrador.md#edição-direta-na-unha) --------------------------------------------------------------
   app.put<{ Params: { id: string }; Body: { generated_text: string } }>(
     '/api/narrative/pages/:id',
     {
@@ -94,7 +94,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     },
   );
 
-  // --- Regeneração com truncamento (§6.2) ------------------------------------------------
+  // --- Regeneração com truncamento (docs/narrador.md#regeneração-com-truncamento) ------------------------------------------------
   app.post<{
     Params: { id: string };
     Body: { player_instruction: string; confirm_truncate?: boolean };
@@ -127,7 +127,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       const active = repos.pages.listActive(session.id);
       const following = active.filter((b) => b.order_index > page.order_index);
       if (following.length > 0 && req.body.confirm_truncate !== true) {
-        // Regra de ramificação (§6.2): a API só descarta o futuro com confirmação explícita.
+        // Regra de ramificação (docs/narrador.md#regeneração-com-truncamento): a API só descarta o futuro com confirmação explícita.
         return reply.code(409).send({
           error: `Alterar esta página descartará ${following.length} ${following.length === 1 ? 'página posterior' : 'páginas posteriores'}. Confirme para continuar.`,
           code: 'truncation_required',
@@ -146,7 +146,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
           playerInstruction: instruction,
         }),
         // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem
-        // numa única transação, então uma falha de geração nunca apaga dados (§11.5).
+        // numa única transação, então uma falha de geração nunca apaga dados (docs/narrador.md#regeneração-com-truncamento).
         persist: (result, model) => {
           const outcome = repos.transaction(() => {
             const discarded = repos.pages.deleteAfter(session.id, page.order_index);
@@ -256,7 +256,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     },
   );
 
-  // --- Ramificar a partir daqui (§7.1) -------------------------------------------------------
+  // --- Ramificar a partir daqui (docs/narrador.md#ramificar) -------------------------------------------------------
   // Mantém a página K como ponto final da história, descartando K+1…N, sem chamar a IA.
   app.post<{ Params: { id: string }; Body: { confirm_truncate?: boolean } }>(
     '/api/narrative/pages/:id/branch',

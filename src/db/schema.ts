@@ -1,7 +1,7 @@
 /**
- * Schema SQLite do Chronicler Engine (design document §5).
+ * Schema SQLite do Chronicler Engine (docs/modelo-de-dados.md).
  *
- * Ajustes em relação ao §5 original (ver §11 do design document):
+ * Ajustes em relação à especificação original (ver docs/modelo-de-dados.md):
  *  - `sessions.model`: modelo Gemini escolhido para a sessão (NULL = padrão global).
  *  - `UNIQUE (session_id, order_index)` em `narrative_pages`.
  *  - `UNIQUE (session_id, volume_number)` em `chronicle_archives`.
