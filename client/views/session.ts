@@ -48,7 +48,7 @@ const HP_COLORS: Record<TokenInfo['state'], string> = {
 
 /**
  * Tela da sessão: Tome Interativo (uma folha por página), Gaveta de Contexto e Doca de Ação
- * (design §7.1). Retorna a função de limpeza chamada pelo roteador ao sair da tela.
+ * (docs/interface.md#o-tome-e-a-doca). Retorna a função de limpeza chamada pelo roteador ao sair da tela.
  */
 export async function renderSession(root: HTMLElement, sessionId: string): Promise<() => void> {
   mount(root, h('p', { class: 'p-8 text-center text-muted' }, 'Abrindo o Tome…'));

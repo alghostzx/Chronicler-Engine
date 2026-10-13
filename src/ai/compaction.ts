@@ -1,13 +1,13 @@
 import type { Page, Session } from '../db/types.js';
 import { buildCorpus } from './contextBuilder.js';
 
-/** Fração (por peso em tokens) das páginas mais antigas que vira crônica (§4.3). */
+/** Fração (por peso em tokens) das páginas mais antigas que vira crônica (docs/narrador.md#compactação-livro-de-crônicas). */
 export const PAST_RATIO = 0.75;
 
 type WeightedPage = Pick<Page, 'order_index' | 'generated_text'>;
 
 /**
- * Peso de uma página em tokens, aproximado pelo tamanho do texto (§11.8). Como a divisão é
+ * Peso de uma página em tokens, aproximado pelo tamanho do texto (docs/narrador.md#compactação-livro-de-crônicas). Como a divisão é
  * proporcional, a razão caracteres/token (praticamente constante) se cancela.
  */
 export function pageWeight(page: Pick<Page, 'generated_text'>): number {
@@ -69,7 +69,7 @@ export function buildCompactionRequest(input: {
   };
 }
 
-/** Anexa um volume ao `world_context` sob o cabeçalho `## Crônica — Volume N` (§11.8). */
+/** Anexa um volume ao `world_context` sob o cabeçalho `## Crônica — Volume N` (docs/narrador.md#compactação-livro-de-crônicas). */
 export function appendChronicle(worldContext: string, volumeNumber: number, summary: string): string {
   const entry = `## Crônica — Volume ${volumeNumber}\n${summary.trim()}`;
   return worldContext.trim() ? `${worldContext.trimEnd()}\n\n${entry}` : entry;

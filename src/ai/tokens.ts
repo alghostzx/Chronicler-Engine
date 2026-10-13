@@ -10,7 +10,7 @@ export interface Hp {
 }
 
 /**
- * HP do Narrador (design document §4.1/§4.2):
+ * HP do Narrador (docs/narrador.md#hp-do-narrador):
  *   HP% = 100 × (1 − tokensUsados / limite)
  *   verde ≥ 50% · amarelo ≥ 20% e < 50% · vermelho < 20%
  */
@@ -31,7 +31,7 @@ const MAX_CACHE_ENTRIES = 64;
  * Contagem real de tokens via `countTokens`, com cache em memória por conteúdo.
  *
  * O HP é recalculado por eventos (abertura de sessão, página gerada/regenerada, edição,
- * commit de crônica — §11.7). O cache evita chamadas repetidas à API quando o payload
+ * commit de crônica — docs/narrador.md#hp-do-narrador). O cache evita chamadas repetidas à API quando o payload
  * não mudou (ex.: reabrir a mesma sessão), sem nunca devolver um valor desatualizado:
  * a chave é o hash do próprio conteúdo.
  */

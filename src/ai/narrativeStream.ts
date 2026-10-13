@@ -1,6 +1,6 @@
 /**
  * Extrator incremental do valor de `narrative_text` num JSON que chega em pedaços
- * (design document §11.4).
+ * (docs/arquitetura.md#eventos-sse).
  *
  * Alimentado com fragmentos do JSON bruto devolvido pelo Gemini, devolve a cada chamada o
  * trecho recém-decodificado de `narrative_text` (já sem escapes JSON). Só considera a chave

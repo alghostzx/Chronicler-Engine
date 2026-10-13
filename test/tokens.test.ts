@@ -3,13 +3,13 @@ import { computeHp } from '../src/ai/tokens.js';
 import { makeApp, mockGateway, withKey, type TestApp } from './helpers.js';
 
 describe('computeHp', () => {
-  it('calcula o percentual restante conforme a fórmula do §4.1', () => {
+  it('calcula o percentual restante conforme a fórmula do HP', () => {
     expect(computeHp(0, 1_000_000)).toEqual({ hp_percent: 100, state: 'green' });
     expect(computeHp(250_000, 1_000_000)).toEqual({ hp_percent: 75, state: 'green' });
     expect(computeHp(123_456, 1_000_000)).toEqual({ hp_percent: 87.7, state: 'green' });
   });
 
-  it('respeita os limiares de estado do §4.2 (≥50 verde, ≥20 amarelo, <20 vermelho)', () => {
+  it('respeita os limiares de estado do HP (≥50 verde, ≥20 amarelo, <20 vermelho)', () => {
     expect(computeHp(500_000, 1_000_000).state).toBe('green'); // exatamente 50%
     expect(computeHp(500_001, 1_000_000).state).toBe('yellow');
     expect(computeHp(800_000, 1_000_000).state).toBe('yellow'); // exatamente 20%

@@ -25,8 +25,8 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 /**
- * Gaveta de Contexto (design §7.1): edição do mundo, regras do Narrador, modelo/limite e leitura
- * dos volumes arquivados. Salvar dispara `onSessionSaved`, que recalcula o HP (§11).
+ * Gaveta de Contexto (docs/interface.md#o-tome-e-a-doca): edição do mundo, regras do Narrador, modelo/limite e leitura
+ * dos volumes arquivados. Salvar dispara `onSessionSaved`, que recalcula o HP (docs/narrador.md#hp-do-narrador).
  */
 export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): void } {
   let tab: Tab = 'mundo';

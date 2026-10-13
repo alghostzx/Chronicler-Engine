@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Imagem única e leve do Chronicler Engine (design document §9, ajustado em §11.18).
+# Imagem única e leve do Chronicler Engine (docs/arquitetura.md#empacotamento-docker).
 # Node 22: o better-sqlite3 13 exige Node >= 22.
 
 # --- Base com toolchain para compilar o better-sqlite3 (quando não há binário pré-compilado) ---

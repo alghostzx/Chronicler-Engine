@@ -1,4 +1,4 @@
-/** Esquema de saída estruturada do Narrador (design document §2.4). */
+/** Esquema de saída estruturada do Narrador (docs/narrador.md#saída-estruturada). */
 export const NARRATOR_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {

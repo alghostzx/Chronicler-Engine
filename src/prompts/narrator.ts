@@ -1,5 +1,5 @@
 /**
- * Regras de narração padrão (design document §2.3). Armazenadas em `sessions.system_rules`
+ * Regras de narração padrão (docs/narrador.md#regras-do-narrador). Armazenadas em `sessions.system_rules`
  * na criação da sessão e editáveis pelo usuário no Context Drawer.
  */
 export const DEFAULT_SYSTEM_RULES = `Você é o Cronista e Narrador de uma história colaborativa literária.

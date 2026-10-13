@@ -28,7 +28,8 @@
     "check:audio": "tsx scripts/check-audio.ts",
     "check:inicio": "tsx scripts/check-inicio.ts",
     "icons": "tsx scripts/make-icons.ts",
-    "logo": "tsx scripts/make-logo.ts"
+    "logo": "tsx scripts/make-logo.ts",
+    "check:docs": "tsx scripts/check-docs.ts"
   },
   "license": "MIT",
   "dependencies": {

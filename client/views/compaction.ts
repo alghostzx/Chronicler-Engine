@@ -2,7 +2,7 @@ import { api, ApiError, type CompactionPreview } from '../api';
 import { h, openModal, toast } from '../dom';
 
 /**
- * Fluxo de compactação (design §3.4/§6.4): gera a minuta da sinopse (nada é gravado), deixa o
+ * Fluxo de compactação (docs/narrador.md#compactação-livro-de-crônicas): gera a minuta da sinopse (nada é gravado), deixa o
  * jogador revisá-la e só então consolida. Resolve `true` se a crônica foi compactada.
  */
 export async function openCompaction(sessionId: string): Promise<boolean> {

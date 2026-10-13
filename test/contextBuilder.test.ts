@@ -11,7 +11,7 @@ describe('contextBuilder', () => {
     expect(buildCorpus(pages)).toBe('Primeiro.\n\nSegundo.');
   });
 
-  it('NUNCA inclui instruções passadas do jogador no payload (checklist §10 nº 1)', () => {
+  it('NUNCA inclui instruções passadas do jogador no payload (invariante 1 em docs/decisoes.md)', () => {
     const req = buildNarratorRequest({
       session: { system_rules: 'REGRAS', world_context: 'MUNDO' },
       precedingPages: pages,

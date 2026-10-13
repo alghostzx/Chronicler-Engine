@@ -105,7 +105,7 @@ REGRAS DESTA PÁGINA:
 5. NÃO avance a história além do que a conversa mostra e NÃO invente falas novas.`;
 
 /**
- * Pedido de narração de um diálogo: mesmo pipeline do §2.1 (regras, mundo, corpus anterior), com a
+ * Pedido de narração de um diálogo: mesmo pipeline de docs/narrador.md#pipeline-do-payload (regras, mundo, corpus anterior), com a
  * transcrição no lugar da ação do jogador. `previousMissing` (de uma tentativa reprovada) vira um aviso.
  */
 export function buildDialoguePageRequest(input: {
