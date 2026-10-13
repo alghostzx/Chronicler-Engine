@@ -10,11 +10,10 @@ export interface CreateSessionInput {
   token_limit?: number;
   model?: string | null;
   tts_auto?: boolean | null;
-  tts_auto_dialogue?: boolean | null;
 }
 
 export type UpdateSessionInput = Partial<
-  Pick<Session, 'title' | 'system_rules' | 'world_context' | 'active_theme' | 'token_limit' | 'model' | 'tts_auto' | 'tts_auto_dialogue'>
+  Pick<Session, 'title' | 'system_rules' | 'world_context' | 'active_theme' | 'token_limit' | 'model' | 'tts_auto'>
 >;
 
 const UPDATABLE: (keyof UpdateSessionInput)[] = [
@@ -25,17 +24,15 @@ const UPDATABLE: (keyof UpdateSessionInput)[] = [
   'token_limit',
   'model',
   'tts_auto',
-  'tts_auto_dialogue',
 ];
 
-type SessionRow = Omit<Session, 'tts_auto' | 'tts_auto_dialogue'> & { tts_auto: number | null; tts_auto_dialogue: number | null };
+type SessionRow = Omit<Session, 'tts_auto'> & { tts_auto: number | null };
 
 const toFlag = (value: number | null | undefined): boolean | null => (value === null || value === undefined ? null : value !== 0);
 
 const toSession = (row: SessionRow): Session => ({
   ...row,
   tts_auto: toFlag(row.tts_auto),
-  tts_auto_dialogue: toFlag(row.tts_auto_dialogue),
 });
 
 const toColumn = (value: unknown): string | number | null => {
@@ -50,8 +47,8 @@ export class SessionsRepository {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO sessions (id, title, system_rules, world_context, active_theme, token_limit, model, tts_auto, tts_auto_dialogue)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (id, title, system_rules, world_context, active_theme, token_limit, model, tts_auto)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -62,7 +59,6 @@ export class SessionsRepository {
         input.token_limit ?? 1_000_000,
         input.model ?? null,
         toColumn(input.tts_auto ?? null),
-        toColumn(input.tts_auto_dialogue ?? null),
       );
     return this.get(id)!;
   }

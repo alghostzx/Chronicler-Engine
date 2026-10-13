@@ -20,10 +20,8 @@ export interface Session {
   active_theme: ThemeId;
   token_limit: number;
   model: string | null;
-  /** Narração automática das páginas novas: true/false, ou null = herdar o padrão global. */
+  /** Narração automática das páginas novas (prosa e diálogo): true/false, ou null = herdar o padrão global. */
   tts_auto: boolean | null;
-  /** Narração automática das páginas de diálogo: true/false, ou null = herdar o padrão global. */
-  tts_auto_dialogue: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -108,11 +106,10 @@ export interface SettingsInfo {
 
 export interface TtsSettingsInfo {
   auto_default: boolean;
-  auto_dialogue_default: boolean;
   model: string;
   voice: string;
   style: string;
-  defaults: { auto_default: boolean; auto_dialogue_default: boolean; model: string; voice: string; style: string };
+  defaults: { auto_default: boolean; model: string; voice: string; style: string };
   models: { id: string; label: string }[];
   voices: { id: string; trait: string }[];
   style_max: number;
