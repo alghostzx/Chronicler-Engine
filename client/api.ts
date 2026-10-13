@@ -46,8 +46,10 @@ export interface Page {
   id: string;
   session_id: string;
   order_index: number;
-  /** `dialogue`: a própria transcrição de um Modo Diálogo; `narrative`: prosa do Narrador. */
+  /** `dialogue`: página de um Modo Diálogo concluído (prosa com as falas literais); `narrative`: prosa do Narrador. */
   kind: 'narrative' | 'dialogue';
+  /** Página de diálogo que ainda é a transcrição crua (`**Nome:** fala`): pode ser reprocessada em prosa. */
+  raw_dialogue: boolean;
   /** Nome do interlocutor (somente páginas de diálogo). */
   npc_name: string | null;
   player_instruction: string | null;
@@ -198,7 +200,10 @@ export async function api<T>(method: string, url: string, body?: unknown): Promi
 export interface TurnHandlers {
   onStart?(model: string): void;
   onChunk?(text: string): void;
-  onPage?(page: Page, discarded: number): void;
+  /** `narration`: só em páginas de diálogo — `fallback` = ficou a transcrição crua (o Narrador falhou). */
+  onPage?(page: Page, discarded: number, narration?: 'narrated' | 'fallback'): void;
+  /** O Narrador está refazendo a página de diálogo (falas alteradas); `attempt` é a nova tentativa. */
+  onRetry?(attempt: number, of: number): void;
   onDialogueTrigger?(dialogue: { dialogue_id: string; npc_name: string }): void;
   onError?(message: string): void;
 }
@@ -244,7 +249,14 @@ export async function streamTurn(
         handlers.onChunk?.(String(d.text ?? ''));
         break;
       case 'page':
-        handlers.onPage?.(d.page as Page, Number(d.discarded ?? 0));
+        handlers.onPage?.(
+          d.page as Page,
+          Number(d.discarded ?? 0),
+          d.narration === 'fallback' || d.narration === 'narrated' ? d.narration : undefined,
+        );
+        break;
+      case 'retry':
+        handlers.onRetry?.(Number(d.attempt ?? 0), Number(d.of ?? 0));
         break;
       case 'dialogue_trigger':
         handlers.onDialogueTrigger?.({ dialogue_id: String(d.dialogue_id), npc_name: String(d.npc_name) });

@@ -9,6 +9,7 @@ export const PAGE_ACTIONS = {
   editText: 'Editar texto da página',
   editPrompt: 'Editar prompt e re-gerar',
   redoDialogue: 'Refazer diálogo',
+  narrateDialogue: 'Narrar diálogo',
   branch: 'Ramificar a partir desta página',
   listen: 'Ouvir esta página',
 } as const;
@@ -31,6 +32,8 @@ export interface PageCardOptions {
   onEditPrompt?: () => void;
   /** Páginas de diálogo: abre um novo diálogo que, ao ser encerrado, substitui esta página. */
   onRedoDialogue?: () => void;
+  /** Só em páginas de diálogo com transcrição crua: o Narrador reescreve em prosa, mantendo as falas. */
+  onNarrateDialogue?: () => void;
   /** Esta página será substituída ao encerrar o diálogo refeito em andamento. */
   replacing?: boolean;
   onBranch?: () => void;
@@ -46,9 +49,9 @@ export function dialogueBadge(npcName: string | null): HTMLElement {
   return h('span', { class: 'page-badge', 'data-badge': 'dialogue' }, icon('dialogue', 14), npcName ? `Diálogo com ${npcName}` : 'Diálogo');
 }
 
-/** Parágrafo de página: nas de diálogo, o rótulo inicial `**Falante:**` vira destaque (tolera edições). */
-function pageParagraph(text: string, dialogue: boolean): HTMLElement {
-  const m = dialogue ? /^\*\*(.{1,80}?):\*\*\s*([\s\S]*)$/.exec(text) : null;
+/** Parágrafo de página: na transcrição crua de um diálogo, o rótulo `**Falante:**` vira destaque (tolera edições). */
+function pageParagraph(text: string, rawDialogue: boolean): HTMLElement {
+  const m = rawDialogue ? /^\*\*(.{1,80}?):\*\*\s*([\s\S]*)$/.exec(text) : null;
   if (!m) return h('p', null, text);
   return h('p', { class: 'dialogue-line' }, h('strong', { class: 'dialogue-speaker' }, `${m[1]}:`), ' ', m[2]);
 }
@@ -65,7 +68,7 @@ export function pageCard(o: PageCardOptions): HTMLElement {
     h(
       'div',
       { class: `prose-tome page-card-body ${o.dropCap ? 'drop-cap' : ''}` },
-      ...paragraphs(page.generated_text).map((p) => pageParagraph(p, page.kind === 'dialogue')),
+      ...paragraphs(page.generated_text).map((p) => pageParagraph(p, page.kind === 'dialogue' && page.raw_dialogue)),
     ),
   ];
   // Narração: o botão "Ouvir" fica sempre no rodapé (inclusive em páginas somente leitura, como as
@@ -77,10 +80,20 @@ export function pageCard(o: PageCardOptions): HTMLElement {
   if (!o.readonly) {
     const last = (o.laterCount ?? 0) === 0;
     const dialogue = page.kind === 'dialogue';
-    const action = (icon: 'pencil' | 'prompt' | 'redoDialogue' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
+    const action = (icon: 'pencil' | 'prompt' | 'narrateDialogue' | 'redoDialogue' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
       iconButton({ icon, label, tip, align: 'end', up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });
     footer.push(
       action('pencil', PAGE_ACTIONS.editText, 'Editar o texto desta página', o.onEditText),
+      ...(dialogue && page.raw_dialogue
+        ? [
+            action(
+              'narrateDialogue',
+              PAGE_ACTIONS.narrateDialogue,
+              'Narrar este diálogo: o Narrador escreve a prosa em volta das falas, que ficam como estão (as páginas seguintes não mudam)',
+              o.onNarrateDialogue,
+            ),
+          ]
+        : []),
       dialogue
         ? action('redoDialogue', PAGE_ACTIONS.redoDialogue, 'Refazer este diálogo do zero (só substitui a página, e descarta as seguintes, ao encerrar o novo)', o.onRedoDialogue)
         : action('prompt', PAGE_ACTIONS.editPrompt, 'Editar o prompt de origem e re-gerar esta página', o.onEditPrompt),

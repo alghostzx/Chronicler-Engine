@@ -66,7 +66,10 @@ async function newSession(title: string, withVolume: boolean): Promise<string> {
   }
   return id;
 }
-/** Crônica com uma página de diálogo no meio: narrativa (gatilho) → conversa salva como página → narrativa. */
+/**
+ * Crônica com páginas de diálogo: narrativa (gatilho) → conversa narrada em prosa (falas literais) → narrativa →
+ * página de diálogo com transcrição crua (a que o botão “Narrar diálogo” reprocessa).
+ */
 async function newDialogueSession(): Promise<string> {
   const r = await app.inject({ method: 'POST', url: '/api/sessions', payload: { title: 'O Corvo Cego', active_theme: 'medieval', world_context: 'Reino de Valdoria.', token_limit: 100_000 } });
   const id = r.json().session.id as string;
@@ -81,10 +84,21 @@ async function newDialogueSession(): Promise<string> {
     gateway.queue(npcJson(reply, false));
     await app.inject({ method: 'POST', url: `/api/dialogue/${dialogueId}/message`, payload: { message: line } });
   }
+  gateway.queue(
+    narratorJson(
+      'Aldric apoiou os cotovelos no balcão úmido e baixou a voz.\n\n— Procuro um navio que parta para o norte esta noite. Sabe de algum? — perguntou.\n\nElena enxugou uma caneca sem pressa.\n\n— O Corvo Cego não faz perguntas, forasteiro, mas o último barco parte na maré da meia-noite.\n\nAldric hesitou, medindo as palavras.\n\n— Quanto custa a passagem até um nome que ninguém ousa dizer em voz alta, como o do rei morto?\n\nA taverneira empurrou a caneca em sua direção.\n\n— Mais do que você carrega na bolsa. Beba, e esqueça o que ouviu.',
+    ),
+  );
   const done = await app.inject({ method: 'POST', url: `/api/dialogue/${dialogueId}/conclude`, payload: {} });
-  if (done.statusCode !== 200) throw new Error(`Encerrar diálogo falhou: ${done.body}`);
+  if (!done.body.includes('event: page')) throw new Error(`Encerrar diálogo falhou: ${done.body.slice(0, 300)}`);
   gateway.queue(narratorJson(STORY[3][1], { activate: false }));
   await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: STORY[3][0] } });
+  repos.pages.append(id, {
+    kind: 'dialogue',
+    npc_name: 'Elena',
+    raw_dialogue: true,
+    generated_text: '**Aldric:** Vejo que o cais está deserto.\n\n**Elena:** Ele sempre está depois da meia-noite.',
+  });
   return id;
 }
 const tomeId = await newSession('A Queda de Valdoria', false);
@@ -170,11 +184,13 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
 
     const dimmedCard = card.classList.contains('is-dimmed'); // páginas a descartar ficam propositalmente esmaecidas
     const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button.page-action'));
+    // Diálogo cru (rótulos de falante visíveis) ganha a ação “Narrar diálogo”; as demais páginas têm 4.
+    const expected = card.querySelector('.dialogue-speaker') ? 5 : 4;
     if (kind === 'volume') {
       const names = actions.map((a) => a.getAttribute('aria-label'));
       if (names.length !== 1 || names[0] !== 'Ouvir esta página') problems.push(`${label}: leitor deve ser somente leitura (apenas “Ouvir”), achou ${JSON.stringify(names)}`);
-    } else if (actions.length !== 4) {
-      problems.push(`${label}: esperava 4 ações, achou ${actions.length}`);
+    } else if (actions.length !== expected) {
+      problems.push(`${label}: esperava ${expected} ações, achou ${actions.length}`);
     }
     for (const b of actions) {
       const name = b.getAttribute('aria-label') ?? '?';
@@ -194,11 +210,11 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
       const cr = ratio(blend(c, under), under);
       if (cr < 3) problems.push(`${label}/${name}: contraste do ícone ${cr.toFixed(2)}:1 (< 3)`);
     }
-    if (kind === 'tome' && actions.length === 4) {
+    if (kind === 'tome' && actions.length === expected) {
       const rects = actions.map((a) => a.getBoundingClientRect());
       if (new Set(rects.map((r) => Math.round(r.top))).size !== 1) problems.push(`${label}: ícones quebraram em mais de uma linha`);
       const glyphs = actions.map((a) => a.querySelector('svg')!.innerHTML);
-      if (new Set(glyphs).size !== 4) problems.push(`${label}: ícones repetidos`);
+      if (new Set(glyphs).size !== expected) problems.push(`${label}: ícones repetidos`);
     }
   }
   return { problems, cards: cards.length };
@@ -318,28 +334,40 @@ for (const theme of THEMES) {
         await page.screenshot({ path: path.join(OUT, 'volumes-gaveta.png') });
       }
 
-      // 3) Página de diálogo: selo, falantes em destaque, "Refazer diálogo" no lugar de "Editar prompt"
-      //    e o estado de refazer (página marcada, seguintes esmaecidas), sem perder nada ao descartar.
+      // 3) Páginas de diálogo: narrada (selo, prosa sem rótulos, "Refazer diálogo" no lugar de "Editar prompt"),
+      //    crua (rótulos de falante + "Narrar diálogo") e o estado de refazer (página marcada, seguintes
+      //    esmaecidas), sem perder nada ao descartar.
       await open(page, `#/s/${dialogueSessionId}`, '.page-card[data-page-id]');
       const dlgTome = await page.evaluate(inspect, 'tome');
       mark('diálogo', dlgTome.problems);
-      if (dlgTome.cards !== 3) report.problems.push(`[diálogo] esperava 3 cartões, achou ${dlgTome.cards}`);
+      if (dlgTome.cards !== 4) report.problems.push(`[diálogo] esperava 4 cartões, achou ${dlgTome.cards}`);
       const dlgCard = page.locator('.page-card[data-page-index="2"]');
       const badgeText = await dlgCard.locator('[data-badge="dialogue"]').textContent().catch(() => null);
       if (badgeText !== 'Diálogo com Elena') report.problems.push(`[diálogo] selo inesperado: ${JSON.stringify(badgeText)}`);
-      const speakers = await dlgCard.locator('.dialogue-speaker').allTextContents();
-      if (speakers.join('|') !== 'Aldric:|Elena:|Aldric:|Elena:') report.problems.push(`[diálogo] falantes inesperados: ${JSON.stringify(speakers)}`);
+      if (await dlgCard.locator('.dialogue-speaker').count()) report.problems.push('[diálogo] página narrada não deveria mostrar rótulos de falante');
+      if (!(await dlgCard.textContent())?.includes('— O Corvo Cego não faz perguntas, forasteiro')) report.problems.push('[diálogo] falas literais ausentes na página narrada');
       const dlgActions = await dlgCard.locator('.page-card-actions button.page-action').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
       if (dlgActions.join('|') !== 'Ouvir esta página|Editar texto da página|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo] ações inesperadas: ${JSON.stringify(dlgActions)}`);
       if (await page.locator('.page-card[data-page-index="1"] [data-badge]').count()) report.problems.push('[diálogo] página narrativa não deveria ter selo de diálogo');
-      try {
-        await dlgCard.getByRole('button', { name: 'Refazer diálogo' }).click({ trial: true, timeout: 3000 });
-      } catch (e) {
-        report.problems.push(`[diálogo] Refazer diálogo não clicável (${(e as Error).message.split('\n')[0]})`);
+      const rawCard = page.locator('.page-card[data-page-index="4"]');
+      const speakers = await rawCard.locator('.dialogue-speaker').allTextContents();
+      if (speakers.join('|') !== 'Aldric:|Elena:') report.problems.push(`[diálogo cru] falantes inesperados: ${JSON.stringify(speakers)}`);
+      const rawActions = await rawCard.locator('.page-card-actions button.page-action').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
+      if (rawActions.join('|') !== 'Ouvir esta página|Editar texto da página|Narrar diálogo|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo cru] ações inesperadas: ${JSON.stringify(rawActions)}`);
+      for (const name of ['Narrar diálogo', 'Refazer diálogo']) {
+        try {
+          await (name === 'Refazer diálogo' ? dlgCard : rawCard).getByRole('button', { name }).click({ trial: true, timeout: 3000 });
+        } catch (e) {
+          report.problems.push(`[diálogo] ${name} não clicável (${(e as Error).message.split('\n')[0]})`);
+        }
       }
       if ((theme === 'medieval' && mode === 'light') || (theme === 'cyberpunk' && mode === 'dark')) {
         await page.evaluate(() => (document.getElementById('tome-scroll')!.scrollTop = 0));
         await page.screenshot({ path: path.join(OUT, `dialogo-${theme}-${mode}${vp.mobile ? '-celular' : ''}.png`) });
+      }
+      if (theme === 'cyberpunk' && mode === 'dark') {
+        await rawCard.evaluate((c) => c.scrollIntoView({ block: 'end' }));
+        await page.screenshot({ path: path.join(OUT, `dialogo-cru-${vp.mobile ? 'celular' : 'desktop'}.png`) });
       }
       await dlgCard.getByRole('button', { name: 'Refazer diálogo' }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Refazer diálogo' }).click();
@@ -355,7 +383,7 @@ for (const theme of THEMES) {
         }));
         if (!state.replacing) report.problems.push('[refazer] página alvo sem o selo “Será substituída”');
         if (!state.dimmed) report.problems.push('[refazer] página seguinte não está esmaecida');
-        if (state.cards !== 3) report.problems.push(`[refazer] nada deveria ser apagado antes de encerrar (cartões: ${state.cards})`);
+        if (state.cards !== 4) report.problems.push(`[refazer] nada deveria ser apagado antes de encerrar (cartões: ${state.cards})`);
         if (state.overflow > 0) report.problems.push(`[refazer] rolagem horizontal ${state.overflow}px`);
         if (theme === 'cyberpunk' && mode === 'dark') {
           await page.locator('.page-card[data-page-index="2"]').evaluate((c) => c.scrollIntoView({ block: 'start' }));
@@ -364,7 +392,7 @@ for (const theme of THEMES) {
         await page.getByRole('button', { name: 'Descartar', exact: true }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Descartar' }).click();
         await page.getByText('Refazendo diálogo — Falando com: Elena').waitFor({ state: 'detached', timeout: 4000 });
-        if ((await page.locator('.page-card[data-page-id]').count()) !== 3) report.problems.push('[refazer] descartar deveria manter as 3 páginas');
+        if ((await page.locator('.page-card[data-page-id]').count()) !== 4) report.problems.push('[refazer] descartar deveria manter as 4 páginas');
       } catch (e) {
         report.problems.push(`[refazer] fluxo falhou (${(e as Error).message.split('\n')[0]})`);
       }
