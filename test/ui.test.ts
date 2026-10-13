@@ -251,7 +251,7 @@ describe('UI — sessão', () => {
     const cards = Array.from(document.querySelectorAll<HTMLElement>('section.page-card[data-page-id]'));
     expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
     for (const card of cards) {
-      const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button'));
+      const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button.page-action'));
       expect(actions.map((b) => b.getAttribute('aria-label'))).toEqual(['Ouvir esta página', 'Reproduzir a partir daqui', 'Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página']);
       for (const b of actions) {
         expect(b.textContent).toBe(''); // só ícone
@@ -260,8 +260,10 @@ describe('UI — sessão', () => {
         expect(b.className).not.toMatch(/opacity-0|md:opacity-0|group-hover/); // nunca depende de hover
       }
     }
-    const icons = Array.from(cards[0]!.querySelectorAll('.page-card-actions svg')).map((s) => s.innerHTML);
+    const icons = Array.from(cards[0]!.querySelectorAll('.page-card-actions .page-action svg')).map((s) => s.innerHTML);
     expect(new Set(icons).size).toBe(5); // glifos distintos
+    // O menu "Opções do áudio" só existe com áudio pronto: sem áudio fica escondido (fora do rodapé visível).
+    for (const c of cards) expect(c.querySelector('.page-action-menu')!.parentElement!.classList.contains('hidden')).toBe(true);
     expect(cards[0]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(false);
     expect(cards[1]!.querySelector<HTMLButtonElement>('[aria-label="Ramificar a partir desta página"]')!.disabled).toBe(true); // última página
     expect(cards[0]!.querySelector('.drop-cap')).not.toBeNull();
@@ -313,7 +315,7 @@ describe('UI — sessão', () => {
     expect(card.querySelectorAll('.dialogue-speaker')).toHaveLength(0); // página narrada: sem rótulos de falante
     expect(card.textContent).toContain('— Olá, viajante!');
     // A ação "editar prompt" vira "Refazer diálogo" (glifo próprio) nas páginas de diálogo; "Narrar diálogo" só nas cruas.
-    const labels = Array.from(card.querySelectorAll('.page-card-actions button')).map((b) => b.getAttribute('aria-label'));
+    const labels = Array.from(card.querySelectorAll('.page-card-actions button.page-action')).map((b) => b.getAttribute('aria-label'));
     expect(labels).toEqual(['Ouvir esta página', 'Reproduzir a partir daqui', 'Editar texto da página', 'Refazer diálogo', 'Ramificar a partir desta página']);
     const first = document.querySelector('section.page-card[data-page-index="1"]')!;
     expect(first.querySelector('[data-badge]')).toBeNull();
@@ -338,7 +340,7 @@ describe('UI — sessão', () => {
     expect(text()).toContain('conseguiu manter as falas intactas');
     const card = () => document.querySelector<HTMLElement>('section.page-card[data-page-index="2"]')!;
     expect(Array.from(card().querySelectorAll('.dialogue-speaker')).map((e) => e.textContent)).toEqual(['Aldric:', 'Mercador:']);
-    const labels = Array.from(card().querySelectorAll('.page-card-actions button')).map((b) => b.getAttribute('aria-label'));
+    const labels = Array.from(card().querySelectorAll('.page-card-actions button.page-action')).map((b) => b.getAttribute('aria-label'));
     expect(labels).toEqual(['Ouvir esta página', 'Reproduzir a partir daqui', 'Editar texto da página', 'Narrar diálogo', 'Refazer diálogo', 'Ramificar a partir desta página']);
 
     gateway.queue(narratorJson('A feira seguiu seu curso.'));
@@ -463,7 +465,7 @@ describe('UI — sessão', () => {
     expect(text()).toContain('Segundo capítulo.');
     expect(text()).not.toContain('Terceiro capítulo.');
     // Somente leitura: o rodapé só tem o ícone de ouvir (sem editar nem ramificar).
-    const readOnlyActions = Array.from(document.querySelectorAll('.page-card-actions button'));
+    const readOnlyActions = Array.from(document.querySelectorAll('.page-card-actions button.page-action'));
     expect(readOnlyActions.map((b) => b.getAttribute('aria-label'))).toEqual(['Ouvir esta página', 'Ouvir esta página']);
     expect(document.querySelector('textarea')).toBeNull();
     expect(byLabel('Salvar volume em Markdown')).not.toBeNull();

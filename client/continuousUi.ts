@@ -1,8 +1,7 @@
 import type { ContinuousState } from './continuousPlayback';
 import { h, openModal } from './dom';
-import { icon } from './icons';
 
-/** Textos e estado do banner (separado do DOM para ser testável). */
+/** Texto de estado da barra do player no modo contínuo (separado do DOM para ser testável). */
 export function statusText(s: ContinuousState): string {
   const parts: string[] = [];
   if (s.phase === 'waiting') parts.push(`Aguardando a narração da Página ${s.currentNumber}…`);
@@ -10,52 +9,6 @@ export function statusText(s: ContinuousState): string {
   if (s.generating > 0) parts.push(`gerando ${s.generating} ${s.generating === 1 ? 'página' : 'páginas'} em segundo plano`);
   if (s.stopsAt !== null) parts.push(`para na Página ${s.stopsAt}, que não tem áudio`);
   return parts.join(' · ');
-}
-
-export interface ContinuousBar {
-  el: HTMLElement;
-  /** `null` esconde o banner. */
-  update(state: ContinuousState | null, title: string): void;
-}
-
-/** Banner fixo acima da Doca: "Reproduzindo «crônica» em modo contínuo" + Interromper. */
-export function createContinuousBar(onStop: () => void): ContinuousBar {
-  const heading = h('p', { class: 'continuous-bar-title' });
-  const detail = h('p', { class: 'continuous-bar-detail' });
-  const live = h('p', { class: 'sr-only', 'aria-live': 'polite', 'data-continuous-live': '' });
-  const stopBtn = h(
-    'button',
-    { type: 'button', class: 'btn btn-danger continuous-bar-stop', 'aria-label': 'Interromper a reprodução contínua', onClick: onStop },
-    icon('stop', 16),
-    h('span', null, 'Interromper'),
-  );
-  const el = h(
-    'div',
-    { class: 'continuous-bar hidden', role: 'region', 'aria-label': 'Reprodução contínua', 'data-continuous-bar': '' },
-    h('span', { class: 'continuous-bar-icon' }, icon('playFrom', 20)),
-    h('div', { class: 'min-w-[14rem] flex-1' }, heading, detail),
-    stopBtn,
-    live,
-  );
-  let lastPage = -1;
-  return {
-    el,
-    update(state, title) {
-      if (!state) {
-        el.classList.add('hidden');
-        lastPage = -1;
-        return;
-      }
-      el.classList.remove('hidden');
-      heading.textContent = `Reproduzindo «${title}» em modo contínuo`;
-      detail.textContent = `Página ${state.currentNumber} · ${state.index + 1} de ${state.pageIds.length} · ${statusText(state)}`;
-      // Anúncio para leitores de tela só quando a página muda (não a cada atualização de status).
-      if (state.currentNumber !== lastPage) {
-        lastPage = state.currentNumber;
-        live.textContent = `Reproduzindo a Página ${state.currentNumber}.`;
-      }
-    },
-  };
 }
 
 /** "Páginas 4, 5 e 7" / "Páginas 4 a 9 e 12" (sequências de 3 ou mais viram intervalo). */

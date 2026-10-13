@@ -33,7 +33,7 @@ const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubble
 const text = () => document.body.textContent ?? '';
 const modalButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')).find((b) => b.textContent === label);
 const card = (n: number) => document.querySelector<HTMLElement>(`section.page-card[data-page-index="${n}"]`)!;
-const bar = () => document.querySelector<HTMLElement>('[data-continuous-bar]')!;
+const bar = () => document.querySelector<HTMLElement>('[data-player-bar]')!;
 const barVisible = () => !!bar() && !bar().classList.contains('hidden');
 const playFrom = (n: number) => byLabel('Reproduzir a partir daqui', card(n)) as HTMLButtonElement;
 const pageId = (n: number) => repos.pages.listAll(sessionId)[n - 1]!.id;
@@ -119,23 +119,78 @@ describe('UI — reprodução contínua', () => {
     expect(document.querySelector('[role=dialog]')).toBeNull();
     expect(barVisible()).toBe(true);
     expect(bar().getAttribute('role')).toBe('region');
-    expect(bar().textContent).toContain('Reproduzindo «Crônica do Teste» em modo contínuo');
+    expect(bar().querySelector('.player-bar-title')!.textContent).toBe('«Crônica do Teste»'); // o ícone da barra já diz "contínuo"
+    expect(bar().getAttribute('aria-label')).toContain('reproduzindo «Crônica do Teste» em modo contínuo'); // leitores de tela ouvem tudo
     expect(bar().textContent).toContain('Página 1 · 1 de 3');
-    // o player da própria página abre
-    await waitFor(() => card(1).querySelector('.audio-player'), 'player da página 1 aberto');
+    // o player mora na barra (não nas páginas): controles de mídia e anterior/próxima
+    expect(bar().getAttribute('data-mode')).toBe('continuous');
+    for (const label of ['Página anterior', 'Tocar', 'Próxima página']) expect(byLabel(label, bar()), label).not.toBeNull();
+    expect(bar().querySelector('input[type=range]')).not.toBeNull();
+    expect(card(1).querySelector('.audio-player')).toBeNull();
 
     ended();
     await waitFor(() => plays.length === 2, 'tocou a página 2');
     expect(plays[1]).toContain(pageId(2));
-    await waitFor(() => card(2).querySelector('.audio-player'), 'player da página 2 aberto');
-    expect(card(1).querySelector('.audio-player')).toBeNull(); // o modo fecha o que abriu
-    expect(bar().textContent).toContain('Página 2 · 2 de 3');
+    await waitFor(() => bar().textContent!.includes('Página 2 · 2 de 3'), 'barra na página 2');
+    expect(card(2).querySelector('.audio-player')).toBeNull();
 
     ended();
     await waitFor(() => plays.length === 3, 'tocou a página 3');
     ended();
     await waitFor(() => !barVisible(), 'banner some ao concluir');
     expect(text()).toContain('Reprodução contínua concluída.');
+  });
+
+  it('anterior/próxima da barra navegam pelas páginas; a próxima some no fim da lista', async () => {
+    await boot();
+    await makeAudio(1, 2, 3);
+    await openSession();
+    click(playFrom(1));
+    await waitFor(() => plays.length === 1, 'tocou a página 1');
+    const nextBtn = byLabel('Próxima página', bar()) as HTMLButtonElement;
+    const prevBtn = byLabel('Página anterior', bar()) as HTMLButtonElement;
+    expect(nextBtn.disabled).toBe(false);
+
+    click(nextBtn);
+    await waitFor(() => plays.length === 2, 'próxima: página 2');
+    expect(plays[1]).toContain(pageId(2));
+    click(nextBtn);
+    await waitFor(() => plays.length === 3, 'próxima: página 3');
+    await waitFor(() => bar().textContent!.includes('Página 3 · 3 de 3'), 'detalhe da página 3');
+    expect(nextBtn.disabled).toBe(true);
+
+    click(prevBtn); // a faixa está no início (tempo 0): volta uma página
+    await waitFor(() => plays.length === 4, 'anterior: página 2');
+    expect(plays[3]).toContain(pageId(2));
+    expect(bar().textContent).toContain('Página 2 · 2 de 3');
+  });
+
+  it('o botão Tocar/Pausar da barra comanda o reprodutor', async () => {
+    await boot();
+    await makeAudio(1, 2, 3);
+    await openSession();
+    click(playFrom(1));
+    await waitFor(() => plays.length === 1, 'tocou a página 1');
+    const play = byLabel('Tocar', bar())!;
+    click(play); // o reprodutor simulado segue "pausado": o clique retoma a mesma faixa
+    await waitFor(() => plays.length === 2, 'retomou');
+    expect(plays[1]).toBe(plays[0]);
+  });
+
+  it('a barra também aparece para uma página tocada fora do modo contínuo, sem Interromper', async () => {
+    await boot();
+    await makeAudio(1);
+    await openSession();
+    expect(barVisible()).toBe(false);
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => barVisible(), 'barra');
+    expect(bar().getAttribute('data-mode')).toBe('single');
+    expect(bar().textContent).toContain('Tocando a Página 1 de «Crônica do Teste»');
+    const stop = byLabel('Interromper a reprodução contínua', bar())!;
+    expect(stop.classList.contains('hidden')).toBe(true);
+    expect((byLabel('Próxima página', bar()) as HTMLElement).classList.contains('hidden')).toBe(true);
+    click(byLabel('Fechar o player', bar())!);
+    await waitFor(() => !barVisible(), 'barra fechada');
   });
 
   it('começando da página 2: a 1 fica de fora', async () => {

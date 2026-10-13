@@ -49,7 +49,8 @@ Por que o projeto é do jeito que é. Este documento guarda o **raciocínio** po
 | **Geração automática desligada por padrão** | Gerar áudio custa tokens; só acontece a pedido (ou pela opção, que é por crônica, com padrão global; uma só, que vale para prosa e diálogo) |
 | **Reprodução contínua: sempre com pergunta** | Faltando áudio, o app pergunta antes de gerar (com aviso de custo reforçado acima de 10 páginas). A ideia de "ler daqui até o fim" automática foi recusada no início justamente pelo risco de gasto; voltou como botão explícito |
 | **Interromper só para a reprodução** | As gerações já iniciadas seguem no servidor: o dinheiro já foi gasto e o áudio fica pronto para depois |
-| **Um único `<audio>` global** | Tocar uma página pausa a outra; o modo contínuo reaproveita o player da própria página e as teclas de mídia ganham próxima/anterior |
+| **Um único `<audio>` global** | Tocar uma página pausa a outra; o modo contínuo usa o mesmo reprodutor e as teclas de mídia ganham próxima/anterior |
+| **O player mora numa barra fixa, não na página** | Um player dentro de cada cartão era difícil de achar com a página rolada para longe do que estava tocando. A página guarda só o status da geração (e o menu *Opções do áudio*); tocar/pausar, posição, velocidade e anterior/próxima ficam na barra, sempre visível, que serve a uma página avulsa e ao modo contínuo (e ao leitor de volumes) |
 
 ## Invariantes e os testes que os protegem
 

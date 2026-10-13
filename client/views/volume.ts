@@ -3,6 +3,7 @@ import { audioPlayer } from '../audioPlayer';
 import { createModeControl, fullscreenButton, iconButton } from '../controls';
 import { h, mount, paragraphs } from '../dom';
 import { pageCard } from '../pageCard';
+import { createPlayerBar } from '../playerBar';
 import { applyTheme } from '../theme';
 import { openVolumeExport } from './volumeExport';
 
@@ -41,6 +42,8 @@ export async function renderVolume(root: HTMLElement, sessionId: string, volumeN
     detail.archives.some((a) => a.volume_number === n) ? h('a', { href: `#/s/${sessionId}/v/${n}`, class: 'btn' }, label) : null;
 
   const pageCount = pages.length;
+  // Player das páginas do volume: barra fixa no rodapé da tela (uma página por vez, sem modo contínuo).
+  const bar = createPlayerBar({ title: () => title });
   mount(
     root,
     h(
@@ -72,10 +75,12 @@ export async function renderVolume(root: HTMLElement, sessionId: string, volumeN
           h('nav', { class: 'flex flex-wrap items-center justify-between gap-2 pb-4', 'aria-label': 'Navegação entre volumes' }, neighbour(volumeNumber - 1, '← Volume anterior') ?? h('span', null), back('Voltar ao Tome'), neighbour(volumeNumber + 1, 'Próximo volume →') ?? h('span', null)),
         ),
       ),
+      bar.el,
     ),
   );
 
   return () => {
+    bar.dispose();
     audioPlayer.stop();
     document.title = 'Chronicler Engine';
   };

@@ -303,6 +303,15 @@
     background: var(--bg-panel);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
   }
+  /* Variante que abre para cima (menus de rodapé de cartão). */
+  .menu-up {
+    width: max-content;
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+  .menu-item.is-danger {
+    color: var(--hp-low);
+  }
   .menu-item {
     @apply flex w-full items-center gap-2 rounded px-2 py-1.5 font-display text-sm text-ink hover:bg-main hover:text-accent focus-visible:bg-main focus-visible:text-accent focus-visible:outline-none;
   }
@@ -383,6 +392,9 @@
     @apply flex items-center justify-end gap-2 border-t px-3 py-2 sm:px-4;
     border-color: var(--page-border);
   }
+  .page-card-actions-start {
+    @apply mr-auto flex items-center gap-2;
+  }
   /* Tooltips do rodapé ancoram na borda direita do botão e nunca passam da largura da tela. */
   .page-card-actions .tip::after {
     max-width: min(16rem, 60vw);
@@ -393,16 +405,13 @@
     opacity: 1;
   }
 
-  /* Narração por voz: botão "Ouvir" e painel (gerando / erro / player) acima do rodapé do cartão. */
+  /* Narração por voz: botão "Ouvir" e painel (gerando / erro) acima do rodapé do cartão; o player fica na .player-bar. */
   .page-action-listen.is-playing {
     @apply border-accent text-accent;
   }
   .audio-panel {
     @apply px-3 py-2 sm:px-4;
     border-top: 1px solid var(--page-border);
-  }
-  .audio-player {
-    @apply flex flex-wrap items-center gap-2;
   }
   .audio-seek {
     flex: 1 1 7rem;
@@ -412,9 +421,6 @@
   .audio-time {
     @apply whitespace-nowrap text-xs text-muted;
     font-variant-numeric: tabular-nums;
-  }
-  .audio-tools {
-    @apply ml-auto flex items-center gap-1;
   }
   .audio-rate {
     @apply h-9 min-w-[2.25rem] px-2 text-xs;
@@ -465,24 +471,40 @@
     }
   }
 
-  /* Reprodução contínua: banner fixo acima da Doca. */
-  .continuous-bar {
-    @apply flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-accent bg-panel px-4 py-2;
+  /* Player de narração: barra fixa (entre o Tome e a Doca; no rodapé do leitor de volumes). */
+  .player-bar {
+    @apply flex shrink-0 flex-col gap-2 border-t border-accent bg-panel px-4 py-2;
   }
-  .continuous-bar.hidden {
+  .player-bar.hidden {
     display: none;
   }
-  .continuous-bar-icon {
+  .player-bar-head {
+    @apply flex items-center gap-3;
+  }
+  .player-bar-icon {
     @apply shrink-0 text-accent;
   }
-  .continuous-bar-title {
-    @apply font-display text-sm text-strong;
+  .player-bar-text {
+    @apply min-w-0 flex-1;
   }
-  .continuous-bar-detail {
-    @apply text-xs text-muted;
+  .player-bar-title {
+    @apply font-display text-sm text-ink;
   }
-  .continuous-bar-stop {
+  /* Fundo da barra é o do painel (mais escuro que a folha): o texto usa a cor principal para manter o contraste em todos os temas. */
+  .player-bar-detail,
+  .player-bar .audio-time {
+    @apply text-xs text-ink;
+  }
+  /* Na barra a posição cede espaço, para tocar/pausar, tempo e velocidade caberem numa linha só no celular. */
+  .player-bar .audio-seek {
+    flex-basis: 5rem;
+    min-width: 5rem;
+  }
+  .player-bar-stop {
     @apply shrink-0;
+  }
+  .player-bar-controls {
+    @apply flex flex-wrap items-center gap-x-2 gap-y-1;
   }
 
   /* Botão "Compactar Crônica" pulsa quando o HP está em exaustão (< 20%). */

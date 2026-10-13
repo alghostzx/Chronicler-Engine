@@ -1,39 +1,28 @@
 import { api, ApiError, type AudioInfo, type Page } from './api';
-import { audioPlayer, audioUrl, formatClock, RATES, type TrackMeta } from './audioPlayer';
-import { iconButton } from './controls';
+import { audioPlayer, audioUrl, type TrackMeta } from './audioPlayer';
+import { createActionMenu, iconButton, type ActionMenu } from './controls';
 import { confirmModal, h, toast } from './dom';
 import { icon } from './icons';
 
 /**
- * Controles de narração de UMA página: o botão "Ouvir" do rodapé do cartão e o painel que aparece
- * sobre o rodapé (gerando, erro, ou player). O áudio em si vive em client/audioPlayer.ts; aqui só
- * há estado de interface. `page.audio` é mantido atualizado (mutação) para que reconstruções do
- * Tome não percam o estado.
+ * Controles de narração de UMA página: o botão "Ouvir" do rodapé do cartão, o menu de opções do
+ * áudio (baixar, gerar de novo, apagar) e o painel que aparece sobre o rodapé (só gerando ou erro).
+ * O player em si (tocar/pausar, posição, velocidade) vive na barra fixa de client/playerBar.ts; o
+ * áudio, em client/audioPlayer.ts. `page.audio` é mantido atualizado (mutação) para que
+ * reconstruções do Tome não percam o estado.
  */
 
 export const AUDIO_LABELS = {
   listen: 'Ouvir esta página',
   play: 'Tocar',
   pause: 'Pausar',
+  options: 'Opções do áudio',
   regenerate: 'Gerar o áudio de novo',
   remove: 'Apagar o áudio',
   download: 'Baixar o áudio (.mp3)',
   cancel: 'Cancelar a geração do áudio',
   retry: 'Tentar gerar o áudio de novo',
 } as const;
-
-/** Páginas cujo player está aberto (sobrevive às reconstruções do Tome). */
-const openPanels = new Set<string>();
-
-/** Abre/fecha o player de uma página por fora do botão "Ouvir" (reprodução contínua); vale na próxima montagem do cartão. */
-export function setPanelOpen(pageId: string, open: boolean): void {
-  if (open) openPanels.add(pageId);
-  else openPanels.delete(pageId);
-}
-
-export function isPanelOpen(pageId: string): boolean {
-  return openPanels.has(pageId);
-}
 
 /** Durante a geração em lote da reprodução contínua, o aviso "ficou pronta" de cada página seria só ruído. */
 let quietReady = false;
@@ -86,7 +75,9 @@ const sizeLabel = (bytes: number): string => (bytes >= 1024 * 1024 ? `${(bytes /
 export interface AudioControls {
   /** Botão "Ouvir" do rodapé do cartão. */
   button: HTMLButtonElement;
-  /** Painel (gerando / erro / player) que fica acima do rodapé; vazio e oculto quando não há o que mostrar. */
+  /** Menu "Opções do áudio" (baixar, gerar de novo, apagar); oculto enquanto não há áudio pronto. */
+  menu: ActionMenu;
+  /** Painel (gerando / erro) que fica acima do rodapé; vazio e oculto quando não há o que mostrar. */
   panel: HTMLElement;
 }
 
@@ -108,11 +99,20 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
     extraClass: 'page-action page-action-listen',
     onClick: () => void onListen(),
   }) as HTMLButtonElement;
+  const menu = createActionMenu({ label: AUDIO_LABELS.options, items: [], align: 'start', up: true });
   const panel = h('div', { class: 'audio-panel hidden', 'data-audio-panel': page.id });
 
   // Se a página perdeu o áudio (editada, apagada, regenerada) enquanto ele tocava, para.
   if (!page.audio && audioPlayer.state.pageId === page.id) audioPlayer.stop();
   if (page.audio?.status === 'generating') startWatching();
+  // Repinta o botão quando o player (barra) toca/pausa esta página; solta o ouvinte quando o cartão sai da tela.
+  let attached = false;
+  const unsubscribe = audioPlayer.subscribe(() => {
+    if (button.isConnected) {
+      attached = true;
+      paintButton();
+    } else if (attached) unsubscribe();
+  });
 
   // --- Ações ---------------------------------------------------------------------------------
   async function generate(): Promise<void> {
@@ -120,7 +120,6 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
       const r = await api<{ audio: AudioInfo }>('POST', `/api/narrative/pages/${page.id}/audio`);
       if (playingThis()) audioPlayer.pause();
       page.audio = r.audio;
-      openPanels.add(page.id);
       paint();
       startWatching();
     } catch (err) {
@@ -133,15 +132,8 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
     const a = page.audio;
     if (!a || a.status === 'error') return generate();
     if (a.status === 'generating') return;
-    if (openPanels.has(page.id)) {
-      openPanels.delete(page.id);
-      if (playingThis()) audioPlayer.pause();
-      paint();
-    } else {
-      openPanels.add(page.id);
-      paint();
-      await audioPlayer.play(meta());
-    }
+    if (playingThis()) audioPlayer.pause();
+    else await audioPlayer.play(meta());
   }
 
   async function regenerate(): Promise<void> {
@@ -163,7 +155,6 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
       await api('DELETE', `/api/narrative/pages/${page.id}/audio`);
       if (audioPlayer.state.pageId === page.id) audioPlayer.stop();
       page.audio = null;
-      openPanels.delete(page.id);
       paint();
     } catch (err) {
       toast((err as Error).message, 'error');
@@ -203,7 +194,7 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
     button.disabled = a?.status === 'generating';
     button.classList.toggle('is-busy', a?.status === 'generating');
     button.classList.toggle('is-playing', playingThis());
-    button.removeAttribute('aria-expanded');
+    button.removeAttribute('aria-pressed');
     button.removeAttribute('aria-busy');
     let tip: string;
     if (!a) tip = 'Gerar a narração em áudio desta página (usa tokens de voz do Gemini)';
@@ -212,9 +203,8 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
       button.setAttribute('aria-busy', 'true');
     } else if (a.status === 'error') tip = `A narração falhou: ${a.error ?? 'erro desconhecido'}. Clique para tentar de novo.`;
     else {
-      const open = openPanels.has(page.id);
-      button.setAttribute('aria-expanded', String(open));
-      tip = open ? 'Fechar o player e pausar' : 'Ouvir esta página';
+      button.setAttribute('aria-pressed', String(playingThis()));
+      tip = playingThis() ? 'Pausar esta página' : 'Ouvir esta página';
     }
     button.setAttribute('data-tip', tip);
   }
@@ -245,11 +235,24 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
           iconButton({ icon: 'refresh', label: AUDIO_LABELS.retry, align: 'end', up: true, onClick: () => void generate() }),
         ),
       );
-    } else if (a?.status === 'ready' && openPanels.has(page.id)) {
-      show(player(a));
+    } else if (a?.status === 'ready' && a.error) {
+      show(h('p', { class: 'audio-note', role: 'status' }, `A última tentativa de gerar de novo falhou: ${a.error}. Esta é a narração anterior.`));
     } else {
       show(null);
     }
+    paintMenu();
+  }
+
+  function paintMenu(): void {
+    const a = page.audio;
+    menu.setHidden(a?.status !== 'ready');
+    if (a?.status !== 'ready') return;
+    menu.button.setAttribute('data-tip', `${AUDIO_LABELS.options} (${sizeLabel(a.bytes ?? 0)})`);
+    menu.setItems([
+      { label: AUDIO_LABELS.download, icon: 'download', href: audioUrl(page.id, undefined, true) },
+      { label: AUDIO_LABELS.regenerate, icon: 'refresh', onSelect: () => void regenerate() },
+      { label: AUDIO_LABELS.remove, icon: 'trash', danger: true, onSelect: () => void remove() },
+    ]);
   }
 
   function show(content: HTMLElement | null): void {
@@ -263,75 +266,6 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
     return s;
   }
 
-  function player(a: AudioInfo): HTMLElement {
-    const playBtn = iconButton({ icon: 'play', label: AUDIO_LABELS.play, align: 'start', up: true, onClick: () => void (playingThis() ? audioPlayer.pause() : audioPlayer.play(meta())) }) as HTMLButtonElement;
-    const seek = h('input', { type: 'range', class: 'audio-seek', min: '0', max: String((a.duration_ms ?? 0) / 1000 || 1), step: '0.1', value: '0', 'aria-label': 'Posição do áudio' });
-    const time = h('span', { class: 'audio-time', 'aria-hidden': 'true' }, '0:00');
-    const rateBtn = h('button', { type: 'button', class: 'btn audio-rate tip tip-up', 'data-tip': 'Velocidade de reprodução' });
-    let dragging = false;
-
-    const sync = (): boolean => {
-      if (!panel.isConnected || !panel.contains(playBtn)) return false;
-      const s = audioPlayer.state;
-      const mine = s.pageId === page.id;
-      const duration = mine && s.duration > 0 ? s.duration : (a.duration_ms ?? 0) / 1000;
-      const current = mine ? s.time : 0;
-      const playing = mine && s.playing;
-      seek.max = String(duration || 1);
-      if (!dragging) seek.value = String(current);
-      seek.setAttribute('aria-valuetext', `${formatClock(current)} de ${formatClock(duration)}`);
-      time.textContent = `${formatClock(current)} / ${formatClock(duration)}`;
-      playBtn.replaceChildren(icon(playing ? 'pause' : 'play'));
-      playBtn.setAttribute('aria-label', playing ? AUDIO_LABELS.pause : AUDIO_LABELS.play);
-      playBtn.setAttribute('data-tip', playing ? AUDIO_LABELS.pause : AUDIO_LABELS.play);
-      playBtn.setAttribute('aria-pressed', String(playing));
-      const r = audioPlayer.rate;
-      rateBtn.textContent = `${r}×`;
-      rateBtn.setAttribute('aria-label', `Velocidade de reprodução: ${r}×. Clique para mudar.`);
-      button.classList.toggle('is-playing', playing);
-      return true;
-    };
-    const unsubscribe = audioPlayer.subscribe(() => {
-      if (!sync()) unsubscribe();
-    });
-
-    seek.addEventListener('input', () => {
-      dragging = true;
-      time.textContent = `${formatClock(Number(seek.value))} / ${formatClock(Number(seek.max))}`;
-    });
-    seek.addEventListener('change', () => {
-      dragging = false;
-      audioPlayer.select(meta());
-      audioPlayer.seek(Number(seek.value));
-    });
-    rateBtn.addEventListener('click', () => {
-      const i = RATES.indexOf(audioPlayer.rate as (typeof RATES)[number]);
-      audioPlayer.setRate(RATES[(i + 1) % RATES.length]!);
-    });
-
-    const download = iconButton({ icon: 'download', label: AUDIO_LABELS.download, tip: `Baixar o MP3 (${sizeLabel(a.bytes ?? 0)})`, align: 'end', up: true, href: audioUrl(page.id, undefined, true) });
-    download.setAttribute('download', '');
-
-    const el = h(
-      'div',
-      { class: 'audio-player', role: 'group', 'aria-label': `Player da página ${page.order_index}` },
-      playBtn,
-      seek,
-      time,
-      h(
-        'div',
-        { class: 'audio-tools' },
-        rateBtn,
-        iconButton({ icon: 'refresh', label: AUDIO_LABELS.regenerate, tip: `${AUDIO_LABELS.regenerate} (substitui este áudio; usa tokens de voz)`, align: 'end', up: true, onClick: () => void regenerate() }),
-        iconButton({ icon: 'trash', label: AUDIO_LABELS.remove, align: 'end', up: true, onClick: () => void remove() }),
-        download,
-      ),
-      a.error ? h('p', { class: 'audio-note' }, `A última tentativa de gerar de novo falhou: ${a.error}. Este é o áudio anterior.`) : null,
-    );
-    queueMicrotask(() => sync());
-    return el;
-  }
-
   paint();
-  return { button, panel };
+  return { button, menu, panel };
 }

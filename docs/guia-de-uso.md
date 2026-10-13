@@ -19,6 +19,7 @@ No rodapé de cada página há ícones sempre visíveis, com tooltip:
 | Ícone | Ação | O que acontece |
 | --- | --- | --- |
 | 🔊 | Ouvir esta página | Gera (ou toca) a narração por voz |
+| ⋮ | Opções do áudio | Baixar o .mp3, gerar de novo ou apagar a narração (só aparece com áudio pronto) |
 | ▶ | Reproduzir a partir daqui | Reprodução contínua (ver [Narração por voz](narracao-por-voz.md#reprodução-contínua)); não aparece na última página |
 | ✎ | Editar o texto | Edita dentro do cartão. As páginas seguintes **não** são afetadas |
 | 💬 | Editar o prompt e re-gerar | Refaz a página e **descarta as posteriores** (com aviso e contagem) |

@@ -74,12 +74,14 @@ export function pageCard(o: PageCardOptions): HTMLElement {
       ...paragraphs(page.generated_text).map((p) => pageParagraph(p, page.kind === 'dialogue' && page.raw_dialogue)),
     ),
   ];
-  // Narração: o botão "Ouvir" fica sempre no rodapé (inclusive em páginas somente leitura, como as
-  // de volumes) e o painel (gerando/erro/player) logo acima dele.
+  // Narração: o botão "Ouvir" (e o menu de opções do áudio, quando há áudio pronto) ficam sempre no
+  // rodapé, inclusive em páginas somente leitura como as de volumes; o painel de geração/erro logo
+  // acima. O player (tocar, posição, velocidade) mora na barra fixa da tela, não no cartão.
   const audio = audioControls(page, { sessionTitle: o.sessionTitle ?? 'Crônica' });
   children.push(audio.panel);
-  const footer: HTMLElement[] = [audio.button];
-  if (o.readonly) audio.button.classList.add('mr-auto'); // sozinho no rodapé, fica à esquerda (a dica ancora no início)
+  // Grupo à esquerda do rodapé (a dica ancora no início); as ações de edição ficam à direita.
+  const start = h('div', { class: 'page-card-actions-start' }, audio.button, audio.menu.el);
+  const footer: HTMLElement[] = [start];
   if (!o.readonly) {
     const last = (o.laterCount ?? 0) === 0;
     const playFrom = iconButton({
@@ -94,8 +96,7 @@ export function pageCard(o: PageCardOptions): HTMLElement {
       disabled: last,
       onClick: o.onPlayFromHere,
     });
-    footer.push(playFrom);
-    playFrom.classList.add('mr-auto');
+    start.append(playFrom);
     const dialogue = page.kind === 'dialogue';
     const action = (icon: 'pencil' | 'prompt' | 'narrateDialogue' | 'redoDialogue' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
       iconButton({ icon, label, tip, align: 'end', up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });

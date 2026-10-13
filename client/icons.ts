@@ -120,6 +120,21 @@ const ICONS = {
     ['path', { d: 'M3 18h8' }],
     ['path', { d: 'M15 10.5 21 14.5 15 18.5z' }],
   ],
+  /** Página anterior / próxima (reprodução contínua): seta com barra. */
+  skipBack: [
+    ['path', { d: 'M19 20 9 12l10-8z' }],
+    ['line', { x1: '5', y1: '19', x2: '5', y2: '5' }],
+  ],
+  skipForward: [
+    ['path', { d: 'm5 4 10 8-10 8z' }],
+    ['line', { x1: '19', y1: '5', x2: '19', y2: '19' }],
+  ],
+  /** Mais opções: três pontos. */
+  more: [
+    ['circle', { cx: '12', cy: '5', r: '1' }],
+    ['circle', { cx: '12', cy: '12', r: '1' }],
+    ['circle', { cx: '12', cy: '19', r: '1' }],
+  ],
   /** Interromper. */
   stop: [['rect', { x: '6', y: '6', width: '12', height: '12', rx: '1.5' }]],
   /** Pausar. */

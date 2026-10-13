@@ -56,9 +56,11 @@ Gerado por `npm run check:audio`:
 | | |
 | --- | --- |
 | ![Geração do áudio em andamento (Medieval claro)](screenshots/audio/medieval-light-desktop-gerando.png) | ![Player de áudio (Cyberpunk escuro)](screenshots/audio/cyberpunk-dark-desktop-player.png) |
-| **Gerando** o áudio da página (progresso n/m, cancelar) | **Player**: tocar/pausar, barra, velocidade, gerar de novo, apagar, baixar |
+| **Gerando** o áudio da página (progresso n/m, cancelar) | **Barra do player** (fixa, acima da Doca): tocar/pausar, posição, velocidade e fechar |
 | ![Reprodução contínua (Medieval claro)](screenshots/audio/medieval-light-desktop-continuo.png) | ![Reprodução contínua no celular (Cyberpunk escuro)](screenshots/audio/cyberpunk-dark-celular-continuo.png) |
-| **Reprodução contínua**: banner com a página atual e *Interromper* | A mesma tela no celular |
+| **Reprodução contínua**: a mesma barra com anterior/próxima, a página atual e *Interromper* | A mesma tela no celular |
+| ![Menu Opções do áudio (Medieval escuro)](screenshots/audio/medieval-dark-desktop-menu.png) | ![Leitor de volume com a barra do player (Cyberpunk escuro, celular)](screenshots/audio/cyberpunk-dark-celular-volume.png) |
+| **Opções do áudio** no rodapé da página: baixar, gerar de novo, apagar | **Leitor de volume**: a barra fica fixa no fim da tela |
 | ![Cartão de configurações de voz (Medieval claro)](screenshots/audio/medieval-light-desktop-config-voz.png) | ![Aba Voz da gaveta (Medieval escuro)](screenshots/audio/medieval-dark-desktop-gaveta-voz.png) |
 | **Opções → Narração por voz**: voz, modelo, estilo, amostra e armazenamento | **Aba Voz** da gaveta: geração automática por crônica |
 
