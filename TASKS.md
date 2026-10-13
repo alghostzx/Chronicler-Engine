@@ -180,7 +180,7 @@ Problemas relatados (Android Chrome): com a barra do navegador visível o campo 
 - [x] Merge de `feature/mobile-app` em `main`
 
 ## Fase 15 — Narração por voz (TTS Gemini 3.8) (branch `feature/tts-narrador`)
-Decisões do autor: voz padrão **Gacrux** ("Mature", pré-definida, sem sotaque carioca) com estilo editável; **geração automática por sessão**, herdando um padrão global **desligado**; **sem** reprodução contínua ("ler daqui até o fim", risco de gasto enorme de tokens); MP3 48 kbps via `@breezystack/lamejs` (LGPL-3.0, documentado). Chave de teste validada: `gemini-3.8-flash-tts` funciona (Interactions API, não `generateContent`).
+Decisões do autor: voz padrão **Gacrux** ("Mature", pré-definida, sem sotaque carioca) com estilo editável; **geração automática por sessão**, herdando um padrão global **desligado**; **sem** reprodução contínua automática ("ler daqui até o fim", risco de gasto enorme de tokens; a Fase 19 a trouxe só por botão explícito, com confirmação de custo); MP3 48 kbps via `@breezystack/lamejs` (LGPL-3.0, documentado). Chave de teste validada: `gemini-3.8-flash-tts` funciona (Interactions API, não `generateContent`).
 
 ### 15.1 Banco e armazenamento (schema v3, sem migração)
 - [x] `SCHEMA_VERSION` 3; tabela `page_audio` (`page_id` PK → `narrative_pages` `ON DELETE CASCADE`, `text_sha256`, `voice`, `model`, `style`, `mime`, `duration_ms`, `bytes`, `audio` BLOB); `sessions.tts_auto` (NULL = herda o padrão global)
@@ -293,21 +293,21 @@ Decisões do autor aprovadas (transcrição crua em `player_instruction`; sem "e
 - [ ] Merge de `feature/dialogo-narrado` em `main` (push e remoção da branch só com confirmação do autor)
 
 ## Fase 19 — Reprodução contínua (branch `feature/reproducao-continua`)
-**Rascunho — aguardando aprovação do autor.** Botão *Reproduzir a partir daqui*: lê as páginas da clicada até o fim; se faltar áudio, pergunta se gera (geração em segundo plano, em ordem, enquanto reproduz) ou se só reproduz até a primeira página sem áudio (sem pular); banner "Reproduzindo «crônica» em modo contínuo" com *Interromper*; o player é o da página que está tocando.
+**Plano aprovado pelo autor.** *Interromper* só para a reprodução e deixa as gerações em andamento correndo (sem modal de cancelar); teclas de mídia ganham próxima/anterior. Botão *Reproduzir a partir daqui*: lê as páginas da clicada até o fim; se faltar áudio, pergunta se gera (geração em segundo plano, em ordem, enquanto reproduz) ou se só reproduz até a primeira página sem áudio (sem pular); banner "Reproduzindo «crônica» em modo contínuo" com *Interromper*; o player é o da página que está tocando.
 
 ### 19.1 Servidor (sem migração)
-- [ ] `GET /api/sessions/:id/audio` (estado do áudio de todas as páginas ativas)
-- [ ] `POST /api/sessions/:id/audio/batch` `{ from_page_id }`: agenda em ordem as páginas sem áudio válido nem job (retenta as com erro); `409` sem chave antes de agendar; idempotente
-- [ ] `POST /api/sessions/:id/audio/cancel` `{ page_ids }` (só páginas da sessão)
+- [x] `GET /api/sessions/:id/audio` (estado do áudio de todas as páginas ativas)
+- [x] `POST /api/sessions/:id/audio/batch` `{ from_page_id }`: agenda em ordem as páginas sem áudio válido nem job (retenta as com erro); `409` sem chave antes de agendar; idempotente
+- [x] `POST /api/sessions/:id/audio/cancel` `{ page_ids }` (só páginas da sessão)
 
 ### 19.2 Cliente
-- [ ] `client/continuousPlayback.ts`: controlador (faixa fixada ao iniciar, faltantes, encadeamento no `ended` do mesmo `<audio>`, esperar geração, parar na 1ª sem áudio / no erro, pausa, takeover, sair da sessão)
-- [ ] Botão no rodapé do cartão (ícone novo, aria-label, tooltip; desabilitado na última página) e modal de faltantes (aviso reforçado acima de 10)
-- [ ] Banner "Reproduzindo «crônica» em modo contínuo" com estado e *Interromper* (pergunta cancelar/deixar gerando se houver geração pendente)
-- [ ] Painel da página atual abre/fecha e o Tome rola até ela; `nexttrack`/`previoustrack` da Media Session
+- [x] `client/continuousPlayback.ts`: controlador (faixa fixada ao iniciar, faltantes, encadeamento no `ended` do mesmo `<audio>`, esperar geração, parar na 1ª sem áudio / no erro, pausa, takeover, sair da sessão)
+- [x] Botão no rodapé do cartão (ícone novo, aria-label, tooltip; desabilitado na última página) e modal de faltantes (aviso reforçado acima de 10)
+- [x] Banner "Reproduzindo «crônica» em modo contínuo" com estado e *Interromper* (só para a reprodução; as gerações pendentes seguem em segundo plano, sem pergunta)
+- [x] Painel da página atual abre/fecha e o Tome rola até ela; `nexttrack`/`previoustrack` da Media Session
 
 ### 19.3 Testes e entrega
-- [ ] Vitest: rotas, controlador (player falso), UI jsdom
-- [ ] `check:audio`/`check:mobile`: fluxo contínuo em Chromium real (encadeamento, banner em 390 px, rodapé em uma linha)
-- [ ] README (inclusive a nota "não existe reprodução contínua"), design document §11.28, typecheck, suíte completa, `npm run build`; merge em `main`
+- [x] Vitest: rotas, controlador (player falso), UI jsdom
+- [x] `check:audio`/`check:mobile`: fluxo contínuo em Chromium real (encadeamento, banner em 390 px, rodapé em uma linha)
+- [x] README (inclusive a nota "não existe reprodução contínua"), design document §11.28, typecheck, suíte completa, `npm run build`; merge em `main`
 
