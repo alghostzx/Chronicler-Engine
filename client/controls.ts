@@ -156,6 +156,125 @@ export function createMenuControl<T extends string>(opts: {
   return { el, button, setCurrent };
 }
 
+export interface ActionMenuItem {
+  label: string;
+  icon?: IconName;
+  /** Link de download: vira `<a download>` em vez de botão. */
+  href?: string;
+  danger?: boolean;
+  onSelect?: () => void;
+}
+
+export interface ActionMenu {
+  el: HTMLElement;
+  button: HTMLButtonElement;
+  setItems(items: ActionMenuItem[]): void;
+  /** Esconde/mostra o botão inteiro (ex.: sem áudio pronto não há o que escolher). */
+  setHidden(hidden: boolean): void;
+}
+
+/**
+ * Botão de ícone (reticências) que abre um pequeno menu de ações (`role=menu`). Fecha com Esc, clique
+ * fora, escolha de um item ou saída do foco; setas ↑/↓ navegam. `up` abre o menu para cima (rodapés).
+ */
+export function createActionMenu(opts: { label: string; icon?: IconName; items: ActionMenuItem[]; align?: TipAlign; up?: boolean }): ActionMenu {
+  const align = opts.align ?? 'start';
+  const button = h('button', {
+    type: 'button',
+    class: `btn btn-icon page-action-menu ${tipClass(align, opts.up)}`,
+    'aria-label': opts.label,
+    'data-tip': opts.label,
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false',
+  });
+  button.append(icon(opts.icon ?? 'more'));
+  const menu = h('div', {
+    role: 'menu',
+    'aria-label': opts.label,
+    class: `menu hidden ${opts.up ? 'menu-up' : ''} ${align === 'end' ? 'right-0' : 'left-0'}`,
+  });
+  const el = h('div', { class: 'relative inline-flex' }, button, menu);
+
+  const entries = (): HTMLElement[] => Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+  const isOpen = (): boolean => !menu.classList.contains('hidden');
+
+  const onOutside = (e: Event): void => {
+    if (!el.isConnected || !el.contains(e.target as Node)) close(false);
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (!el.isConnected) return close(false);
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      close(true);
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const list = entries();
+      if (list.length === 0) return;
+      const at = list.indexOf(document.activeElement as HTMLElement);
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      list[(at + step + list.length) % list.length]?.focus();
+    }
+  };
+
+  function open(): void {
+    menu.classList.remove('hidden');
+    button.setAttribute('aria-expanded', 'true');
+    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('keydown', onKey, true);
+    entries()[0]?.focus();
+  }
+
+  function close(refocus: boolean): void {
+    menu.classList.add('hidden');
+    button.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('mousedown', onOutside);
+    document.removeEventListener('keydown', onKey, true);
+    if (refocus) button.focus();
+  }
+
+  function setItems(items: ActionMenuItem[]): void {
+    menu.replaceChildren(
+      ...items.map((it) => {
+        const content = [it.icon ? icon(it.icon, 16) : null, h('span', { class: 'flex-1 text-left' }, it.label)];
+        const cls = `menu-item${it.danger ? ' is-danger' : ''}`;
+        if (it.href !== undefined) {
+          return h('a', { role: 'menuitem', class: cls, href: it.href, download: '', onClick: () => close(false) }, ...content);
+        }
+        return h(
+          'button',
+          {
+            type: 'button',
+            role: 'menuitem',
+            class: cls,
+            onClick: () => {
+              close(true);
+              it.onSelect?.();
+            },
+          },
+          ...content,
+        );
+      }),
+    );
+  }
+
+  button.addEventListener('click', () => (isOpen() ? close(true) : open()));
+  el.addEventListener('focusout', (e) => {
+    const next = (e as FocusEvent).relatedTarget as Node | null;
+    if (isOpen() && next && !el.contains(next)) close(false);
+  });
+
+  setItems(opts.items);
+  return {
+    el,
+    button,
+    setItems,
+    setHidden(hidden) {
+      if (hidden && isOpen()) close(false);
+      el.classList.toggle('hidden', hidden);
+    },
+  };
+}
+
 const MODE_ICON: Record<ModePref, IconName> = { auto: 'monitor', light: 'sun', dark: 'moon' };
 const MODE_OPTION_ICON = MODE_ICON;
 

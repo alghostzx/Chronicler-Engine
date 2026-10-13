@@ -2,8 +2,8 @@ import { toast } from './dom';
 
 /**
  * Reprodutor único de narrações: um só `<audio>` para o app inteiro, de modo que tocar uma página
- * pausa a que estava tocando. Os controles de cada página (client/audioUi.ts) apenas refletem
- * este estado e não guardam áudio nenhum.
+ * pausa a que estava tocando. O botão de cada página (client/audioUi.ts) e a barra do player
+ * (client/playerBar.ts) apenas refletem este estado e não guardam áudio nenhum.
  */
 
 export const RATES = [0.75, 1, 1.25, 1.5] as const;
@@ -77,6 +77,11 @@ class AudioPlayer {
     };
   }
 
+  /** Metadados da faixa carregada (tocando ou pausada); `null` se não há faixa. */
+  get currentTrack(): TrackMeta | null {
+    return this.track;
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -118,6 +123,16 @@ class AudioPlayer {
 
   async play(track: TrackMeta): Promise<void> {
     this.select(track);
+    try {
+      await this.el.play();
+    } catch (err) {
+      if ((err as DOMException)?.name !== 'AbortError') toast('Não foi possível iniciar o áudio.', 'error');
+    }
+  }
+
+  /** Retoma a faixa já carregada (a barra do player não conhece os metadados da página). */
+  async resume(): Promise<void> {
+    if (!this.track) return;
     try {
       await this.el.play();
     } catch (err) {
