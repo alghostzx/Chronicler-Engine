@@ -218,11 +218,8 @@ export class GeminiGatewayImpl implements GeminiGateway {
   }
 }
 
-/**
- * Tempo máximo de uma única chamada de síntese. Um trecho de ~6000 caracteres rende vários minutos de áudio
- * e leva minutos para gerar (≈0,45 s por segundo de áudio), então o limite é folgado.
- */
-const SYNTHESIS_TIMEOUT_MS = 480_000;
+/** Tempo máximo de uma única chamada de síntese (trechos de ~1,5 mil caracteres levam ~10–40 s). */
+const SYNTHESIS_TIMEOUT_MS = 180_000;
 
 /** Traduz erros do SDK/rede para mensagens em pt-BR e decide se vale tentar de novo. */
 export function toSynthesisError(err: unknown): SynthesisError {

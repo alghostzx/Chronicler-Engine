@@ -20,11 +20,15 @@
  * página; `player_name` é o nome do protagonista na conversa (inferido pelo Narrador);
  * `sessions.tts_auto_dialogue` liga/desliga a narração automática das páginas de diálogo.
  *
+ * Versão 5: `narrative_pages.raw_dialogue` marca a página de diálogo que ainda guarda a transcrição crua
+ * (`**Nome:** fala`): as criadas antes do diálogo narrado e as que caíram no fallback. Só essas ganham o
+ * botão "Narrar diálogo"; narrar (ou encerrar com sucesso) deixa a marca em 0.
+ *
  * A partir da versão 4 o projeto (alpha) migra bancos existentes: ver `migrations.ts`. Esta constante
  * descreve o schema de um banco NOVO; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE`
  * da migração (um teste confere que os dois caminhos geram o mesmo schema).
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -59,6 +63,7 @@ CREATE TABLE IF NOT EXISTS narrative_pages (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     kind TEXT NOT NULL DEFAULT 'narrative' CHECK (kind IN ('narrative', 'dialogue')),
     npc_name TEXT,
+    raw_dialogue INTEGER NOT NULL DEFAULT 0 CHECK (raw_dialogue IN (0, 1)),
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
     UNIQUE (session_id, order_index)
 );

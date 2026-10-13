@@ -100,13 +100,15 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     },
   );
 
-  // --- Encerramento: a conversa vira uma página (§3.3, §8.3) ------------------------------------
-  // Sem IA: a transcrição, como foi falada, é gravada como página `dialogue`. Se este diálogo estava
-  // refazendo uma página, ela é substituída e as seguintes são descartadas (só agora, não ao abrir).
+  // --- Encerramento: a conversa vira uma página narrada (§3.3, §8.3) ----------------------------
+  // SSE (mesmos eventos do §11.12, mais `retry`). O Narrador escreve a prosa em volta das falas, que
+  // voltam literais; reprovado 3 vezes, grava a transcrição crua (`raw_dialogue`). Se este diálogo
+  // estava refazendo uma página, ela é substituída e as seguintes são descartadas (só agora, não ao
+  // abrir). Erro da API: nada é gravado e o diálogo continua ativo.
   app.post<{ Params: { id: string } }>(
     '/api/dialogue/:id/conclude',
     { schema: { params: idParams } },
-    async (req) => {
+    async (req, reply) => {
       const dialogue = requireActiveDialogue(req.params.id);
       const session = repos.sessions.get(dialogue.session_id)!;
       const messages = repos.dialogues.listMessages(dialogue.id);
@@ -120,35 +122,52 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
         throw new HttpError(409, 'Há uma operação em andamento nesta sessão.');
       }
 
-      const text = formatDialoguePage(dialogue, messages);
+      const rawTranscript = formatDialoguePage(dialogue, messages);
       const redo = dialogue.redo_page_id ? repos.pages.get(dialogue.redo_page_id) : undefined;
       if (dialogue.redo_page_id && (!redo || redo.is_archived || redo.kind !== 'dialogue')) {
         throw new HttpError(409, 'A página que este diálogo substituiria já não está disponível. Descarte o diálogo.');
       }
-      const following = redo ? repos.pages.listActive(session.id).filter((p) => p.order_index > redo.order_index) : [];
+      const active = repos.pages.listActive(session.id);
+      const following = redo ? active.filter((p) => p.order_index > redo.order_index) : [];
+      turns.claim(session.id);
 
-      const outcome = repos.transaction(() => {
-        let page;
-        let discarded = 0;
-        if (redo) {
-          discarded = repos.pages.deleteAfter(session.id, redo.order_index);
-          repos.dialogues.deleteByPage(redo.id);
-          page = repos.pages.replaceGeneration(redo.id, { player_instruction: null, generated_text: text, model_identifier: null })!;
-          repos.audio.delete(redo.id); // o áudio narrava a conversa antiga
-        } else {
-          page = repos.pages.append(session.id, { player_instruction: null, generated_text: text, kind: 'dialogue', npc_name: dialogue.npc_name });
-        }
-        repos.dialogues.conclude(dialogue.id, page.id);
-        repos.sessions.touch(session.id);
-        return { page, discarded };
+      await turns.runDialoguePage(req, reply, {
+        session,
+        rawTranscript,
+        // No refazer, o contexto é a história antes da página que será substituída.
+        precedingPages: redo ? active.filter((p) => p.order_index < redo.order_index) : active,
+        fallbackToRaw: true,
+        persist: (text, model, narration) => {
+          const raw = narration === 'fallback';
+          const outcome = repos.transaction(() => {
+            let page;
+            let discarded = 0;
+            if (redo) {
+              discarded = repos.pages.deleteAfter(session.id, redo.order_index);
+              repos.dialogues.deleteByPage(redo.id);
+              page = repos.pages.replaceGeneration(redo.id, { player_instruction: rawTranscript, generated_text: text, model_identifier: model, raw_dialogue: raw })!;
+              repos.audio.delete(redo.id); // o áudio narrava a conversa antiga
+            } else {
+              page = repos.pages.append(session.id, {
+                player_instruction: rawTranscript,
+                generated_text: text,
+                model_identifier: model,
+                kind: 'dialogue',
+                npc_name: dialogue.npc_name,
+                raw_dialogue: raw,
+              });
+            }
+            repos.dialogues.conclude(dialogue.id, page.id);
+            repos.sessions.touch(session.id);
+            return { page, discarded, narration };
+          });
+          if (redo) {
+            ctx.audio.cancelMany([redo.id, ...following.map((p) => p.id)]);
+            repos.audio.reclaim();
+          }
+          return outcome;
+        },
       });
-      if (redo) {
-        ctx.audio.cancelMany([redo.id, ...following.map((p) => p.id)]);
-        repos.audio.reclaim();
-      }
-      // Narração automática dos diálogos (opção própria, desligada de fábrica), em segundo plano.
-      ctx.audio.autoStart(session, outcome.page);
-      return { page: ctx.audio.decorate([outcome.page])[0], discarded: outcome.discarded };
     },
   );
 

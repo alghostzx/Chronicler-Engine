@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { buildNarratorRequest } from '../ai/contextBuilder.js';
+import { parseDialoguePage } from '../ai/dialogueProse.js';
 import { HttpError, type AppContext } from '../context.js';
 import { publicDialogue } from './dialogue.js';
 import type { Session } from '../db/types.js';
@@ -162,6 +163,52 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
             return { page: updated, discarded, dialogue };
           });
           audio.cancelMany([page.id, ...following.map((p) => p.id)]);
+          repos.audio.reclaim();
+          return outcome;
+        },
+      });
+    },
+  );
+
+  // --- Narrar uma página de diálogo crua ---------------------------------------------------------
+  // Páginas de diálogo com a transcrição crua (as antigas e as que caíram no fallback) ganham a prosa em
+  // volta das falas, que ficam literais. Não toca nas páginas seguintes: o diálogo continua igual.
+  app.post<{ Params: { id: string } }>(
+    '/api/narrative/pages/:id/narrate-dialogue',
+    { schema: { params: idParams } },
+    async (req, reply) => {
+      const page = repos.pages.get(req.params.id);
+      if (!page) throw new HttpError(404, 'Página não encontrada.');
+      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser narradas.');
+      if (page.kind !== 'dialogue') throw new HttpError(409, 'Só páginas de diálogo podem ser narradas.');
+      if (!page.raw_dialogue) throw new HttpError(409, 'Esta página de diálogo já foi narrada.');
+      if (parseDialoguePage(page.generated_text).length === 0) {
+        throw new HttpError(409, 'A página não tem falas para narrar.');
+      }
+      const session = requireSession(page.session_id);
+      assertNoActiveDialogue(session.id);
+      turns.claim(session.id);
+
+      const rawTranscript = page.generated_text;
+      await turns.runDialoguePage(req, reply, {
+        session,
+        rawTranscript,
+        // O contexto é a história até a página (as seguintes continuam como estão, sem entrar no pedido).
+        precedingPages: repos.pages.listActive(session.id).filter((p) => p.order_index < page.order_index),
+        fallbackToRaw: false,
+        persist: (text, model) => {
+          const outcome = repos.transaction(() => {
+            const updated = repos.pages.replaceGeneration(page.id, {
+              player_instruction: rawTranscript,
+              generated_text: text,
+              model_identifier: model,
+              raw_dialogue: false,
+            })!;
+            repos.audio.delete(page.id); // o áudio lia a transcrição crua
+            repos.sessions.touch(session.id);
+            return { page: updated, discarded: 0, narration: 'narrated' as const };
+          });
+          audio.cancelMany([page.id]);
           repos.audio.reclaim();
           return outcome;
         },

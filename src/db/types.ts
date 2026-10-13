@@ -29,6 +29,8 @@ export interface Page {
   kind: PageKind;
   /** Nome do NPC (somente `kind = 'dialogue'`). A persona secreta do NPC nunca está na página. */
   npc_name: string | null;
+  /** Página de diálogo que ainda guarda a transcrição crua (`**Nome:** fala`): pode ser narrada depois. */
+  raw_dialogue: boolean;
   created_at: string;
   updated_at: string;
 }

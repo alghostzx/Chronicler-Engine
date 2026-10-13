@@ -8,11 +8,11 @@
 
 /**
  * Tamanho-alvo de um trecho enviado de uma vez à API (a documentação recomenda dividir textos longos).
- * Cada trecho é uma chamada independente: o modelo recomeça a prosódia e, nas páginas de diálogo, inventa
- * de novo as vozes dos personagens e volta a ler os nomes antes das falas. Por isso o corte deve ser raro;
- * 6000 caracteres (calibrado pelo autor) deixa a maioria das páginas em uma única chamada.
+ * Cada trecho é uma chamada independente (o modelo recomeça a prosódia). Com 6000 o corte era raro, mas só
+ * porque as páginas de diálogo traziam `**Nome:**` e o modelo lia os nomes ao recomeçar; agora o diálogo é
+ * prosa com falas em travessão, e os cortes (sempre entre parágrafos) voltaram a ser inofensivos.
  */
-export const DEFAULT_CHUNK_CHARS = 6000;
+export const DEFAULT_CHUNK_CHARS = 1500;
 
 export function cleanForSpeech(text: string): string {
   return (
