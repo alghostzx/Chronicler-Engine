@@ -23,12 +23,15 @@ describe('cleanForSpeech', () => {
 });
 
 describe('splitForSpeech', () => {
-  it('o tamanho padrão mantém em um único trecho uma página de diálogo de ~5 mil caracteres', () => {
-    const fala = (nome: string, n: number) => `**${nome}:** ${'x'.repeat(n)}`;
-    const dialogue = Array.from({ length: 10 }, (_, i) => fala(i % 2 ? 'Elena' : 'Aldric', 480)).join('\n\n');
-    expect(DEFAULT_CHUNK_CHARS).toBe(6000);
-    expect(dialogue.length).toBeGreaterThan(4800);
-    expect(splitForSpeech(dialogue)).toHaveLength(1);
+  it('o tamanho padrão é 1500 e os cortes caem entre parágrafos (sem partir uma fala)', () => {
+    expect(DEFAULT_CHUNK_CHARS).toBe(1500);
+    const fala = (i: number) => `— Fala número ${i}, ${'x'.repeat(400)}, disse ele.`;
+    const page = Array.from({ length: 8 }, (_, i) => fala(i)).join('\n\n');
+    const chunks = splitForSpeech(page);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((c) => c.length <= DEFAULT_CHUNK_CHARS)).toBe(true);
+    expect(chunks.join('\n\n')).toBe(page);
+    for (const c of chunks) for (const p of c.split('\n\n')) expect(p).toMatch(/^— Fala número \d+, x+, disse ele\.$/);
   });
 
   const para = (n: number, c = 'a') => `${c.repeat(n)}.`;

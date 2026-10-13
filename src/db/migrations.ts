@@ -45,4 +45,15 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    description: 'diálogo narrado (narrative_pages.raw_dialogue: página de diálogo com a transcrição crua)',
+    up(db) {
+      db.exec(`
+        ALTER TABLE narrative_pages ADD COLUMN raw_dialogue INTEGER NOT NULL DEFAULT 0 CHECK (raw_dialogue IN (0, 1));
+        -- Todas as páginas de diálogo criadas até a v4 guardam a transcrição crua.
+        UPDATE narrative_pages SET raw_dialogue = 1 WHERE kind = 'dialogue';
+      `);
+    },
+  },
 ];

@@ -265,3 +265,30 @@ Decisões do autor aprovadas. O diálogo executado deixa de ser reinterpretado p
 - [x] Vitest backend (conclude sem gateway, formato, CASCADE, 409 do regenerate, edição preserva as seguintes, refazer: intacto até encerrar / descartar / substituir+truncar, áudio, auto-TTS, schema v4) e UI jsdom (selo, rótulos, ícone, dock, fluxo completo)
 - [x] `check:paginas` com página de diálogo (8 temas × desktop/celular) + regressões `check:mobile`/`check:audio`; `scripts/live-dialogue.ts` adaptado
 - [x] README, design document (§3.3, §8.3, checklist nº 5, §11.26), capturas, typecheck, suíte completa, `npm run build`; merge de `feature/dialogo-pagina` em `main`
+
+## Fase 18 — Diálogo narrado (branch `feature/dialogo-narrado`)
+Decisões do autor aprovadas (transcrição crua em `player_instruction`; sem "encerrar sem narrar"; **3 tentativas** antes do fallback; botão de reprocessar). Meio-termo: ao encerrar, o Narrador escreve uma página em prosa **mantendo as falas literais** (só acrescenta o preenchimento narrativo); fim dos rótulos `**Nome:**` no texto lido pela voz, o que permite voltar o trecho do TTS a 1500 caracteres.
+
+### 18.1 Servidor
+- [x] `buildDialoguePageRequest`: regras + mundo + corpus + transcrição (`**Rótulo:** fala`) + instrução de fidelidade (travessão, falas intactas, sem rótulos, sem avançar a história); resposta no JSON do Narrador (regra 4 padrão), `dialogue_trigger` ignorado
+- [x] `POST /api/dialogue/:id/conclude` volta a ser SSE (mesmos eventos do §11.12, sem encadear novo diálogo); no *Refazer*, o fantasma ocupa o lugar da página antiga
+- [x] Verificação de fidelidade (palavras das falas, em ordem, no texto); até **3 tentativas**; depois, fallback para a transcrição crua com aviso (`narration: 'fallback'`)
+- [x] Erro da API: nada é gravado e o diálogo continua ativo; transcrição crua guardada em `player_instruction`; mensagens apagadas só após gravar a página
+- [x] TTS: `DEFAULT_CHUNK_CHARS` = 1500 e timeout de síntese de volta a 180 s
+
+### 18.2 Reprocessar diálogos crus
+- [x] Schema v5 + migração v4→v5: `narrative_pages.raw_dialogue` (1 = página de diálogo com a transcrição crua: antigas, fallback; 0 = narrada); a migração marca como cruas todas as páginas `kind = 'dialogue'` existentes
+- [x] `parseDialoguePage` (`**Rótulo:** fala` → falas) usada na verificação e no reprocessamento (o texto atual da página é a fonte, mesmo se editado)
+- [x] `POST /api/narrative/pages/:id/narrate-dialogue` (SSE): só páginas de diálogo cruas (409 nas demais); contexto = páginas **anteriores**; **não** descarta as seguintes; 3 tentativas; sucesso troca o texto, zera `raw_dialogue` e descarta o áudio; falha mantém a página como está
+- [x] Botão **Narrar diálogo** (ícone próprio, aria-label, tooltip) só em páginas de diálogo cruas; some depois de reprocessada
+
+### 18.3 Interface
+- [x] Doca: "Encerrar diálogo" mostra "Narrando…" e o fantasma da página (SSE); aviso quando houve fallback para a transcrição crua
+- [x] Páginas antigas (cruas) continuam renderizando os rótulos em destaque
+
+### 18.4 Testes e entrega
+- [x] Vitest: fidelidade (aprova/reprova/ordem/acentos), retentativa, fallback, erro da API mantém o diálogo ativo, *Refazer* (substitui só ao concluir), `player_instruction`, TTS 1500; UI jsdom do fluxo
+- [x] `scripts/live-dialogue.ts` com o fluxo narrado e verificação ao vivo; regressões `check:paginas`/`check:audio`
+- [x] README, design document (§3.3, §8.3, checklist nº 5, §11.27), typecheck, suíte completa, `npm run build`
+- [ ] Merge de `feature/dialogo-narrado` em `main` (push e remoção da branch só com confirmação do autor)
+

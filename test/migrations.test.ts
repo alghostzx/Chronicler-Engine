@@ -78,6 +78,33 @@ describe('migrações do banco', () => {
     expect(db.prepare('SELECT id FROM dialogue_messages').all()).toEqual([{ id: 'm2' }]);
   });
 
+  it('v4 → v5: páginas de diálogo existentes viram transcrição crua (raw_dialogue = 1); as narrativas não', () => {
+    // banco "v4": o v3 + a primeira migração
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chronicler-mig-'));
+    const file = path.join(dir, 'chronicler.db');
+    const raw = new Database(file);
+    raw.pragma('foreign_keys = ON');
+    raw.exec(SCHEMA_V3_SQL);
+    MIGRATIONS[0]!.up(raw);
+    raw.pragma('user_version = 4');
+    raw.exec(`
+      INSERT INTO sessions (id, title, system_rules, world_context) VALUES ('s1', 'Crônica', 'r', 'w');
+      INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text, kind, npc_name) VALUES
+        ('p1', 's1', 1, 'abre', 'Prosa.', 'narrative', NULL),
+        ('p2', 's1', 2, NULL, '**Kira:** Oi.\\n\\n**Elena:** Olá.', 'dialogue', 'Elena');
+    `);
+    raw.close();
+
+    const db = openDatabase(file);
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
+    expect(db.prepare('SELECT id, kind, raw_dialogue FROM narrative_pages ORDER BY order_index').all()).toEqual([
+      { id: 'p1', kind: 'narrative', raw_dialogue: 0 },
+      { id: 'p2', kind: 'dialogue', raw_dialogue: 1 },
+    ]);
+    expect(fs.existsSync(`${file}.v4.bak`)).toBe(true);
+    db.close();
+  });
+
   it('copia o banco antes de migrar (arquivo .v3.bak, íntegro e ainda na versão 3)', () => {
     const file = bancoV3();
     openDatabase(file).close();

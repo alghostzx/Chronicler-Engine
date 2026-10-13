@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '../connection.js';
 import type { Page, PageKind } from '../types.js';
 
-type PageRow = Omit<Page, 'is_archived'> & { is_archived: number | null };
+type PageRow = Omit<Page, 'is_archived' | 'raw_dialogue'> & { is_archived: number | null; raw_dialogue: number };
 
-const toPage = (row: PageRow): Page => ({ ...row, is_archived: Boolean(row.is_archived) });
+const toPage = (row: PageRow): Page => ({ ...row, is_archived: Boolean(row.is_archived), raw_dialogue: Boolean(row.raw_dialogue) });
 
 export interface AppendPageInput {
   player_instruction: string | null;
@@ -13,6 +13,8 @@ export interface AppendPageInput {
   /** Padrão `narrative`. Páginas de diálogo guardam a transcrição e o nome do NPC. */
   kind?: PageKind;
   npc_name?: string | null;
+  /** Página de diálogo com a transcrição crua (ainda não narrada). */
+  raw_dialogue?: boolean;
 }
 
 export class PagesRepository {
@@ -29,8 +31,8 @@ export class PagesRepository {
       .get(sessionId) as { max: number };
     this.db
       .prepare(
-        `INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text, model_identifier, kind, npc_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text, model_identifier, kind, npc_name, raw_dialogue)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -41,6 +43,7 @@ export class PagesRepository {
         input.model_identifier ?? null,
         input.kind ?? 'narrative',
         input.npc_name ?? null,
+        input.raw_dialogue ? 1 : 0,
       );
     return this.get(id)!;
   }
@@ -103,18 +106,28 @@ export class PagesRepository {
     return this.get(id);
   }
 
-  /** Substitui instrução, texto e modelo de uma página (resultado de uma regeneração por IA). */
+  /**
+   * Substitui instrução, texto e modelo de uma página (resultado de uma regeneração por IA).
+   * `raw_dialogue`, se informado, atualiza a marca de transcrição crua (páginas de diálogo).
+   */
   replaceGeneration(
     id: string,
-    input: { player_instruction: string | null; generated_text: string; model_identifier?: string | null },
+    input: { player_instruction: string | null; generated_text: string; model_identifier?: string | null; raw_dialogue?: boolean },
   ): Page | undefined {
     this.db
       .prepare(
         `UPDATE narrative_pages
-         SET player_instruction = ?, generated_text = ?, model_identifier = ?, updated_at = CURRENT_TIMESTAMP
+         SET player_instruction = ?, generated_text = ?, model_identifier = ?,
+             raw_dialogue = COALESCE(?, raw_dialogue), updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
       )
-      .run(input.player_instruction, input.generated_text, input.model_identifier ?? null, id);
+      .run(
+        input.player_instruction,
+        input.generated_text,
+        input.model_identifier ?? null,
+        input.raw_dialogue === undefined ? null : input.raw_dialogue ? 1 : 0,
+        id,
+      );
     return this.get(id);
   }
 

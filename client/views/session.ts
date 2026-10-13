@@ -27,14 +27,14 @@ interface DialogueState {
   wantsEnd: boolean;
   /** Aguardando a resposta do NPC. */
   waiting: boolean;
-  /** Encerrando (salvando a página): trava os botões contra duplo clique. */
-  closing?: boolean;
 }
 
 interface Ghost {
   text: string;
   /** Página sendo regenerada (o fantasma ocupa o seu lugar); undefined = nova página no fim. */
   replaceId?: string;
+  /** A página substituída não descarta as seguintes (narrar um diálogo cru): nada é esmaecido. */
+  keepLater?: boolean;
 }
 
 const HP_COLORS: Record<TokenInfo['state'], string> = {
@@ -258,6 +258,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       },
       onEditPrompt: () => openRegenerate(b),
       onRedoDialogue: () => void redoDialogue(b, laterCount),
+      onNarrateDialogue: () => void narrateDialogue(b),
       replacing: dlg?.dialogue.redo_page_id === b.id,
       onBranch: () => void branchFrom(b, laterCount),
     });
@@ -317,7 +318,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   function dialogueCard(): HTMLElement | null {
-    if (!dlg) return null;
+    if (!dlg || ghost) return null; // enquanto o Narrador escreve a página, o fantasma ocupa o lugar da conversa
     const d = dlg;
     const redoing = redoTarget();
     const playerLabel = d.dialogue.player_name ?? 'Protagonista';
@@ -346,7 +347,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   /** Reconstrói o Tome. `stick` força a rolagem ao fim (novo conteúdo). */
   function renderTome(stick: boolean): void {
     const follow = stick || nearBottom();
-    const target = ghost?.replaceId ? detail.pages.find((b) => b.id === ghost!.replaceId) : redoTarget();
+    const target = ghost?.replaceId && !ghost.keepLater ? detail.pages.find((b) => b.id === ghost!.replaceId) : redoTarget();
     const items: (HTMLElement | null)[] = [];
 
     if (detail.pages.length === 0 && !ghost && !dlg) {
@@ -446,7 +447,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     );
 
     const redoing = redoTarget();
-    const dlgLocked = busy || !!dlg?.waiting || !!dlg?.closing;
+    const dlgLocked = busy || !!dlg?.waiting;
     const dialogueBar = dlg
       ? h(
           'div',
@@ -459,7 +460,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
               class: `btn ${dlg.wantsEnd ? 'btn-primary btn-pulse' : ''}`,
               type: 'button',
               disabled: dlgLocked,
-              title: redoing ? `Salva esta conversa no lugar da página ${redoing.order_index} (e descarta as seguintes)` : 'Salva a conversa como uma página da crônica (o Narrador não é chamado)',
+              title: redoing
+                ? `O Narrador escreve a página ${redoing.order_index} com as falas desta conversa (e as páginas seguintes são descartadas)`
+                : 'O Narrador escreve a página com as falas desta conversa, que ficam como foram ditas',
               onClick: () => void concludeDialogue(),
             },
             redoing ? `Encerrar e substituir a página ${redoing.order_index}` : 'Encerrar diálogo',
@@ -490,10 +493,10 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   // --- Ações ----------------------------------------------------------------------------------------
   /** Executa um turno narrativo (SSE). Retorna true se uma página foi persistida. */
-  async function runTurn(url: string, body: unknown, replaceId?: string): Promise<boolean> {
+  async function runTurn(url: string, body: unknown, replaceId?: string, keepLater = false): Promise<boolean> {
     if (busy) return false;
     controller = new AbortController();
-    ghost = { text: '', replaceId };
+    ghost = { text: '', replaceId, keepLater };
     ghostTextEl = null;
     setBusy(true);
     renderTome(true);
@@ -512,8 +515,17 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
             if (ghostTextEl) ghostTextEl.textContent = ghost.text;
             if (follow) scrollToEnd();
           },
-          onPage: () => {
+          onRetry: (attempt, of) => {
+            // O Narrador alterou alguma fala: a prosa anterior foi descartada e ele escreve de novo.
+            if (ghost) ghost.text = '';
+            if (ghostTextEl) ghostTextEl.textContent = '';
+            toast(`O Narrador alterou uma fala; reescrevendo a página (tentativa ${attempt} de ${of})…`, 'info');
+          },
+          onPage: (_page, _discarded, narration) => {
             gotPage = true;
+            if (narration === 'fallback') {
+              toast('O Narrador não conseguiu manter as falas intactas; a conversa foi salva como transcrição. Use “Narrar diálogo” na página para tentar de novo.', 'info');
+            }
           },
           onDialogueTrigger: () => {
             newDialogue = true;
@@ -656,27 +668,26 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   async function concludeDialogue(): Promise<void> {
-    if (!dlg || busy || dlg.closing) return;
+    if (!dlg || busy) return;
     if (dlg.messages.length === 0) {
       toast('Troque ao menos uma fala antes de encerrar, ou use “Descartar”.', 'info');
       return;
     }
-    const state = dlg;
-    state.closing = true;
-    renderDock();
-    try {
-      // A conversa vira, ela mesma, uma página (sem chamar o Narrador).
-      await api('POST', `/api/dialogue/${state.dialogue.id}/conclude`, {});
-      dlg = null;
-      await reloadDetail();
-      renderTome(true);
-      renderDock();
-      void refreshTokens(); // evento: página criada/substituída
-    } catch (err) {
-      state.closing = false;
-      toast((err as Error).message, 'error');
-      if (!disposed) renderDock();
-    }
+    // O Narrador escreve a página em prosa em volta das falas (literais). Num "Refazer", o fantasma
+    // ocupa o lugar da página antiga; se a narração falhar, o diálogo continua ativo e nada muda.
+    await runTurn(`/api/dialogue/${dlg.dialogue.id}/conclude`, {}, redoTarget()?.id);
+  }
+
+  /** "Narrar diálogo": reescreve em prosa uma página de diálogo crua, mantendo as falas e as páginas seguintes. */
+  async function narrateDialogue(b: Page): Promise<void> {
+    if (busy || dlg) return;
+    const ok = await confirmModal(
+      'Narrar diálogo',
+      'O Narrador escreverá a prosa em volta das falas, que ficam exatamente como estão. As demais páginas não mudam. Isso consome tokens, e a página só é trocada se o resultado mantiver as falas intactas.',
+      { confirmLabel: 'Narrar diálogo' },
+    );
+    if (!ok) return;
+    await runTurn(`/api/narrative/pages/${b.id}/narrate-dialogue`, {}, b.id, true);
   }
 
   /** "Refazer diálogo": abre um novo diálogo; a página só é substituída ao encerrá-lo (descartar mantém tudo). */

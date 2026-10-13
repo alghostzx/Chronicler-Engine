@@ -73,6 +73,12 @@ const ICONS = {
     ['path', { d: 'M15.5 10a3.5 3.5 0 1 1-1.03-2.47' }],
     ['polyline', { points: '14.5 5.5 14.5 7.5 12.5 7.5' }],
   ],
+  /** Narrar o diálogo (o Narrador escreve a prosa em volta das falas): pena de escrever. */
+  narrateDialogue: [
+    ['path', { d: 'M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z' }],
+    ['line', { x1: '16', y1: '8', x2: '2', y2: '22' }],
+    ['line', { x1: '17.5', y1: '15', x2: '9', y2: '15' }],
+  ],
   /** Ramificar a história a partir da página: bifurcação. */
   branch: [
     ['line', { x1: '6', y1: '3', x2: '6', y2: '15' }],

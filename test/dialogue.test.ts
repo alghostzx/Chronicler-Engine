@@ -108,29 +108,56 @@ describe('POST /dialogue/:id/message', () => {
 const TRANSCRIPT =
   '**Protagonista:** Procuro um mapa.\n\n**Elena Vance:** Quem pergunta?\n\n**Protagonista:** Pago bem.\n\n**Elena Vance:** Hmpf. Entre.';
 
-describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
+/** Prosa que o Narrador devolveria: as quatro falas intactas (uma partida ao meio) + preenchimento. */
+const PROSE =
+  'Elena Vance ergueu os olhos do balcão.\n\n— Procuro um mapa, — disse o viajante.\n\nA taverneira estreitou o olhar.\n\n— Quem pergunta? — rebateu ela.\n\nO viajante deixou uma bolsa sobre a madeira.\n\n— Pago bem.\n\nElena pesou a bolsa na mão.\n\n— Hmpf. Entre.';
+/** Prosa reprovada: omite a fala “Pago bem.” */
+const BAD_PROSE = 'Elena ergueu os olhos.\n\n— Procuro um mapa.\n\n— Quem pergunta?\n\n— Hmpf. Entre.';
+
+const concludePage = (res: { body: string }) => parseSse(res.body).find((e) => e.event === 'page')?.data;
+
+describe('POST /dialogue/:id/conclude (o Narrador escreve o diálogo como página)', () => {
   const converse = async (id = dialogueId) => {
     t.gateway.queue(npcJson('Quem pergunta?'), npcJson('Hmpf. Entre.'));
     await say('Procuro um mapa.', id);
     await say('Pago bem.', id);
   };
 
-  it('grava a transcrição como UMA página de diálogo, sem chamar o Narrador', async () => {
+  it('grava UMA página de prosa com as falas literais; a transcrição crua fica em player_instruction', async () => {
     await converse();
     const before = t.gateway.requests.length;
+    t.gateway.queue(narratorJson(PROSE));
 
     const res = await conclude();
     expect(res.statusCode).toBe(200);
-    expect(t.gateway.requests).toHaveLength(before); // nenhuma chamada de IA ao encerrar
-    const body = res.json();
-    expect(body.discarded).toBe(0);
-    expect(body.page).toMatchObject({ kind: 'dialogue', npc_name: 'Elena Vance', order_index: 2, generated_text: TRANSCRIPT });
+    const events = parseSse(res.body);
+    expect(events.map((e) => e.event)).toEqual(expect.arrayContaining(['start', 'chunk', 'page', 'done']));
+    expect(events.map((e) => e.event)).not.toContain('retry');
+    const body = concludePage(res);
+    expect(body).toMatchObject({ discarded: 0, narration: 'narrated' });
+    expect(body.page).toMatchObject({
+      kind: 'dialogue',
+      npc_name: 'Elena Vance',
+      order_index: 2,
+      raw_dialogue: false,
+      generated_text: PROSE,
+    });
     expect(res.body).not.toContain('SEGREDO-DO-NPC');
+
+    // o Narrador viu a história até aqui, o mundo e a transcrição literal — nunca o segredo do NPC
+    expect(t.gateway.requests).toHaveLength(before + 1);
+    const req = t.gateway.requests.at(-1)!;
+    expect(req.systemInstruction).toBe('REGRAS DO NARRADOR');
+    expect(req.userText).toContain('Reino de Aldor');
+    expect(req.userText).toContain('Prosa anterior.');
+    expect(req.userText).toContain(TRANSCRIPT);
+    expect(req.userText).not.toContain('SEGREDO-DO-NPC');
 
     const pages = t.repos.pages.listActive(sessionId);
     expect(pages).toHaveLength(2);
-    expect(pages[1]).toMatchObject({ kind: 'dialogue', npc_name: 'Elena Vance', player_instruction: null, model_identifier: null });
-    expect(pages[0]).toMatchObject({ kind: 'narrative', npc_name: null });
+    expect(pages[1]).toMatchObject({ kind: 'dialogue', player_instruction: TRANSCRIPT, raw_dialogue: false });
+    expect(pages[1]!.model_identifier).toBeTruthy();
+    expect(pages[0]).toMatchObject({ kind: 'narrative', npc_name: null, raw_dialogue: false });
 
     const d = t.repos.dialogues.get(dialogueId)!;
     expect(d).toMatchObject({ status: 'concluded', page_id: pages[1]!.id, redo_page_id: null });
@@ -138,12 +165,16 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
     expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
   });
 
-  it('rotula o jogador com o nome dado pelo Narrador (e “Protagonista” sem ele)', async () => {
+  it('rotula o jogador com o nome dado pelo Narrador na transcrição (e “Protagonista” sem ele)', async () => {
     t.repos.dialogues.delete(dialogueId);
     const named = t.repos.dialogues.create(sessionId, 'Elena Vance', NPC_PROMPT, { playerName: 'Kira' });
     await converse(named.id);
+    t.gateway.queue(narratorJson(PROSE));
     const res = await conclude(named.id);
-    expect(res.json().page.generated_text).toBe(TRANSCRIPT.replaceAll('Protagonista', 'Kira'));
+    const kira = TRANSCRIPT.replaceAll('Protagonista', 'Kira');
+    expect(t.gateway.requests.at(-1)!.userText).toContain(kira);
+    expect(concludePage(res).page.generated_text).toBe(PROSE);
+    expect(t.repos.pages.get(concludePage(res).page.id)!.player_instruction).toBe(kira);
   });
 
   it('o prompt do NPC recebe o nome do jogador', async () => {
@@ -154,7 +185,71 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
     expect(t.gateway.requests[0]!.systemInstruction).toContain('"Kira"');
   });
 
-  it('a narração normal só volta depois, e o corpus já traz a conversa como foi gravada', async () => {
+  it('prosa que altera as falas é recusada e o Narrador tenta de novo (evento retry + aviso na 2ª tentativa)', async () => {
+    await converse();
+    const before = t.gateway.requests.length;
+    t.gateway.queue(narratorJson(BAD_PROSE), narratorJson(PROSE));
+
+    const res = await conclude();
+    const events = parseSse(res.body);
+    expect(events.filter((e) => e.event === 'retry').map((e) => e.data)).toEqual([{ attempt: 2, of: 3 }]);
+    expect(t.gateway.requests).toHaveLength(before + 2);
+    expect(t.gateway.requests.at(-2)!.userText).not.toContain('ATENÇÃO');
+    expect(t.gateway.requests.at(-1)!.userText).toContain('ATENÇÃO');
+    expect(concludePage(res)).toMatchObject({ narration: 'narrated', page: { generated_text: PROSE, raw_dialogue: false } });
+  });
+
+  it('JSON inválido também conta como tentativa perdida', async () => {
+    await converse();
+    t.gateway.queue('isto não é JSON', narratorJson(PROSE));
+    const res = await conclude();
+    expect(concludePage(res)).toMatchObject({ narration: 'narrated' });
+    expect(parseSse(res.body).map((e) => e.event)).toContain('retry');
+  });
+
+  it('após 3 tentativas reprovadas grava a transcrição crua (fallback) e marca a página como crua', async () => {
+    await converse();
+    const before = t.gateway.requests.length;
+    t.gateway.queue(narratorJson(BAD_PROSE), narratorJson(BAD_PROSE), narratorJson(BAD_PROSE));
+
+    const res = await conclude();
+    expect(res.statusCode).toBe(200);
+    expect(t.gateway.requests).toHaveLength(before + 3);
+    const events = parseSse(res.body);
+    expect(events.filter((e) => e.event === 'retry')).toHaveLength(2);
+    expect(events.map((e) => e.event)).not.toContain('error');
+    const body = concludePage(res);
+    expect(body.narration).toBe('fallback');
+    expect(body.page).toMatchObject({ kind: 'dialogue', raw_dialogue: true, generated_text: TRANSCRIPT, model_identifier: null });
+
+    const page = t.repos.pages.listActive(sessionId)[1]!;
+    expect(page).toMatchObject({ raw_dialogue: true, generated_text: TRANSCRIPT, player_instruction: TRANSCRIPT });
+    expect(t.repos.dialogues.get(dialogueId)).toMatchObject({ status: 'concluded', page_id: page.id });
+    expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
+  });
+
+  it('o gatilho de diálogo na resposta do Narrador é ignorado nesta página', async () => {
+    await converse();
+    t.gateway.queue(narratorJson(PROSE, { activate: true, npc_name: 'Intruso', dynamic_system_prompt: 'x' }));
+    const res = await conclude();
+    expect(parseSse(res.body).map((e) => e.event)).not.toContain('dialogue_trigger');
+    expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
+  });
+
+  it('falha de API: nada é gravado, o diálogo continua ativo e dá para encerrar de novo', async () => {
+    await converse();
+    // sem resposta enfileirada → o gateway falha
+    const res = await conclude();
+    expect(parseSse(res.body).map((e) => e.event)).toContain('error');
+    expect(t.repos.pages.listActive(sessionId)).toHaveLength(1);
+    expect(t.repos.dialogues.getActive(sessionId)).toMatchObject({ id: dialogueId, status: 'active' });
+    expect(t.repos.dialogues.listMessages(dialogueId)).toHaveLength(4);
+
+    t.gateway.queue(narratorJson(PROSE));
+    expect(concludePage(await conclude())).toMatchObject({ narration: 'narrated' });
+  });
+
+  it('a narração normal só volta depois, e o corpus já traz a página em prosa', async () => {
     await converse();
     const blocked = await t.app.inject({
       method: 'POST',
@@ -163,6 +258,7 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
     });
     expect(blocked.statusCode).toBe(409);
 
+    t.gateway.queue(narratorJson(PROSE));
     await conclude();
     t.gateway.queue(narratorJson('Depois do diálogo.'));
     const ok = await t.app.inject({
@@ -172,7 +268,7 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
     });
     expect(parseSse(ok.body).at(-1)!.event).toBe('done');
     const next = t.gateway.requests.at(-1)!;
-    expect(next.userText).toContain(TRANSCRIPT);
+    expect(next.userText).toContain(PROSE);
     expect(next.userText).not.toContain('SEGREDO-DO-NPC');
   });
 
@@ -180,6 +276,7 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
     expect((await conclude()).statusCode).toBe(409);
     expect((await conclude('nao-existe')).statusCode).toBe(404);
     await converse();
+    t.gateway.queue(narratorJson(PROSE));
     expect((await conclude()).statusCode).toBe(200);
     expect((await conclude()).statusCode).toBe(409);
   });
@@ -188,18 +285,19 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
     let pageId: string;
     beforeEach(async () => {
       await converse();
-      pageId = (await conclude()).json().page.id;
+      t.gateway.queue(narratorJson(PROSE));
+      pageId = concludePage(await conclude()).page.id;
     });
 
     it('edita o texto sem descartar as páginas seguintes', async () => {
       t.repos.pages.append(sessionId, { player_instruction: 'depois', generated_text: 'Página seguinte.' });
-      const res = await t.app.inject({ method: 'PUT', url: `/api/narrative/pages/${pageId}`, payload: { generated_text: '**Kira:** Editado.' } });
+      const res = await t.app.inject({ method: 'PUT', url: `/api/narrative/pages/${pageId}`, payload: { generated_text: '— Editado.' } });
       expect(res.statusCode).toBe(200);
-      expect(res.json().page).toMatchObject({ kind: 'dialogue', generated_text: '**Kira:** Editado.' });
+      expect(res.json().page).toMatchObject({ kind: 'dialogue', generated_text: '— Editado.' });
       expect(t.repos.pages.listActive(sessionId)).toHaveLength(3);
     });
 
-    it('não tem prompt: re-gerar é recusado (409) e nada muda', async () => {
+    it('re-gerar é recusado (409, sugere Refazer diálogo) e nada muda', async () => {
       const res = await t.app.inject({
         method: 'POST',
         url: `/api/narrative/pages/${pageId}/regenerate`,
@@ -207,7 +305,7 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
       });
       expect(res.statusCode).toBe(409);
       expect(res.json().error).toContain('Refazer diálogo');
-      expect(t.repos.pages.get(pageId)!.generated_text).toBe(TRANSCRIPT);
+      expect(t.repos.pages.get(pageId)!.generated_text).toBe(PROSE);
     });
 
     it('some junto com a página (ramificar) — o diálogo concluído não sobra no banco', async () => {
@@ -228,6 +326,8 @@ describe('POST /dialogue/:id/conclude (o diálogo vira página)', () => {
 describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', () => {
   let pageId: string;
   const redo = (body: object = {}, id = pageId) => t.app.inject({ method: 'POST', url: `/api/narrative/pages/${id}/redo-dialogue`, payload: body });
+  const FIRST_PROSE = 'Elena estreitou os olhos.\n\n— Procuro um mapa.\n\n— Quem pergunta?';
+  const SECOND_PROSE = 'O viajante se inclinou.\n\n— Outra abordagem.\n\nElena cerrou o punho.\n\n— Fale logo.';
 
   beforeEach(async () => {
     t.repos.dialogues.delete(dialogueId);
@@ -235,7 +335,8 @@ describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', (
     t.gateway.queue(npcJson('Quem pergunta?'));
     await say('Procuro um mapa.', d.id);
     dialogueId = d.id;
-    pageId = (await conclude(d.id)).json().page.id;
+    t.gateway.queue(narratorJson(FIRST_PROSE));
+    pageId = concludePage(await conclude(d.id)).page.id;
   });
 
   it('abre um diálogo ativo com a mesma persona, sem tocar na página', async () => {
@@ -248,7 +349,7 @@ describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', (
 
     const active = t.repos.dialogues.getActive(sessionId)!;
     expect(active.dynamic_system_prompt).toBe(NPC_PROMPT); // a persona é a mesma
-    expect(t.repos.pages.get(pageId)!.generated_text).toContain('Procuro um mapa.');
+    expect(t.repos.pages.get(pageId)!.generated_text).toBe(FIRST_PROSE);
     expect(t.repos.dialogues.get(dialogueId)!.page_id).toBe(pageId); // o diálogo antigo continua ligado
     // com um diálogo ativo, narrar/re-gerar/ramificar/refazer de novo ficam bloqueados
     expect((await redo()).statusCode).toBe(409);
@@ -280,7 +381,7 @@ describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', (
     const res = await t.app.inject({ method: 'POST', url: `/api/dialogue/${opened.dialogue.id}/cancel` });
     expect(res.statusCode).toBe(204);
     expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
-    expect(t.repos.pages.listActive(sessionId).map((p) => p.generated_text)).toEqual(['Prosa anterior.', '**Kira:** Procuro um mapa.\n\n**Elena Vance:** Quem pergunta?', 'Página seguinte.']);
+    expect(t.repos.pages.listActive(sessionId).map((p) => p.generated_text)).toEqual(['Prosa anterior.', FIRST_PROSE, 'Página seguinte.']);
     expect(t.repos.dialogues.get(dialogueId)!.page_id).toBe(pageId);
   });
 
@@ -290,10 +391,18 @@ describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', (
     t.gateway.queue(npcJson('Fale logo.'));
     await say('Outra abordagem.', opened.dialogue.id);
 
+    t.gateway.queue(narratorJson(SECOND_PROSE));
     const res = await conclude(opened.dialogue.id);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ discarded: 1, page: { id: pageId, order_index: 2, kind: 'dialogue' } });
-    expect(res.json().page.generated_text).toBe('**Kira:** Outra abordagem.\n\n**Elena Vance:** Fale logo.');
+    expect(concludePage(res)).toMatchObject({ discarded: 1, narration: 'narrated', page: { id: pageId, order_index: 2, kind: 'dialogue' } });
+    expect(concludePage(res).page.generated_text).toBe(SECOND_PROSE);
+    expect(t.repos.pages.get(pageId)!.player_instruction).toBe('**Kira:** Outra abordagem.\n\n**Elena Vance:** Fale logo.');
+
+    // o contexto da narração é a história ANTES da página refeita (nem a página antiga, nem as seguintes)
+    const req = t.gateway.requests.at(-1)!;
+    expect(req.userText).toContain('Prosa anterior.');
+    expect(req.userText).not.toContain('Elena estreitou os olhos.');
+    expect(req.userText).not.toContain('Página seguinte.');
 
     expect(t.repos.pages.listActive(sessionId)).toHaveLength(2);
     expect(t.repos.dialogues.get(dialogueId)).toBeUndefined(); // o antigo foi substituído
@@ -301,6 +410,101 @@ describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', (
     expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
     // e dá para refazer de novo, com a mesma persona
     expect((await redo({})).statusCode).toBe(201);
+  });
+
+  it('se a narração do novo diálogo falhar, nada é substituído e o diálogo continua ativo', async () => {
+    t.repos.pages.append(sessionId, { player_instruction: 'depois', generated_text: 'Página seguinte.' });
+    const opened = (await redo({ confirm_truncate: true })).json();
+    t.gateway.queue(npcJson('Fale logo.'));
+    await say('Outra abordagem.', opened.dialogue.id);
+
+    const res = await conclude(opened.dialogue.id); // sem resposta do Narrador
+    expect(parseSse(res.body).map((e) => e.event)).toContain('error');
+    expect(t.repos.pages.listActive(sessionId).map((p) => p.generated_text)).toEqual(['Prosa anterior.', FIRST_PROSE, 'Página seguinte.']);
+    expect(t.repos.dialogues.getActive(sessionId)!.id).toBe(opened.dialogue.id);
+  });
+});
+
+describe('POST /narrative/pages/:id/narrate-dialogue (reprocessar transcrição crua)', () => {
+  let rawId: string;
+  const narrate = (id = rawId) => t.app.inject({ method: 'POST', url: `/api/narrative/pages/${id}/narrate-dialogue` });
+  const RAW = '**Kira:** Procuro um mapa.\n\n**Elena Vance:** Quem pergunta?';
+  const NARRATED = 'Elena ergueu os olhos.\n\n— Procuro um mapa, — disse Kira.\n\nElena sorriu de lado.\n\n— Quem pergunta?';
+
+  beforeEach(() => {
+    t.repos.dialogues.delete(dialogueId);
+    rawId = t.repos.pages.append(sessionId, {
+      kind: 'dialogue',
+      npc_name: 'Elena Vance',
+      raw_dialogue: true,
+      player_instruction: null,
+      generated_text: RAW,
+    }).id;
+    t.repos.pages.append(sessionId, { player_instruction: 'depois', generated_text: 'Página seguinte.' });
+  });
+
+  it('troca só o texto da página crua por prosa, guardando a transcrição; as páginas seguintes ficam intactas', async () => {
+    t.gateway.queue(narratorJson(NARRATED));
+    const res = await narrate();
+    expect(res.statusCode).toBe(200);
+    const body = concludePage(res);
+    expect(body).toMatchObject({ discarded: 0, narration: 'narrated', page: { id: rawId, raw_dialogue: false, generated_text: NARRATED } });
+
+    const page = t.repos.pages.get(rawId)!;
+    expect(page).toMatchObject({ kind: 'dialogue', raw_dialogue: false, player_instruction: RAW, generated_text: NARRATED });
+    expect(page.model_identifier).toBeTruthy();
+    expect(t.repos.pages.listActive(sessionId).map((p) => p.generated_text)).toEqual(['Prosa anterior.', NARRATED, 'Página seguinte.']);
+
+    // contexto: a história até a página; as seguintes não entram
+    const req = t.gateway.requests.at(-1)!;
+    expect(req.userText).toContain('Prosa anterior.');
+    expect(req.userText).toContain(RAW);
+    expect(req.userText).not.toContain('Página seguinte.');
+  });
+
+  it('tenta até 3 vezes; se todas falharem, a página continua crua e nada é alterado', async () => {
+    const bad = narratorJson('Elena ergueu os olhos.\n\n— Procuro um mapa.');
+    t.gateway.queue(bad, bad, bad);
+    const res = await narrate();
+    expect(res.statusCode).toBe(200);
+    const events = parseSse(res.body).map((e) => e.event);
+    expect(events).toContain('error');
+    expect(events).not.toContain('page');
+    expect(t.gateway.requests).toHaveLength(3);
+    expect(t.repos.pages.get(rawId)).toMatchObject({ raw_dialogue: true, generated_text: RAW, player_instruction: null });
+    // a trava foi liberada: dá para tentar de novo
+    t.gateway.queue(narratorJson(NARRATED));
+    expect(concludePage(await narrate())).toMatchObject({ narration: 'narrated' });
+  });
+
+  it('recusa páginas narrativas, diálogos já narrados e inexistentes', async () => {
+    t.gateway.queue(narratorJson(NARRATED));
+    await narrate();
+    expect((await narrate()).statusCode).toBe(409); // já narrada
+    const narrative = t.repos.pages.listActive(sessionId)[0]!;
+    expect((await narrate(narrative.id)).statusCode).toBe(409);
+    expect((await narrate('nao-existe')).statusCode).toBe(404);
+    expect(t.gateway.requests).toHaveLength(1);
+  });
+
+  it('409 com diálogo ativo', async () => {
+    t.repos.dialogues.create(sessionId, 'Elena Vance', NPC_PROMPT);
+    expect((await narrate()).statusCode).toBe(409);
+  });
+
+  it('apaga o áudio antigo (lia a transcrição crua)', async () => {
+    t.repos.audio.put(rawId, {
+      text_sha256: 'x',
+      voice: 'Gacrux',
+      model: 'gemini-3.8-flash-tts',
+      style: '',
+      duration_ms: 1000,
+      audio: Buffer.from([1, 2, 3]),
+    });
+    expect(t.repos.audio.meta(rawId)).toBeDefined();
+    t.gateway.queue(narratorJson(NARRATED));
+    await narrate();
+    expect(t.repos.audio.meta(rawId)).toBeUndefined();
   });
 });
 

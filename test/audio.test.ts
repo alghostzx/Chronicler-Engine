@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SynthesisError } from '../src/ai/gateway.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
-import { fakeWav, makeApp, mockGateway, narratorJson, npcJson, withKey, type TestApp } from './helpers.js';
+import { fakeWav, makeApp, mockGateway, narratorJson, npcJson, parseSse, withKey, type TestApp } from './helpers.js';
 
 let t: TestApp;
 let sessionId: string;
@@ -448,7 +448,7 @@ describe('geração automática', () => {
     expect(t.repos.pages.listActive(sessionId)).toHaveLength(1);
   });
 
-  // Conversa e encerra um diálogo (a página de diálogo é criada sem IA); devolve a página.
+  // Conversa e encerra um diálogo (o Narrador escreve a página em prosa); devolve a página.
   async function dialoguePage(): Promise<{ id: string; generated_text: string }> {
     t.repos.pages.append(sessionId, { player_instruction: 'x', generated_text: 'Prosa anterior.' });
     const dialogue = t.repos.dialogues.create(sessionId, 'Elena', 'Você é Elena.');
@@ -457,9 +457,10 @@ describe('geração automática', () => {
     await t.app.inject({ method: 'POST', url: `/api/dialogue/${dialogue.id}/message`, payload: { message: 'Tchau' } });
     await new Promise((r) => setTimeout(r, 30));
     expect(t.gateway.synthRequests).toHaveLength(0); // as falas soltas do diálogo nunca são narradas
+    t.gateway.queue(narratorJson('Elena o encarou.\n\n— Oi.\n\nEla ergueu uma sobrancelha.\n\n— Quem pergunta?\n\n— Tchau.\n\n— Hum.'));
     const res = await t.app.inject({ method: 'POST', url: `/api/dialogue/${dialogue.id}/conclude` });
     expect(res.statusCode).toBe(200);
-    return res.json().page;
+    return parseSse(res.body).find((e) => e.event === 'page')!.data.page;
   }
 
   it('NUNCA narra as falas do Modo Diálogo; a página de diálogo só segue a opção PRÓPRIA (desligada de fábrica)', async () => {
