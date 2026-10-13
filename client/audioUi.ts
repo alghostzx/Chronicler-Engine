@@ -25,6 +25,16 @@ export const AUDIO_LABELS = {
 /** Páginas cujo player está aberto (sobrevive às reconstruções do Tome). */
 const openPanels = new Set<string>();
 
+/** Abre/fecha o player de uma página por fora do botão "Ouvir" (reprodução contínua); vale na próxima montagem do cartão. */
+export function setPanelOpen(pageId: string, open: boolean): void {
+  if (open) openPanels.add(pageId);
+  else openPanels.delete(pageId);
+}
+
+export function isPanelOpen(pageId: string): boolean {
+  return openPanels.has(pageId);
+}
+
 let pollMs = 1500;
 /** Intervalo de consulta do progresso (testes usam valores curtos). */
 export function setAudioPollInterval(ms: number): void {

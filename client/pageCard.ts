@@ -12,6 +12,7 @@ export const PAGE_ACTIONS = {
   narrateDialogue: 'Narrar diálogo',
   branch: 'Ramificar a partir desta página',
   listen: 'Ouvir esta página',
+  playFromHere: 'Reproduzir a partir daqui',
 } as const;
 
 export interface PageCardOptions {
@@ -37,6 +38,8 @@ export interface PageCardOptions {
   /** Esta página será substituída ao encerrar o diálogo refeito em andamento. */
   replacing?: boolean;
   onBranch?: () => void;
+  /** Reprodução contínua a partir desta página (só no Tome, nunca no leitor de volumes). */
+  onPlayFromHere?: () => void;
 }
 
 /** Cabeçalho comum: "Página N" (número absoluto, nunca reaproveitado) e, se houver, o selo da página. */
@@ -76,9 +79,22 @@ export function pageCard(o: PageCardOptions): HTMLElement {
   const audio = audioControls(page, { sessionTitle: o.sessionTitle ?? 'Crônica' });
   children.push(audio.panel);
   const footer: HTMLElement[] = [audio.button];
-  audio.button.classList.add('mr-auto');
   if (!o.readonly) {
     const last = (o.laterCount ?? 0) === 0;
+    const playFrom = iconButton({
+      icon: 'playFrom',
+      label: PAGE_ACTIONS.playFromHere,
+      tip: last
+        ? 'Esta já é a última página; use “Ouvir”'
+        : 'Reproduzir a partir daqui, em sequência, até a última página (pergunta antes de gerar o que faltar)',
+      align: 'start',
+      up: true,
+      extraClass: 'page-action',
+      disabled: last,
+      onClick: o.onPlayFromHere,
+    });
+    footer.push(playFrom);
+    playFrom.classList.add('mr-auto');
     const dialogue = page.kind === 'dialogue';
     const action = (icon: 'pencil' | 'prompt' | 'narrateDialogue' | 'redoDialogue' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
       iconButton({ icon, label, tip, align: 'end', up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });
