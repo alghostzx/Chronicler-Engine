@@ -23,7 +23,7 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 | Rota | Descrição |
 | --- | --- |
 | `GET /api/sessions` | `{ sessions }`: as crônicas salvas |
-| `POST /api/sessions` | Cria (`201 { session }`). `title` obrigatório; `system_rules`, `world_context`, `active_theme`, `token_limit` (1.000–10.000.000), `model`, `tts_auto`, `tts_auto_dialogue` opcionais |
+| `POST /api/sessions` | Cria (`201 { session }`). `title` obrigatório; `system_rules`, `world_context`, `active_theme`, `token_limit` (1.000–10.000.000), `model`, `tts_auto` opcionais |
 | `GET /api/sessions/:id` | `{ session, pages, archives, active_dialogue }`: páginas ativas já com `audio` (só metadados) e o diálogo ativo **sem** o prompt |
 | `PUT /api/sessions/:id/context` | Atualiza os mesmos campos de `POST` (ao menos um) |
 | `DELETE /api/sessions/:id` | Exclui (cascata) e cancela os jobs de áudio |
@@ -75,9 +75,9 @@ Funcionamento em [Narração por voz](narracao-por-voz.md).
 | `GET /api/sessions/:id/audio` | `{ pages: [{ page_id, order_index, kind, audio }] }`: estado do áudio de todas as páginas ativas, sem bytes (reprodução contínua) |
 | `POST /api/sessions/:id/audio/batch` | `{ from_page_id }`: agenda, em ordem, as páginas dali até a última que não têm áudio válido nem job (retenta as com erro); `{ started, pages }`; `409 missing_api_key` antes de agendar; idempotente |
 | `POST /api/sessions/:id/audio/cancel` | `{ page_ids }`: cancela jobs só de páginas dessa sessão; `{ cancelled, pages }` |
-| `GET /api/settings/tts` | Configuração (`auto_default`, `auto_dialogue_default`, `model`, `voice`, `style`) mais `defaults`, `models`, `voices`, `style_max` e `usage` |
+| `GET /api/settings/tts` | Configuração (`auto_default`, `model`, `voice`, `style`) mais `defaults`, `models`, `voices`, `style_max` e `usage` |
 | `PUT /api/settings/tts` | Atualiza a configuração (ao menos um campo) |
 | `POST /api/settings/tts/sample` | Gera uma amostra de voz (MP3) com a configuração atual ou a informada; não é guardada |
 | `DELETE /api/audio` | Apaga **todos** os áudios; `{ deleted, usage }` |
 
-As listagens de páginas e o evento SSE `page` já trazem `audio` (metadados; os blobs nunca vão em listagens). `tts_auto` e `tts_auto_dialogue` entram no `PUT /api/sessions/:id/context`.
+As listagens de páginas e o evento SSE `page` já trazem `audio` (metadados; os blobs nunca vão em listagens). `tts_auto` entra no `PUT /api/sessions/:id/context`.

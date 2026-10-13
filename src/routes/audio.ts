@@ -216,7 +216,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: AppContext): void
     usage: audio.usage(),
   }));
 
-  app.put<{ Body: { auto_default?: boolean; auto_dialogue_default?: boolean; model?: string; voice?: string; style?: string } }>(
+  app.put<{ Body: { auto_default?: boolean; model?: string; voice?: string; style?: string } }>(
     '/api/settings/tts',
     {
       schema: {
@@ -226,7 +226,6 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: AppContext): void
           minProperties: 1,
           properties: {
             auto_default: { type: 'boolean' },
-            auto_dialogue_default: { type: 'boolean' },
             model: modelField,
             voice: voiceField,
             style: styleField,

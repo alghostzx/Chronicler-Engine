@@ -194,16 +194,8 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
       'select',
       { class: 'input', 'aria-label': 'Narração automática desta sessão' },
       h('option', { value: 'inherit', selected: current === 'inherit' }, `Herdar o padrão global (${tts?.auto_default ? 'ligada' : 'desligada'})`),
-      h('option', { value: 'on', selected: current === 'on' }, 'Ligada: narrar cada página nova'),
+      h('option', { value: 'on', selected: current === 'on' }, 'Ligada: narrar cada página nova (inclusive as de diálogo)'),
       h('option', { value: 'off', selected: current === 'off' }, 'Desligada: só narrar quando eu pedir'),
-    );
-    const currentDlg = session.tts_auto_dialogue === null ? 'inherit' : session.tts_auto_dialogue ? 'on' : 'off';
-    const selectDlg = h(
-      'select',
-      { class: 'input', 'aria-label': 'Narração automática dos diálogos desta sessão' },
-      h('option', { value: 'inherit', selected: currentDlg === 'inherit' }, `Herdar o padrão global (${tts?.auto_dialogue_default ? 'ligada' : 'desligada'})`),
-      h('option', { value: 'on', selected: currentDlg === 'on' }, 'Ligada: narrar cada página de diálogo'),
-      h('option', { value: 'off', selected: currentDlg === 'off' }, 'Desligada: só narrar quando eu pedir'),
     );
     mount(
       content,
@@ -211,7 +203,6 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
         'div',
         { class: 'space-y-4' },
         h('div', null, h('label', { class: 'label' }, 'Narração automática'), select),
-        h('div', null, h('label', { class: 'label' }, 'Narração automática dos diálogos'), selectDlg),
         h(
           'p',
           { class: 'text-xs text-muted' },
@@ -223,13 +214,7 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
             class: 'btn btn-primary',
             type: 'button',
             onClick: () =>
-              void save(
-                {
-                  tts_auto: select.value === 'inherit' ? null : select.value === 'on',
-                  tts_auto_dialogue: selectDlg.value === 'inherit' ? null : selectDlg.value === 'on',
-                },
-                'Narração automática salva.',
-              ),
+              void save({ tts_auto: select.value === 'inherit' ? null : select.value === 'on' }, 'Narração automática salva.'),
           },
           'Salvar',
         ),

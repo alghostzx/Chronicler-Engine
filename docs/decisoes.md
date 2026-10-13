@@ -46,7 +46,7 @@ Por que o projeto é do jeito que é. Este documento guarda o **raciocínio** po
 | **MP3 48 kbps mono no SQLite** | ≈ 6 KB/s, 8× menor que o WAV; ouvir de novo é grátis. `auto_vacuum = INCREMENTAL` devolve o espaço de áudios descartados |
 | **Áudio vinculado ao hash do texto** | Editar o texto invalida o áudio; um job que termina depois de a página mudar é descartado |
 | **Trechos de 1500 caracteres, cortados entre parágrafos** | Cada trecho é uma chamada independente; como o diálogo agora é prosa sem rótulos, o corte não faz o modelo ler nomes. 1500 é o valor original, restaurado depois da fase do diálogo cru |
-| **Geração automática desligada por padrão** | Gerar áudio custa tokens; só acontece a pedido (ou pela opção, que é por crônica, com padrão global e opção própria para diálogos) |
+| **Geração automática desligada por padrão** | Gerar áudio custa tokens; só acontece a pedido (ou pela opção, que é por crônica, com padrão global; uma só, que vale para prosa e diálogo) |
 | **Reprodução contínua: sempre com pergunta** | Faltando áudio, o app pergunta antes de gerar (com aviso de custo reforçado acima de 10 páginas). A ideia de "ler daqui até o fim" automática foi recusada no início justamente pelo risco de gasto; voltou como botão explícito |
 | **Interromper só para a reprodução** | As gerações já iniciadas seguem no servidor: o dinheiro já foi gasto e o áudio fica pronto para depois |
 | **Um único `<audio>` global** | Tocar uma página pausa a outra; o modo contínuo reaproveita o player da própria página e as teclas de mídia ganham próxima/anterior |

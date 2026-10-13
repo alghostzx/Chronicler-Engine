@@ -5,7 +5,7 @@ import type { Db } from './connection.js';
  *
  * Política (alpha): bancos existentes são migrados. Só se quebra o banco (exigindo apagar `./data`)
  * quando migrar for muito problemático ou inflaria o programa com migrações demais — e isso deve ser
- * dito no README e no design document. Cada migração roda numa transação, junto com a troca do
+ * dito no README e em docs/modelo-de-dados.md. Cada migração roda numa transação, junto com a troca do
  * `user_version`; falhando, nada é alterado. Antes de migrar um banco em arquivo, o runner faz uma
  * cópia (`<arquivo>.v<versão-antiga>.bak`).
  *
@@ -53,6 +53,16 @@ export const MIGRATIONS: readonly Migration[] = [
         ALTER TABLE narrative_pages ADD COLUMN raw_dialogue INTEGER NOT NULL DEFAULT 0 CHECK (raw_dialogue IN (0, 1));
         -- Todas as páginas de diálogo criadas até a v4 guardam a transcrição crua.
         UPDATE narrative_pages SET raw_dialogue = 1 WHERE kind = 'dialogue';
+      `);
+    },
+  },
+  {
+    version: 6,
+    description: 'narração automática única (remove sessions.tts_auto_dialogue e a configuração global dos diálogos)',
+    up(db) {
+      db.exec(`
+        ALTER TABLE sessions DROP COLUMN tts_auto_dialogue;
+        DELETE FROM app_settings WHERE key = 'tts_auto_dialogue_default';
       `);
     },
   },

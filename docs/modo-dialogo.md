@@ -60,4 +60,4 @@ A versão anterior gravava a transcrição crua (`**Nome:** fala`) como página.
 
 - `kind = 'dialogue'`, com `npc_name`; o cartão mostra o selo **Diálogo com {NPC}** e, nas cruas, os rótulos de fala em destaque.
 - É **editável como qualquer outra página sem descartar as seguintes**. Na ação "editar prompt e re-gerar" entra *Refazer diálogo* (`regenerate` responde `409`).
-- *Ouvir* manual vale para páginas de diálogo; as falas soltas durante a conversa nunca são narradas. A geração **automática** de áudio dessas páginas tem opção própria, desligada de fábrica ([Narração por voz](narracao-por-voz.md#geração-automática)).
+- *Ouvir* manual vale para páginas de diálogo; as falas soltas durante a conversa nunca são narradas. A geração **automática** de áudio dessas páginas segue a mesma opção das demais páginas ([Narração por voz](narracao-por-voz.md#geração-automática)).

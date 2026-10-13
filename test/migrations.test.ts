@@ -65,7 +65,7 @@ describe('migrações do banco', () => {
     const file = bancoV3();
     const db = openDatabase(file);
     expect(db.prepare(`SELECT value FROM app_settings WHERE key = 'gemini_api_key'`).get()).toEqual({ value: 'segredo' });
-    expect(db.prepare('SELECT title, tts_auto, tts_auto_dialogue FROM sessions').get()).toEqual({ title: 'Crônica', tts_auto: 1, tts_auto_dialogue: null });
+    expect(db.prepare('SELECT title, tts_auto FROM sessions').get()).toEqual({ title: 'Crônica', tts_auto: 1 });
     expect(db.prepare('SELECT id, kind, npc_name, generated_text FROM narrative_pages ORDER BY order_index').all()).toEqual([
       { id: 'p1', kind: 'narrative', npc_name: null, generated_text: 'Prosa um.' },
       { id: 'p2', kind: 'narrative', npc_name: null, generated_text: 'Costura em prosa.' },
@@ -102,6 +102,34 @@ describe('migrações do banco', () => {
       { id: 'p2', kind: 'dialogue', raw_dialogue: 1 },
     ]);
     expect(fs.existsSync(`${file}.v4.bak`)).toBe(true);
+    db.close();
+  });
+
+  it('v5 → v6: some a opção própria dos diálogos (coluna e padrão global); a narração automática única e o resto ficam', () => {
+    // banco "v5": o v3 + as duas primeiras migrações
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chronicler-mig-'));
+    const file = path.join(dir, 'chronicler.db');
+    const raw = new Database(file);
+    raw.pragma('foreign_keys = ON');
+    raw.exec(SCHEMA_V3_SQL);
+    MIGRATIONS[0]!.up(raw);
+    MIGRATIONS[1]!.up(raw);
+    raw.pragma('user_version = 5');
+    raw.exec(`
+      INSERT INTO app_settings (key, value) VALUES ('tts_auto_default', '1'), ('tts_auto_dialogue_default', '1'), ('tts_voice', 'Gacrux');
+      INSERT INTO sessions (id, title, system_rules, world_context, tts_auto, tts_auto_dialogue) VALUES ('s1', 'Crônica', 'r', 'w', NULL, 0);
+      INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text) VALUES ('p1', 's1', 1, 'abre', 'Prosa.');
+    `);
+    raw.close();
+
+    const db = openDatabase(file);
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
+    const cols = (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name);
+    expect(cols).not.toContain('tts_auto_dialogue');
+    expect(db.prepare('SELECT title, tts_auto FROM sessions').get()).toEqual({ title: 'Crônica', tts_auto: null });
+    expect(db.prepare('SELECT key FROM app_settings ORDER BY key').all()).toEqual([{ key: 'tts_auto_default' }, { key: 'tts_voice' }]);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM narrative_pages').get()).toEqual({ n: 1 });
+    expect(fs.existsSync(`${file}.v5.bak`)).toBe(true);
     db.close();
   });
 

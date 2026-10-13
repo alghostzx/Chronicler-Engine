@@ -20,7 +20,6 @@ const sessionFields = {
   token_limit: { type: 'integer', minimum: 1000, maximum: 10_000_000 },
   model: { type: ['string', 'null'], maxLength: 200 },
   tts_auto: { type: ['boolean', 'null'] },
-  tts_auto_dialogue: { type: ['boolean', 'null'] },
 };
 
 export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -43,7 +42,6 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
       token_limit?: number;
       model?: string | null;
       tts_auto?: boolean | null;
-      tts_auto_dialogue?: boolean | null;
     };
   }>(
     '/api/sessions',
@@ -62,7 +60,6 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
         token_limit: b.token_limit,
         model: b.model,
         tts_auto: b.tts_auto,
-        tts_auto_dialogue: b.tts_auto_dialogue,
       });
       return reply.code(201).send({ session });
     },
