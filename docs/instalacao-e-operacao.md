@@ -90,6 +90,7 @@ A interface **não tem autenticação** e o banco guarda a chave da API em texto
 O projeto está em **alpha**, mas o banco **é migrado automaticamente** ao subir (a partir do schema v3), depois de salvar uma cópia ao lado (`chronicler.db.v3.bak`, `chronicler.db.v4.bak`… com o nome da versão antiga). Se um passo falhar, nada é alterado.
 
 - As páginas de diálogo criadas antes do schema v5 passam a ser tratadas como transcrição crua e podem ser reprocessadas com *Narrar diálogo*.
+- No schema v6 a opção separada de narração automática dos diálogos deixou de existir: valores antigos dela são descartados, e as páginas de diálogo seguem a opção única de cada crônica (ou o padrão global).
 - Bancos mais antigos (v1/v2, de antes das páginas e da narração por voz) **não são migráveis**: pare o contêiner, apague `./data` e suba de novo (antes, salve as crônicas que quiser guardar com *Salvar em Markdown*).
 - Um banco de versão **mais nova** que a do programa também é recusado.
 - Uma versão futura pode voltar a exigir apagar `./data` se migrar for inviável; o aviso vem na mensagem de erro da inicialização. A política e o histórico estão em [Modelo de dados](modelo-de-dados.md#migrações).

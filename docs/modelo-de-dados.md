@@ -1,6 +1,6 @@
 # Modelo de dados e migrações
 
-O SQLite roda localmente (por padrão em `./data/chronicler.db`; `/data/chronicler.db` no contêiner) com o driver síncrono `better-sqlite3`. A fonte da verdade do schema é [`src/db/schema.ts`](../src/db/schema.ts) (`SCHEMA_VERSION = 5`); este documento explica o que cada parte significa.
+O SQLite roda localmente (por padrão em `./data/chronicler.db`; `/data/chronicler.db` no contêiner) com o driver síncrono `better-sqlite3`. A fonte da verdade do schema é [`src/db/schema.ts`](../src/db/schema.ts) (`SCHEMA_VERSION = 6`); este documento explica o que cada parte significa.
 
 ## Tabelas
 
@@ -19,7 +19,7 @@ Todas as tabelas filhas usam `ON DELETE CASCADE`: excluir uma sessão apaga pág
 | Tabela | Papel |
 | --- | --- |
 | `app_settings` | Configurações globais em chave/valor: chave da API, modelo padrão, padrões de voz (`tts_*`) |
-| `sessions` | Uma crônica: `title`, `system_rules`, `world_context`, `active_theme` (`medieval`, `cyberpunk`, `pos-apocaliptico`, `contemporaneo`), `token_limit` (1.000.000), `model` (`NULL` = padrão global), `tts_auto` e `tts_auto_dialogue` (`NULL` = herda o padrão global) |
+| `sessions` | Uma crônica: `title`, `system_rules`, `world_context`, `active_theme` (`medieval`, `cyberpunk`, `pos-apocaliptico`, `contemporaneo`), `token_limit` (1.000.000), `model` (`NULL` = padrão global), `tts_auto` (`NULL` = herda o padrão global; vale para páginas de prosa e de diálogo) |
 | `narrative_pages` | As páginas do Tome (abaixo) |
 | `chronicle_archives` | Um volume por compactação: `volume_number`, `summary_text` (a sinopse revisada) e a faixa `covered_page_start_index`…`covered_page_end_index`. `UNIQUE (session_id, volume_number)` |
 | `dialogue_sessions` | Diálogos com NPC: `npc_name`, `player_name`, `dynamic_system_prompt` (**nunca exposto pela API**), `status` (`active`/`concluded`), `page_id` (a página em que virou), `redo_page_id` (página que um *Refazer* vai substituir) |
@@ -70,8 +70,9 @@ O controle de versão usa `PRAGMA user_version`. Política do projeto (alpha): *
 | 1 | Schema original (tabela `narrative_blocks`) | — |
 | 2 | "Blocos" viraram "páginas" (`narrative_pages`, `covered_page_*`, rotas e JSON `pages`) | Recusada (apague `./data`) |
 | 3 | Narração por voz: `page_audio`, `sessions.tts_auto`, `auto_vacuum` | Recusada se a origem for < 3 |
-| 4 | Diálogo como página: `kind`, `npc_name`, `dialogue_sessions.player_name/page_id/redo_page_id`, `sessions.tts_auto_dialogue` | v3 → v4: `ALTER TABLE`s; apaga diálogos já concluídos (não há página para ligá-los) |
+| 4 | Diálogo como página: `kind`, `npc_name`, `dialogue_sessions.player_name/page_id/redo_page_id`, `sessions.tts_auto_dialogue` (removida na v6) | v3 → v4: `ALTER TABLE`s; apaga diálogos já concluídos (não há página para ligá-los) |
 | 5 | Diálogo narrado: `narrative_pages.raw_dialogue` | v4 → v5: marca como cruas (`1`) todas as páginas `kind = 'dialogue'` já existentes |
+| 6 | Narração automática única: **remove** `sessions.tts_auto_dialogue` | v5 → v6: `DROP COLUMN` e apaga a configuração global `tts_auto_dialogue_default`; `tts_auto` e o padrão global passam a valer também para os diálogos |
 
 ### Como criar uma migração
 

@@ -12,11 +12,11 @@ Clique no ícone de alto-falante (**Ouvir esta página**) no rodapé de qualquer
 
 ## Geração automática
 
-Opcional e desligada por padrão: a opção global **Narrar automaticamente cada página nova** fica no cartão *Narração por voz* da página **Opções**; cada crônica pode **herdar** esse padrão ou forçar *ligada*/*desligada* na aba **Voz** da gaveta de contexto. As páginas criadas ao encerrar um diálogo têm uma opção **própria** (global e por crônica, também desligada de fábrica), separada da narrativa.
+Opcional e desligada por padrão: a opção global **Narrar automaticamente cada página nova** fica no cartão *Narração por voz* da página **Opções**; cada crônica pode **herdar** esse padrão ou forçar *ligada*/*desligada* na aba **Voz** da gaveta de contexto. A opção é **única**: vale também para a página criada ao encerrar um diálogo (as falas soltas durante a conversa nunca são narradas).
 
 ## Configuração
 
-Na página **Opções**: voz (30 vozes pré-definidas do Gemini, com o traço de cada uma), modelo (`gemini-3.8-flash-tts` padrão ou `gemini-3.8-flash-lite-tts`, mais barato), **estilo** (ritmo e tom; padrão `voz grave, rouca e pausada de um velho narrador`; a idade e o sotaque vêm da escolha da voz, não do estilo), **Ouvir amostra**, *Restaurar padrão*, uso de armazenamento e *Apagar todos os áudios*. Os valores globais ficam em `app_settings` (`tts_auto_default`, `tts_auto_dialogue_default`, `tts_model`, `tts_voice`, `tts_style`).
+Na página **Opções**: voz (30 vozes pré-definidas do Gemini, com o traço de cada uma), modelo (`gemini-3.8-flash-tts` padrão ou `gemini-3.8-flash-lite-tts`, mais barato), **estilo** (ritmo e tom; padrão `voz grave, rouca e pausada de um velho narrador`; a idade e o sotaque vêm da escolha da voz, não do estilo), **Ouvir amostra**, *Restaurar padrão*, uso de armazenamento e *Apagar todos os áudios*. Os valores globais ficam em `app_settings` (`tts_auto_default`, `tts_model`, `tts_voice`, `tts_style`).
 
 ## Reprodução contínua
 
