@@ -1,313 +1,111 @@
-# Chronicler Engine — Tarefas
+# TASKS.md — diário para agentes de IA
 
-Legenda: `[x]` concluído · `[~]` em andamento · `[ ]` pendente
+> **Público:** agentes (LLMs) que trabalham neste repositório. Não é documentação para usuários (isso é o [README](README.md) e a pasta [`docs/`](docs)). Aqui está tudo que um agente precisa saber para continuar o projeto: o que existe, o que foi feito, o que falta, as regras de trabalho e as armadilhas conhecidas.
+>
+> **Mantenha este arquivo atualizado** ao final de cada fase: atualize o "Estado atual", acrescente uma linha ao histórico e mova pendências. Conteúdo técnico detalhado vai no documento do tema em `docs/`, **não aqui**.
 
-Plano completo: ver seção 11 do [design document](chronicler_engine_design_document.md).
+## Resumo do projeto
 
-## Fase 0 — Scaffold e infraestrutura ✅
-- [x] `package.json`, `tsconfig.json`, scripts (`dev`, `build`, `test`, `typecheck`)
-- [x] Fastify + `@fastify/static`, `GET /api/health`
-- [x] `.gitignore` com `data/`, `*.db*` e `GEMINIKEY.txt`
-- [x] Teste do health check
+**Chronicler Engine**: app web local de escrita/RPG narrativo. O jogador escreve instruções; o Gemini é o **Narrador** e responde em prosa, uma **página** por instrução, num *Tome*. Fastify + `better-sqlite3` no servidor; TypeScript puro + Tailwind 3 no cliente (bundle esbuild em `public/assets/`, ignorado pelo git); SQLite como único armazenamento (inclusive áudio). Interface em pt-BR. Repositório público (`github.com/alghostzx/Chronicler-Engine`, MIT), 100% gerado por IA; cada *push* em `main` reconstrói a imagem do GHCR. Schema atual: **v5**. Node ≥ 22.
 
-## Fase 1 — Banco de dados e repositórios ✅
-- [x] Schema idempotente + migração na inicialização (WAL, foreign_keys, `user_version`)
-- [x] Repositórios: settings, sessions, blocks, archives, dialogues
-- [x] Testes com SQLite `:memory:` (12 testes)
+## Mapa de documentação (fonte da verdade)
 
-## Fase 2 — Configurações e sessões ✅
-- [x] `GET /api/settings`, `POST /api/settings/key` (valida a chave via `models.list` antes de gravar), `DELETE /api/settings/key`, `PUT /api/settings/model`
-- [x] `GET /api/models`: lista real de modelos de texto (`models.list`), cache de 10 min, fallback para o primeiro Flash
-- [x] CRUD de sessões, `PUT /api/sessions/:id/context` (regras, contexto, tema, modelo, `token_limit`)
-- [x] Validação estrita do corpo (campos desconhecidos → 400)
-- [x] Verificado contra a API real (`scripts/live-models.ts`): `gemini-3.8-flash` existe
+| Assunto | Documento |
+| --- | --- |
+| Visão geral, stack, estrutura do código, ciclo de geração, SSE, Docker | [`docs/arquitetura.md`](docs/arquitetura.md) |
+| Payload do Narrador, regras, saída estruturada, páginas, HP, compactação, export | [`docs/narrador.md`](docs/narrador.md) |
+| Modo Diálogo (persona, conclusão narrada, fidelidade, refazer, reprocessar) | [`docs/modo-dialogo.md`](docs/modo-dialogo.md) |
+| Schema, migrações, histórico de versões | [`docs/modelo-de-dados.md`](docs/modelo-de-dados.md) |
+| Rotas REST/SSE (**verificadas por `check:docs`**) | [`docs/api.md`](docs/api.md) |
+| Narração por voz e reprodução contínua | [`docs/narracao-por-voz.md`](docs/narracao-por-voz.md) |
+| Interface, temas, cartão de página, celular | [`docs/interface.md`](docs/interface.md), [`docs/celular-pwa.md`](docs/celular-pwa.md) |
+| Instalação, segurança, backup, variáveis de ambiente | [`docs/instalacao-e-operacao.md`](docs/instalacao-e-operacao.md) |
+| Comandos, testes, verificações visuais, convenções | [`docs/desenvolvimento.md`](docs/desenvolvimento.md) |
+| Por quês, **invariantes e seus testes**, limites conhecidos | [`docs/decisoes.md`](docs/decisoes.md) |
 
-## Fase 3 — Núcleo narrativo ✅
-- [x] `contextBuilder` puro (sem prompts passados), testado
-- [x] Geração estruturada com `responseJsonSchema` (`narrative_text` primeiro, `propertyOrdering`)
-- [x] SSE com parse incremental de `narrative_text` (`NarrativeTextExtractor`, testado com todas as fatias)
-- [x] `POST /api/sessions/:id/narrative/next` (eventos `start`/`chunk`/`page`/`dialogue_trigger`/`error`/`done`)
-- [x] Edição direta de página (`PUT /api/narrative/pages/:id`)
-- [x] Regeneração com truncamento atômico pós-geração e `confirm_truncate`
-- [x] Trava de concorrência por sessão e bloqueio durante diálogo ativo
-- [x] Verificado contra a API real (`scripts/live-narrative.ts`, `gemini-3.8-flash`): streaming e `dialogue_trigger` OK
+O antigo *design document* (um arquivo único com especificação + diário de decisões numerado) foi **desmembrado nesses documentos e removido**; não procure por referências de seção numerada.
 
-## Fase 4 — Token count e HP ✅
-- [x] `GET /api/sessions/:id/token-count` com `countTokens` real sobre o payload (regras + mundo + corpus ativo)
-- [x] `computeHp` com estados verde/amarelo/vermelho (limiares exatos testados)
-- [x] Cache por hash do conteúdo (sem polling, sem valores obsoletos)
-- [x] Verificado contra a API real (`scripts/live-tokens.ts`); descoberta: `systemInstruction` não é aceito em `countTokens` na Developer API → regras contadas junto ao conteúdo
+## Regras de trabalho (acordadas com o autor)
 
-## Fase 5 — Modo Diálogo ✅
-- [x] Ativação via `dialogue_trigger` (Fase 3), um diálogo ativo por sessão (índice único no banco)
-- [x] `POST /api/dialogue/:id/message`: persona do NPC, histórico isolado multi-turno, sinal `npc_wants_to_end`
-- [x] `POST /api/dialogue/:id/conclude`: costura em prosa via SSE, único ponto em que o diálogo altera a história
-- [x] `POST /api/dialogue/:id/cancel` (extensão) e `GET /api/sessions/:id/dialogue/active` (reconexão pós-reload)
-- [x] `dynamic_system_prompt` nunca é exposto pela API
-- [x] Refatoração: `TurnRunner` compartilhado (travas de concorrência e SSE)
-- [x] Verificado contra a API real (`scripts/live-dialogue.ts`)
+- **Idioma:** responder ao autor em **pt-BR**, de forma concisa, em Markdown. Código em inglês/português como já está; interface e docs em pt-BR.
+- **Git:** funcionalidade nova em ramo `feature/...` (ou de tópico: `docs/...`) com **commits parciais**; depois *merge* em `main` com `--no-ff`. **`git push` e remoção de ramo só depois de perguntar ao autor e receber o aval** (ele diz "make it so" / "punch it"). Comandos de escrita do git, vitest, navegadores, npm e `tsx` com rede precisam rodar **fora do sandbox**.
+- **Segredos:** nunca imprimir nem versionar a chave do Gemini. `GEMINIKEY.txt`, `data/`, `*.db*` e `public/assets/` são ignorados pelo git. Apagar artefatos temporários locais.
+- **Honestidade:** declarar o que não pôde ser verificado (celular real, áudio ouvido, iOS). Ver [Limites conhecidos](docs/decisoes.md#limites-conhecidos).
+- **Comentários:** preservar comentários e docstrings que não tenham relação com a mudança. Comentários de código apontam para `docs/*.md`.
+- **Documentação:** cada mudança de comportamento atualiza **só o documento do tema** (e este arquivo, se mudar o estado). Rode `npm run check:docs` (também roda no `npm test`).
+- **Migrações:** mudou o schema? Crie a migração ([como](docs/modelo-de-dados.md#como-criar-uma-migração)); só quebrar o banco quando migrar for muito trabalhoso.
+- **Fim de cada fase:** `npm test`, `npm run typecheck`, `npm run typecheck:client`, `npm run build`; e, se mexeu na UI, as verificações visuais relevantes.
 
-## Fase 6 — Compactação ✅
-- [x] `splitForCompaction`: 75/25 por peso (tamanho do texto), ≥ 1 página de cada lado
-- [x] `POST /api/sessions/:id/compact/preview`: sinopse factual do Corpus Passado, sem efeitos colaterais
-- [x] `POST /api/sessions/:id/compact/commit` transacional: volume em `chronicle_archives`, `## Crônica — Volume N` no `world_context`, páginas `is_archived`
-- [x] Validação da faixa no commit (prefixo dos ativos, preserva o última página) e rollback atômico
-- [x] Verificado contra a API real (`scripts/live-compaction.ts`): HP 62,6% → 79,3%
+### Armadilhas conhecidas (de sessões anteriores)
 
-## Fase 7 — Frontend (Vanilla TS + Tailwind, pt-BR) ✅
-- [x] `POST /api/narrative/pages/:id/branch` (ramificar) + testes
-- [x] Fontes locais empacotadas (`npm run fonts` → `public/fonts/`), sem CDN
-- [x] Temas (4) via variáveis CSS + classe na raiz, persistidos em `localStorage` e na sessão
-- [x] Tela inicial: chave da API (validada), modelo padrão (lista real da API), criar/listar/excluir sessões
-- [x] Layout: Gaveta de Contexto (Mundo/Regras/Modelo+limite/Crônica), Tome Interativo, Doca de Ação
-- [x] Tome com streaming (página fantasma), editar, ver prompt/re-gerar com aviso de descarte, ramificar
-- [x] Barra de HP (verde/amarelo/vermelho) recalculada só por eventos + botão Compactar Crônica pulsante
-- [x] UI do Modo Diálogo (transcrição, encerrar/descartar, reconexão pós-reload)
-- [x] Modal de revisão da sinopse (minuta editável → consolidar)
-- [x] Testes: parser SSE do cliente, serviço estático, e integração da UI em jsdom contra o servidor real (7 cenários)
+- Em *shell*, crase dentro de aspas duplas é substituída por comando: para edições multilinha, use *heredocs* de Python/arquivos, não `echo "...`x`..."`.
+- `npm run check:*` abrem Chromium e levam 1–3 min: rode em segundo plano e consulte depois. Eles **regravam dezenas de PNGs** com diferenças irrelevantes: reverta com `git checkout -- docs/screenshots/<pasta>` e mantenha só as capturas novas e significativas.
+- A saída das ferramentas pode dobrar barras invertidas; confira o arquivo real antes de concluir que há um erro.
+- Não há `GET /api/audio/usage`: o `usage` do armazenamento de áudio vem dentro de `GET`/`PUT /api/settings/tts` e de `DELETE /api/audio`.
+- `countTokens` da Developer API **rejeita** `systemInstruction`: as regras são contadas como texto somado ao conteúdo.
+- Podman: `up -d --build` pode manter o contêiner antigo; use `--force-recreate`.
 
-## Fase 8 — Docker ✅
-- [x] Dockerfile multi-stage (Node 22, deps de produção isoladas, runtime enxuto) + `.dockerignore`
-- [x] `docker-compose.yml` com bind `127.0.0.1:3000`, volume `./data`, entrypoint com `su-exec`
-- [x] README em pt-BR
-- [x] Validado sem Docker: build, `npm ci --omit=dev` isolado e servidor de produção respondendo (Docker indisponível no ambiente)
-- [x] Subida real com **Podman rootless** (`podman-compose` + `docker-compose.podman.yml`): build da imagem OK, contêiner responde em `127.0.0.1:3000` (`/api/health`, `/`, `/assets/*`, `/fonts/*` = 200) e `./data` permanece do usuário
-- [x] Teste com Docker propriamente dito (Docker 29.7 + Compose 5.5, Fedora 44) — ver Fase 12
+## Estado atual (capacidades)
 
-## Fase 9 — Verificação final ✅
-- [x] Checklist da seção 10 do design document (5/5, com evidências no próprio documento)
-- [x] Suíte completa: 128 testes passando; `typecheck` do servidor e do cliente limpos
-- [x] Teste ponta a ponta com chave real (`scripts/live-*.ts`, modelo `gemini-3.8-flash`)
+Tudo abaixo está **implementado e testado** (suíte Vitest; `check:*` em Chromium, alguns também em Firefox):
 
-### Pendências conhecidas / riscos
-- A imagem foi construída e executada com Podman rootless **e** com Docker (Fase 12).
-- A UI foi validada visualmente nos 4 temas e em viewport mobile via Chromium headless (`scripts/screenshots.ts`).
-- Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/modo JSON não foram testados com eles.
-- `npm audit` acusa 7 vulnerabilidades, todas em dependências de desenvolvimento (a instalação de produção tem 0).
+- **Núcleo narrativo:** payload isolado (só prosa), saída JSON estruturada com `propertyOrdering`, SSE com parse incremental, edição direta, regeneração com truncamento atômico, ramificar, trava de concorrência por sessão.
+- **HP e compactação:** `countTokens` real com cache por hash; cisão 75/25 por peso; minuta de sinopse revisável; volumes (`chronicle_archives`); páginas arquivadas legíveis e exportáveis.
+- **Modo Diálogo:** persona isolada e sigilosa; conclusão **narrada** (prosa com falas literais, verificação de fidelidade, até 3 tentativas, *fallback* para transcrição crua); *Narrar diálogo* (reprocessar crua sem tocar nas seguintes); *Refazer* não destrutivo.
+- **Voz:** Gemini TTS pela Interactions API; MP3 48 kbps no SQLite; trechos de 1500 caracteres; geração automática (global/por crônica, com opção própria para diálogos); **reprodução contínua** com modal de faltantes, geração em segundo plano e banner.
+- **Interface:** tela inicial (logo Srcery), Opções, Tome em cartões de página, gaveta de contexto, leitor de volume, 4 temas × claro/escuro, app shell no celular, tela cheia, PWA instalável (sem service worker).
+- **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5).
 
-## Fase 10 — Melhorias pós-entrega ✅
-- [x] Favicon (SVG + ICO + apple-touch-icon), servidos localmente
-- [x] Variações clara/escura para os 4 temas (Automático/Claro/Escuro, sem "flash" na carga)
-- [x] Botão **Salvar .md**: `GET /api/sessions/:id/export` (inclui páginas arquivadas; contexto opcional; sem prompts do jogador)
-- [x] Testes: exportação (módulo + rota), temas/modo (jsdom) e UI (download + alternância de modo); 142 testes passando
-- [x] Imagem reconstruída e contêiner Podman atualizado com estas mudanças (favicon, assets e API respondendo 200)
+## Pendências e riscos abertos
 
-## Fase 11 — Interface: ícones e responsividade ✅
-- [x] Cabeçalho da sessão só com ícones (Biblioteca, Tema, Modo, Salvar .md, Contexto) com tooltip no hover/foco e `aria-label`
-- [x] Tema e modo claro/escuro como menus de ícone (Esc, clique fora, setas), também na tela inicial
-- [x] Tela inicial sem corte/rolagem horizontal no celular (`grid-cols-1`, `min-w-0`, `.input` com `max-w-full`, lista de crônicas com truncamento)
-- [x] Testes: cabeçalho (rótulos/tooltips), menus de tema/modo e regressão da marcação responsiva; 145 testes passando
-- [x] Conferência visual em viewport mobile via Chromium headless (`npm run screenshots`, 0 px de rolagem horizontal)
+Nenhuma fase está em andamento. O que resta é, em geral, **validação que só o autor pode fazer** ou decisão futura:
 
-## Fase 12 — README e capturas de tela ✅
-- [x] README: subir com Docker, Podman+compose e Podman puro (testado), primeiro uso, atualização, backup, solução de problemas, arquitetura
-- [x] `npm run screenshots` (Chromium headless + Gemini simulado) gera 8 capturas em `docs/screenshots/` (desktop e celular; 0 px de rolagem horizontal)
-- [x] Correção encontrada nas capturas: barra de HP no celular
-- [x] Encerramento gracioso (`SIGTERM`/`SIGINT`) — `stop`/`down` não esperam mais 10 s
-- [x] Caminho Docker testado: `docker compose up -d --build` (porta 3100 e dados em `/tmp` para não colidir), todos os endpoints 200, `healthcheck` healthy, processo rodando como usuário sem privilégios, dados persistem após `restart` (0,5 s), `down` limpo
+- [ ] Confirmar no **celular real** (Android Chrome; iOS/Safari) o layout, a instalação PWA e a reprodução contínua com a tela bloqueada.
+- [ ] O autor **ouvir** a narração dos diálogos narrados e avaliar a qualidade literária/efeito no TTS.
+- [ ] Modelos `gemma-*` aparecem no seletor, mas `systemInstruction`/JSON não foram testados com eles.
+- [ ] `npm audit`: 7 vulnerabilidades, todas em dependências de **desenvolvimento** (produção: 0).
+- [ ] A verificação de fidelidade do diálogo é heurística (palavras e ordem; ignora pontuação e não vê palavras acrescentadas dentro de uma fala).
+- Ideias sem compromisso: nenhuma registrada pelo autor no momento. Antes de propor algo novo, leia [Decisões](docs/decisoes.md): várias "funcionalidades óbvias" foram recusadas de propósito (ex.: reprodução contínua automática sem confirmar custo).
 
-## Fase 13 — Páginas (branch `feature/paginas`, mesclada em `main`) ✅
-Conceito: cada texto gerado por prompt é uma **página** do Tome (antes "bloco"). Draft v2 revisado com as decisões do autor: renomeação completa **sem migração** (pré-pré-alpha, atualizações não suportadas), numeração absoluta (`Página N` = `order_index`), `---` entre páginas no export, páginas arquivadas legíveis e exportáveis, "Editar prompt" mantém o aviso destrutivo.
+## Histórico por fase (todas concluídas)
 
-### 13.1 Renomeação bloco → página (código, API, banco; sem migração)
-- [x] Schema: `narrative_blocks` → `narrative_pages`, `covered_block_*` → `covered_page_*`, índice `idx_pages_order`; `SCHEMA_VERSION` 2
-- [x] Banco de versão antiga (v1) falha com mensagem clara (apague `./data`) em vez de `no such table`; teste cobrindo
-- [x] Repositório `blocks` → `pages`; tipos `NarrativeBlock`/`Block` → `Page`
-- [x] Rotas `/api/narrative/blocks/:id…` → `/api/narrative/pages/:id…` (sem alias); JSON (`blocks` → `pages`, `pages_to_archive/keep`, `pages_to_discard`, `covered_page_*`) e evento SSE `block` → `page`
-- [x] Mensagens de erro, prompts de compactação e textos da UI: "bloco(s)" → "página(s)"
-- [x] Testes e scripts (`live-*`, `screenshots`) atualizados; suíte verde
+| Fase | Entrega | Onde ler hoje |
+| --- | --- | --- |
+| 0 | Scaffold (`package.json`, `tsconfig`, Fastify, `/api/health`, `.gitignore`) | [Arquitetura](docs/arquitetura.md) |
+| 1 | Banco e repositórios (schema idempotente, WAL, `user_version`) | [Modelo de dados](docs/modelo-de-dados.md) |
+| 2 | Configurações e sessões; `models.list` com cache; validação estrita de corpo | [API](docs/api.md) |
+| 3 | Núcleo narrativo: `contextBuilder`, JSON estruturado, SSE, regenerar/editar | [Narrador](docs/narrador.md) |
+| 4 | HP: `countTokens` real, estados verde/amarelo/vermelho, cache por hash | [Narrador](docs/narrador.md#hp-do-narrador) |
+| 5 | Modo Diálogo (persona isolada, `/message`, `/conclude`, `/cancel`, reconexão) | [Modo Diálogo](docs/modo-dialogo.md) |
+| 6 | Compactação (75/25, preview sem efeitos, commit transacional) | [Narrador](docs/narrador.md#compactação-livro-de-crônicas) |
+| 7 | Frontend (temas, gaveta, Tome com streaming, HP, diálogo, revisão da sinopse) | [Interface](docs/interface.md) |
+| 8 | Docker/Podman (multi-stage, entrypoint com `su-exec`, compose) | [Arquitetura](docs/arquitetura.md#empacotamento-docker) |
+| 9 | Verificação final com a API real (`scripts/live-*.ts`) | [Desenvolvimento](docs/desenvolvimento.md#verificações-visuais) |
+| 10 | Favicon, claro/escuro, **Salvar .md** | [Narrador](docs/narrador.md#exportação-em-markdown) |
+| 11 | Cabeçalho só com ícones, menus de tema/modo, responsividade | [Interface](docs/interface.md#controles-tooltips-e-acessibilidade) |
+| 12 | README, capturas, `SIGTERM` gracioso, Docker validado | [Capturas](docs/capturas-de-tela.md) |
+| 13 | **Páginas** (bloco → página, cartão por página, volumes legíveis, export por escopo, 8 temas) | [Interface](docs/interface.md#cartão-de-página) |
+| 14 | Mobile: app shell (`100dvh`, `visualViewport`), tela cheia, PWA | [Celular e PWA](docs/celular-pwa.md) |
+| 15 | Narração por voz (TTS, MP3 no SQLite, geração automática) | [Narração por voz](docs/narracao-por-voz.md) |
+| 16 | Tela inicial de jogo (logo Srcery, quadros, Opções) | [Interface](docs/interface.md#tela-inicial) |
+| 17 | Diálogo como página + **migrações reais** (schema v4) | [Modo Diálogo](docs/modo-dialogo.md), [Modelo de dados](docs/modelo-de-dados.md#migrações) |
+| 18 | Diálogo narrado + reprocessar cruas (schema v5; chunk TTS volta a 1500) | [Modo Diálogo](docs/modo-dialogo.md#narrar-diálogo-reprocessar) |
+| 19 | Reprodução contínua (rotas de lote, controlador, banner, Media Session) | [Narração por voz](docs/narracao-por-voz.md#reprodução-contínua) |
+| 20 | Revisão geral da documentação: README enxuto, `docs/` por tema, `check:docs`, fim do design document | [Desenvolvimento](docs/desenvolvimento.md#checkdocs) |
 
-### 13.2 Interface — cartão de página
-- [x] Ícones novos em `client/icons.ts`: lápis (editar texto), prompt editável, ramificar
-- [x] Componente `pageCard` (cartão separado por página, cabeçalho "Página N" absoluto, folha com borda/sombra, espaçamento) no lugar da prosa contínua; modo `readonly` reutilizável
-- [x] Ações no rodapé do cartão, **sempre visíveis**, só ícones com tooltip/`aria-label`: Editar texto, Editar prompt (re-gera, **com aviso de descarte**), Ramificar (desabilitado na última página)
-- [x] Estados: edição dentro do cartão, página fantasma (streaming), esmaecidas na re-geração, drop-cap só na 1ª, cartão de diálogo distinto
-- [x] Mobile (390 px): sem rolagem horizontal, ícones sem quebra de linha
+Cada fase seguiu o mesmo ritmo: rascunho aprovado pelo autor → ramo → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval.
 
-### 13.3 Páginas consumidas continuam legíveis e exportáveis
-- [x] `GET /api/archives/:id/pages` (sob demanda; faixa `covered_page_*`, só arquivadas) + testes
-- [x] Painel Contexto → Crônica: "Volume N — páginas X a Y", sinopse, botão **Ler as N páginas** e ícone **Salvar volume em .md**
-- [x] Leitor de volume como **página separada** (rota `#/s/<id>/v/<n>`, não modal) com `pageCard` somente leitura, link de volta e ícone de exportar; arquivadas não são editáveis nem ponto de ramificação na UI
-- [x] Teste: páginas arquivadas ficam **fora** do contexto da IA/HP/compactação e **dentro** do que o jogador lê e exporta
-- [x] Exportador: `---` entre páginas (linhas em branco ao redor), metadados "N páginas"; prompts do jogador continuam fora
-- [x] `GET /api/sessions/:id/export?scope=all|active|archived&include_context=` (padrão `all`)
-- [x] `GET /api/archives/:id/export?include_summary=` (volume: `# Título — Volume N`, sinopse opcional, páginas)
-- [x] Modal "Salvar em Markdown" com escopo (completa · só no Tome · só em volumes) + checkbox de contexto
+## Verificação (comandos)
 
-### 13.4 Os 8 temas (4 temas × claro/escuro)
-- [x] Tokens de "folha" por tema/modo em `client/styles.css`
-- [x] `test/pageThemes.test.ts` (vitest): contraste WCAG de texto, texto esmaecido e ícones, e distinção folha × fundo nas 8 combinações
-- [x] `npm run check:paginas` (Chromium headless): 8 combinações × 1280 px e 390 px — ações visíveis e clicáveis, sem overflow horizontal, páginas sem sobreposição, contraste no DOM renderizado, leitor de volume
-- [x] Capturas das 8 combinações (desktop e celular, mais leitor de volume e gaveta) em `docs/screenshots/paginas/` inspecionadas uma a uma
-- [x] Testes de UI (jsdom): rótulos novos, ícones sempre visíveis (sem `opacity-0`), número da página, leitor, modal de exportação
+```bash
+npm test                    # Vitest (inclui test/docs.test.ts = check:docs)
+npm run typecheck && npm run typecheck:client
+npm run build               # servidor (dist/) + cliente (public/assets/)
+npm run check:docs          # links, âncoras e rotas da documentação
+npm run check:paginas       # 8 temas, cartão de página (Chromium)
+npm run check:mobile        # layout 390 px, 3 alturas, 8 temas
+npm run check:audio         # voz e reprodução contínua
+npm run check:inicio        # tela inicial e Opções, 320–1920 px
+```
 
-### 13.5 Documentação e entrega
-- [x] Design document: nova §11.22 (conceito, mapa de renomeação, leitor de volumes, formato do export, sem migração) + notas remissivas nas seções antigas
-- [x] README: vocabulário novo, aviso "pré-pré-alpha: atualizações não suportadas, apague `./data`", galeria dos 8 temas
-- [x] Suíte completa (198 testes) + typecheck (servidor e cliente) + `npm run build` + imagem Docker reconstruída e testada (build, subida, endpoints, limpeza)
-- [x] Merge de `feature/paginas` em `main` (a imagem no GHCR é publicada no push)
-
-## Fase 14 — Mobile: layout, tela cheia e instalável (branch `feature/mobile-app`)
-Problemas relatados (Android Chrome): com a barra do navegador visível o campo de digitação fica fora da tela; com o teclado aberto o cabeçalho some e a interface sai de alcance. Decisões do autor: `display: standalone` (mantém a barra de status, sem modo imersivo), botão "Tela cheia" no cabeçalho seguindo o padrão de ícones, alvo Android (testar também com Firefox headless se possível), **somente manifesto** (sem convite/botão de instalação; documentar como instalável "PWA").
-
-### 14.1 Layout que cabe na tela (cabeçalho + digitação sempre visíveis)
-- [x] `viewport`: `viewport-fit=cover, interactive-widget=resizes-content`
-- [x] `100dvh` (fallback `100vh`) no lugar de `h-screen` nas telas de sessão e leitor de volume; "app shell" (sem rolagem do documento; só a área das páginas rola)
-- [x] `client/viewport.ts`: fallback com `visualViewport` (altura útil → `--app-height`) para navegadores que não redimensionam o layout com o teclado
-- [x] `env(safe-area-inset-*)` no cabeçalho/dock; biblioteca/home continuam rolando normalmente
-
-### 14.2 Botão "Tela cheia"
-- [x] Ícones novos (entrar/sair da tela cheia) em `client/icons.ts`
-- [x] Botão no cabeçalho da biblioteca, da sessão e do leitor (padrão `iconButton`, tooltip + `aria-label`, pt-BR), oculto onde a Fullscreen API não existe; alterna rótulo/ícone ao mudar de estado
-
-### 14.3 Instalável (manifesto)
-- [x] `public/manifest.webmanifest` (nome, `short_name`, `lang pt-BR`, `start_url`, `scope`, `display: standalone`, cores, ícones)
-- [x] Ícones PNG 192/512 + maskable 512 gerados a partir de `favicon.svg` (`scripts/make-icons.ts`, `npm run icons`)
-- [x] Metas em `index.html` (`manifest`, `theme-color`, `mobile-web-app-capable`, apple-*) e `theme-color` dinâmico por tema/modo
-- [x] Service worker **não necessário**: o Chromium reporta 0 erros de instalabilidade sem ele (verificado via CDP)
-
-### 14.4 Testes
-- [x] Vitest: meta viewport, manifesto (campos, arquivos de ícone, Content-Type), `theme-color` por tema, botão de tela cheia
-- [x] `npm run check:mobile` (Chromium, 390 px; alturas 844/760/480; 8 temas; sessão e leitor): cabeçalho no topo, dock embaixo, sem rolagem do documento, só a área das páginas rola, textarea visível, sem overflow horizontal, erros de instalabilidade = 0
-- [x] Mesma verificação no Firefox headless (`BROWSER=firefox npm run check:mobile`; Firefox 157 do Playwright)
-- [x] Capturas inspecionadas (folhas de contato dos 8 temas: sessão com barra, sessão com teclado, leitor com teclado)
-- [x] Doca compacta em altura ≤ 520 px (oculta HP/Compactar) para sobrar espaço às páginas com o teclado aberto
-- [ ] Confirmação no celular real (Android Chrome) pelo autor
-
-### 14.5 Documentação e entrega
-- [x] README (instalável como PWA, HTTPS necessário, `check:mobile`, `icons`) e design document §11.23
-- [x] typecheck (servidor e cliente), suíte completa, `npm run build`
-- [x] Merge de `feature/mobile-app` em `main`
-
-## Fase 15 — Narração por voz (TTS Gemini 3.8) (branch `feature/tts-narrador`)
-Decisões do autor: voz padrão **Gacrux** ("Mature", pré-definida, sem sotaque carioca) com estilo editável; **geração automática por sessão**, herdando um padrão global **desligado**; **sem** reprodução contínua automática ("ler daqui até o fim", risco de gasto enorme de tokens; a Fase 19 a trouxe só por botão explícito, com confirmação de custo); MP3 48 kbps via `@breezystack/lamejs` (LGPL-3.0, documentado). Chave de teste validada: `gemini-3.8-flash-tts` funciona (Interactions API, não `generateContent`).
-
-### 15.1 Banco e armazenamento (schema v3, sem migração)
-- [x] `SCHEMA_VERSION` 3; tabela `page_audio` (`page_id` PK → `narrative_pages` `ON DELETE CASCADE`, `text_sha256`, `voice`, `model`, `style`, `mime`, `duration_ms`, `bytes`, `audio` BLOB); `sessions.tts_auto` (NULL = herda o padrão global)
-- [x] `PRAGMA auto_vacuum = INCREMENTAL` na criação do banco + `incremental_vacuum` após apagar áudios
-- [x] Repositório `audio` (get sem blob / com blob, put, delete, stats, purge); leitura valida `text_sha256` (obsoleto = inexistente e apagado)
-- [x] Descarte: edição de texto, regeneração e ramificação/exclusão de sessão (CASCADE)
-
-### 15.2 Síntese (servidor)
-- [x] `GeminiGateway.synthesize` (Interactions API, `speech_metadata.style`, voz em `speech_config`), mock em `test/helpers.ts`
-- [x] Limpeza do texto (markdown/símbolos) e quebra por parágrafos (~1,5 mil caracteres)
-- [x] WAV → PCM, silêncio de ~250 ms entre trechos, codificação MP3 48 kbps mono
-- [x] Gerenciador de jobs: progresso n/m, cancelamento, máx. 2 simultâneos, retentativas 429/5xx, mensagens pt-BR, descarte do resultado se a página mudou/sumiu durante o job
-
-### 15.3 API
-- [x] `POST /api/narrative/pages/:id/audio` (gera/gera de novo), `GET …/audio/status`, `GET …/audio` (MP3 com `Range`), `DELETE …/audio`, `POST …/audio/cancel`
-- [x] `GET/PUT /api/settings/tts` (auto padrão, modelo, voz, estilo), `GET /api/audio/usage`, `DELETE /api/audio` (apagar todos), `POST /api/settings/tts/sample`
-- [x] `tts_auto` por sessão no `PUT /api/sessions/:id/context`
-- [x] Geração automática em segundo plano após cada página do Narrador (inclusive a de fechamento de diálogo); nunca para mensagens de diálogo; desligada por padrão
-- [x] Páginas arquivadas (volumes) também podem ser narradas
-
-### 15.4 Interface
-- [x] Ícones SVG novos (ouvir, tocar, pausar, regenerar, apagar, baixar, cancelar)
-- [x] 4º ícone "Ouvir" sempre visível no cartão; player embutido (tocar/pausar, barra, tempo, velocidade, gerar de novo com aviso, apagar, baixar .mp3); estados gerando n/m e erro
-- [x] Um único `<audio>` global (tocar uma página pausa a outra) + Media Session
-- [x] Leitor de volume com o botão de áudio
-- [x] Gaveta da sessão: geração automática (herdar/ligar/desligar); Biblioteca: configurações de voz (modelo, voz, estilo, amostra, uso de armazenamento, apagar tudo)
-
-### 15.5 Testes
-- [x] Vitest (gateway simulado): geração, quebra, MP3 válido, cache (2ª leitura sem API), descarte por edição/regeneração/ramificação/sessão, hash de segurança, corrida, sem áudio em diálogo, auto só quando ligado, Range, auto_vacuum, UI jsdom
-- [x] `npm run check:audio` (Chromium e Firefox; 8 temas × desktop/390 px; capturas inspecionadas)
-- [x] Teste real com a chave (`scripts/live-tts-e2e.ts`), verificado por transcrição
-
-### 15.6 Documentação e entrega
-- [x] README (uso, geração automática, custo/armazenamento, privacidade, LGPL do `lamejs`), design document §11.24
-- [x] typecheck (servidor e cliente), suíte completa, `npm run build`
-- [x] Remover `samples-tts/`; merge de `feature/tts-narrador` em `main`
-
-## Fase 16 — Tela inicial de jogo (branch `feature/tela-inicial`)
-Rascunho aprovado pelo autor antes de implementar (ver decisões pendentes no draft). Logo em arte ASCII renderizado como SVG com a paleta **Srcery**, legenda e menu `Continuar` / `Nova Crônica` / `Opções`; os dois primeiros abrem quadros sobrepostos, `Opções` é uma página (`#/opcoes`) com a conexão com o Gemini e a narração por voz.
-
-### 16.1 Logo
-- [x] `scripts/make-logo.ts` (`npm run logo`): converte `echo-chronicler-engine-logo.sh` (cores ANSI → paleta Srcery; `▀ ▄ █ ░ ▒ ▓`) em SVG (um `<path>` por cor), faixa única e variante empilhada (CHRONICLER / ENGINE) para celular
-- [x] SVGs gerados em `public/` e `<picture>` com `alt`; sempre cabe na largura, `max-height` limitado
-
-### 16.2 Tela de título
-- [x] Escopo de cores `theme-srcery` (fundo escuro fixo, vinheta, brilho discreto) para `#/` e `#/opcoes`
-- [x] Legenda abaixo do logo na fonte normal; menu com três botões grandes, teclado (↑/↓/Enter/Esc), foco visível, alvos ≥ 44 px, `prefers-reduced-motion`
-- [x] `Continuar` desabilitado sem crônicas; aviso/pulso de `Opções` quando não há chave do Gemini; botão de Tela cheia mantido
-
-### 16.3 Quadros e Opções
-- [x] Quadro **Continuar** (lista, excluir com confirmação) e quadro **Nova Crônica** (formulário atual) sobre fundo escurecido; Esc/clique fora/Fechar; foco devolvido; botão "voltar" fecha o quadro
-- [x] Página **Opções** (`#/opcoes`): conexão com o Gemini + modelo padrão + narração por voz; botão Voltar
-
-### 16.4 Testes e entrega
-- [x] Vitest (conversor do logo; menu, quadros, Opções, teclado, criação/exclusão)
-- [x] `npm run check:inicio` (Chromium e Firefox; larguras 320–1920; capturas inspecionadas) + regressões `check:mobile`/`check:paginas`/`check:audio`
-- [x] README (tela inicial e capturas), design document §11.25, typecheck, suíte completa, `npm run build`; merge de `feature/tela-inicial` em `main`
-
-## Fase 17 — Diálogo como página (branch `feature/dialogo-pagina`)
-Decisões do autor aprovadas. O diálogo executado deixa de ser reinterpretado pelo Narrador: ao encerrar, a **transcrição vira a própria página** (`kind = 'dialogue'`, sem IA); ela é editável sem descartar as seguintes e o 💬 "editar prompt e re-gerar" vira **Refazer diálogo**.
-
-### 17.1 Banco e repositórios (schema v4, com migração)
-- [x] `narrative_pages.kind` (`narrative`|`dialogue`) e `npc_name`; `dialogue_sessions.page_id` e `redo_page_id` (FK → `narrative_pages` `ON DELETE CASCADE`), índice único parcial em `page_id`; `SCHEMA_VERSION = 4` e tipos
-- [x] `PagesRepository.append` aceita `kind`/`npc_name`; `DialoguesRepository`: vincular página, apagar mensagens ao encerrar, `redo_page_id`
-- [x] Prompt dinâmico do NPC nunca no JSON de páginas (só `kind` e `npc_name`)
-- [x] **Migrações reais** (`src/db/migrations.ts`): cada passo numa transação, backup `<banco>.v<antiga>.bak`, v3→v4 automática; v1/v2 e bancos mais novos recusados; política: só quebrar o banco quando migrar for inviável
-- [x] `dialogue_sessions.player_name` (rótulo do jogador inferido pelo Narrador; padrão "Protagonista") e `sessions.tts_auto_dialogue`
-
-### 17.2 Servidor
-- [x] `formatDialoguePage` (`**Protagonista:** …` / `**Nome:** …`, uma fala por parágrafo); remover `buildBridgeRequest`/`bridgeInstruction`
-- [x] `POST /api/dialogue/:id/conclude` sem IA: grava a página de diálogo (JSON `{page, discarded}`), apaga as mensagens, marca `concluded`
-- [x] `POST /api/narrative/pages/:id/redo-dialogue` (confirmação de truncamento): cria diálogo ativo com a mesma persona e `redo_page_id`; encerrar substitui a página, trunca as seguintes, troca o diálogo da página e descarta o áudio; descartar não altera nada
-- [x] `regenerate` de página de diálogo → 409; `active` e detalhe da sessão informam `redo_page_id`
-- [x] Voz: *Ouvir* manual permitido em páginas de diálogo; geração automática com opção **própria** (global `tts_auto_dialogue_default` + por sessão, desligada de fábrica), separada da narrativa
-
-### 17.3 Interface
-- [x] `pageCard`: selo "Diálogo com …", rótulos de fala em destaque, ícone novo **Refazer diálogo** no lugar do 💬 (aria-label, tooltip, um ícone por ação)
-- [x] Dock: "Encerrar diálogo" (sem SSE), modo refazer ("Encerrar e substituir a página N"), página esmaecida com selo "será substituída"; confirmação de Refazer com contagem de páginas descartadas
-- [x] Cliente: conclude como POST simples, `Page.kind`/`npc_name`, `Dialogue.redo_page_id`
-
-### 17.4 Testes e entrega
-- [x] Vitest backend (conclude sem gateway, formato, CASCADE, 409 do regenerate, edição preserva as seguintes, refazer: intacto até encerrar / descartar / substituir+truncar, áudio, auto-TTS, schema v4) e UI jsdom (selo, rótulos, ícone, dock, fluxo completo)
-- [x] `check:paginas` com página de diálogo (8 temas × desktop/celular) + regressões `check:mobile`/`check:audio`; `scripts/live-dialogue.ts` adaptado
-- [x] README, design document (§3.3, §8.3, checklist nº 5, §11.26), capturas, typecheck, suíte completa, `npm run build`; merge de `feature/dialogo-pagina` em `main`
-
-## Fase 18 — Diálogo narrado (branch `feature/dialogo-narrado`)
-Decisões do autor aprovadas (transcrição crua em `player_instruction`; sem "encerrar sem narrar"; **3 tentativas** antes do fallback; botão de reprocessar). Meio-termo: ao encerrar, o Narrador escreve uma página em prosa **mantendo as falas literais** (só acrescenta o preenchimento narrativo); fim dos rótulos `**Nome:**` no texto lido pela voz, o que permite voltar o trecho do TTS a 1500 caracteres.
-
-### 18.1 Servidor
-- [x] `buildDialoguePageRequest`: regras + mundo + corpus + transcrição (`**Rótulo:** fala`) + instrução de fidelidade (travessão, falas intactas, sem rótulos, sem avançar a história); resposta no JSON do Narrador (regra 4 padrão), `dialogue_trigger` ignorado
-- [x] `POST /api/dialogue/:id/conclude` volta a ser SSE (mesmos eventos do §11.12, sem encadear novo diálogo); no *Refazer*, o fantasma ocupa o lugar da página antiga
-- [x] Verificação de fidelidade (palavras das falas, em ordem, no texto); até **3 tentativas**; depois, fallback para a transcrição crua com aviso (`narration: 'fallback'`)
-- [x] Erro da API: nada é gravado e o diálogo continua ativo; transcrição crua guardada em `player_instruction`; mensagens apagadas só após gravar a página
-- [x] TTS: `DEFAULT_CHUNK_CHARS` = 1500 e timeout de síntese de volta a 180 s
-
-### 18.2 Reprocessar diálogos crus
-- [x] Schema v5 + migração v4→v5: `narrative_pages.raw_dialogue` (1 = página de diálogo com a transcrição crua: antigas, fallback; 0 = narrada); a migração marca como cruas todas as páginas `kind = 'dialogue'` existentes
-- [x] `parseDialoguePage` (`**Rótulo:** fala` → falas) usada na verificação e no reprocessamento (o texto atual da página é a fonte, mesmo se editado)
-- [x] `POST /api/narrative/pages/:id/narrate-dialogue` (SSE): só páginas de diálogo cruas (409 nas demais); contexto = páginas **anteriores**; **não** descarta as seguintes; 3 tentativas; sucesso troca o texto, zera `raw_dialogue` e descarta o áudio; falha mantém a página como está
-- [x] Botão **Narrar diálogo** (ícone próprio, aria-label, tooltip) só em páginas de diálogo cruas; some depois de reprocessada
-
-### 18.3 Interface
-- [x] Doca: "Encerrar diálogo" mostra "Narrando…" e o fantasma da página (SSE); aviso quando houve fallback para a transcrição crua
-- [x] Páginas antigas (cruas) continuam renderizando os rótulos em destaque
-
-### 18.4 Testes e entrega
-- [x] Vitest: fidelidade (aprova/reprova/ordem/acentos), retentativa, fallback, erro da API mantém o diálogo ativo, *Refazer* (substitui só ao concluir), `player_instruction`, TTS 1500; UI jsdom do fluxo
-- [x] `scripts/live-dialogue.ts` com o fluxo narrado e verificação ao vivo; regressões `check:paginas`/`check:audio`
-- [x] README, design document (§3.3, §8.3, checklist nº 5, §11.27), typecheck, suíte completa, `npm run build`
-- [ ] Merge de `feature/dialogo-narrado` em `main` (push e remoção da branch só com confirmação do autor)
-
-## Fase 19 — Reprodução contínua (branch `feature/reproducao-continua`)
-**Plano aprovado pelo autor.** *Interromper* só para a reprodução e deixa as gerações em andamento correndo (sem modal de cancelar); teclas de mídia ganham próxima/anterior. Botão *Reproduzir a partir daqui*: lê as páginas da clicada até o fim; se faltar áudio, pergunta se gera (geração em segundo plano, em ordem, enquanto reproduz) ou se só reproduz até a primeira página sem áudio (sem pular); banner "Reproduzindo «crônica» em modo contínuo" com *Interromper*; o player é o da página que está tocando.
-
-### 19.1 Servidor (sem migração)
-- [x] `GET /api/sessions/:id/audio` (estado do áudio de todas as páginas ativas)
-- [x] `POST /api/sessions/:id/audio/batch` `{ from_page_id }`: agenda em ordem as páginas sem áudio válido nem job (retenta as com erro); `409` sem chave antes de agendar; idempotente
-- [x] `POST /api/sessions/:id/audio/cancel` `{ page_ids }` (só páginas da sessão)
-
-### 19.2 Cliente
-- [x] `client/continuousPlayback.ts`: controlador (faixa fixada ao iniciar, faltantes, encadeamento no `ended` do mesmo `<audio>`, esperar geração, parar na 1ª sem áudio / no erro, pausa, takeover, sair da sessão)
-- [x] Botão no rodapé do cartão (ícone novo, aria-label, tooltip; desabilitado na última página) e modal de faltantes (aviso reforçado acima de 10)
-- [x] Banner "Reproduzindo «crônica» em modo contínuo" com estado e *Interromper* (só para a reprodução; as gerações pendentes seguem em segundo plano, sem pergunta)
-- [x] Painel da página atual abre/fecha e o Tome rola até ela; `nexttrack`/`previoustrack` da Media Session
-
-### 19.3 Testes e entrega
-- [x] Vitest: rotas, controlador (player falso), UI jsdom
-- [x] `check:audio`/`check:mobile`: fluxo contínuo em Chromium real (encadeamento, banner em 390 px, rodapé em uma linha)
-- [x] README (inclusive a nota "não existe reprodução contínua"), design document §11.28, typecheck, suíte completa, `npm run build`; merge em `main`
-
+Estado da suíte ao fim da Fase 20: **358 testes** (27 arquivos) passando; `check:audio` e `check:paginas` 16/16 na última execução (Fase 19).
