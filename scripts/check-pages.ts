@@ -184,8 +184,9 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
 
     const dimmedCard = card.classList.contains('is-dimmed'); // páginas a descartar ficam propositalmente esmaecidas
     const actions = Array.from(card.querySelectorAll<HTMLButtonElement>('.page-card-actions button.page-action'));
-    // Diálogo cru (rótulos de falante visíveis) ganha a ação “Narrar diálogo”; as demais páginas têm 4.
-    const expected = card.querySelector('.dialogue-speaker') ? 5 : 4;
+    // Diálogo cru (rótulos de falante visíveis) ganha a ação “Narrar diálogo”; as demais páginas têm 5
+    // (ouvir, reproduzir a partir daqui, editar texto, editar prompt/refazer diálogo, ramificar).
+    const expected = card.querySelector('.dialogue-speaker') ? 6 : 5;
     if (kind === 'volume') {
       const names = actions.map((a) => a.getAttribute('aria-label'));
       if (names.length !== 1 || names[0] !== 'Ouvir esta página') problems.push(`${label}: leitor deve ser somente leitura (apenas “Ouvir”), achou ${JSON.stringify(names)}`);
@@ -269,7 +270,7 @@ for (const theme of THEMES) {
 
       // Ações clicáveis (verifica visibilidade, estabilidade e que nada cobre o botão) + tooltip
       const first = page.locator('.page-card[data-page-id]').first();
-      for (const label of ['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página', 'Ouvir esta página']) {
+      for (const label of ['Editar texto da página', 'Editar prompt e re-gerar', 'Ramificar a partir desta página', 'Ouvir esta página', 'Reproduzir a partir daqui']) {
         try {
           await first.getByRole('button', { name: label }).click({ trial: true, timeout: 3000 });
         } catch (e) {
@@ -288,6 +289,8 @@ for (const theme of THEMES) {
       }
       const lastBranch = page.locator('.page-card[data-page-id]').last().getByRole('button', { name: 'Ramificar a partir desta página' });
       if (!(await lastBranch.isDisabled())) report.problems.push('[tome] Ramificar deveria estar desabilitado na última página');
+      const lastPlayFrom = page.locator('.page-card[data-page-id]').last().getByRole('button', { name: 'Reproduzir a partir daqui' });
+      if (!(await lastPlayFrom.isDisabled())) report.problems.push('[tome] Reproduzir a partir daqui deveria estar desabilitado na última página');
 
       // Edição dentro do cartão
       await first.getByRole('button', { name: 'Editar texto da página' }).click();
@@ -347,13 +350,13 @@ for (const theme of THEMES) {
       if (await dlgCard.locator('.dialogue-speaker').count()) report.problems.push('[diálogo] página narrada não deveria mostrar rótulos de falante');
       if (!(await dlgCard.textContent())?.includes('— O Corvo Cego não faz perguntas, forasteiro')) report.problems.push('[diálogo] falas literais ausentes na página narrada');
       const dlgActions = await dlgCard.locator('.page-card-actions button.page-action').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
-      if (dlgActions.join('|') !== 'Ouvir esta página|Editar texto da página|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo] ações inesperadas: ${JSON.stringify(dlgActions)}`);
+      if (dlgActions.join('|') !== 'Ouvir esta página|Reproduzir a partir daqui|Editar texto da página|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo] ações inesperadas: ${JSON.stringify(dlgActions)}`);
       if (await page.locator('.page-card[data-page-index="1"] [data-badge]').count()) report.problems.push('[diálogo] página narrativa não deveria ter selo de diálogo');
       const rawCard = page.locator('.page-card[data-page-index="4"]');
       const speakers = await rawCard.locator('.dialogue-speaker').allTextContents();
       if (speakers.join('|') !== 'Aldric:|Elena:') report.problems.push(`[diálogo cru] falantes inesperados: ${JSON.stringify(speakers)}`);
       const rawActions = await rawCard.locator('.page-card-actions button.page-action').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
-      if (rawActions.join('|') !== 'Ouvir esta página|Editar texto da página|Narrar diálogo|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo cru] ações inesperadas: ${JSON.stringify(rawActions)}`);
+      if (rawActions.join('|') !== 'Ouvir esta página|Reproduzir a partir daqui|Editar texto da página|Narrar diálogo|Refazer diálogo|Ramificar a partir desta página') report.problems.push(`[diálogo cru] ações inesperadas: ${JSON.stringify(rawActions)}`);
       for (const name of ['Narrar diálogo', 'Refazer diálogo']) {
         try {
           await (name === 'Refazer diálogo' ? dlgCard : rawCard).getByRole('button', { name }).click({ trial: true, timeout: 3000 });

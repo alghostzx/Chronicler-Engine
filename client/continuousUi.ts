@@ -33,7 +33,7 @@ export function createContinuousBar(onStop: () => void): ContinuousBar {
     'div',
     { class: 'continuous-bar hidden', role: 'region', 'aria-label': 'Reprodução contínua', 'data-continuous-bar': '' },
     h('span', { class: 'continuous-bar-icon' }, icon('playFrom', 20)),
-    h('div', { class: 'min-w-0 flex-1' }, heading, detail),
+    h('div', { class: 'min-w-[14rem] flex-1' }, heading, detail),
     stopBtn,
     live,
   );

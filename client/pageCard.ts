@@ -79,6 +79,7 @@ export function pageCard(o: PageCardOptions): HTMLElement {
   const audio = audioControls(page, { sessionTitle: o.sessionTitle ?? 'Crônica' });
   children.push(audio.panel);
   const footer: HTMLElement[] = [audio.button];
+  if (o.readonly) audio.button.classList.add('mr-auto'); // sozinho no rodapé, fica à esquerda (a dica ancora no início)
   if (!o.readonly) {
     const last = (o.laterCount ?? 0) === 0;
     const playFrom = iconButton({

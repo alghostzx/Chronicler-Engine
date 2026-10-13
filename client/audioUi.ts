@@ -35,6 +35,12 @@ export function isPanelOpen(pageId: string): boolean {
   return openPanels.has(pageId);
 }
 
+/** Durante a geração em lote da reprodução contínua, o aviso "ficou pronta" de cada página seria só ruído. */
+let quietReady = false;
+export function setQuietReadyToasts(quiet: boolean): void {
+  quietReady = quiet;
+}
+
 let pollMs = 1500;
 /** Intervalo de consulta do progresso (testes usam valores curtos). */
 export function setAudioPollInterval(ms: number): void {
@@ -183,8 +189,9 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
       paint();
       if (done) {
         wasGenerating = false;
-        if (info?.status === 'ready') toast(`A narração da Página ${page.order_index} ficou pronta.`, 'success');
-        else if (info?.status === 'error') toast(info.error ?? 'Não foi possível gerar o áudio.', 'error');
+        if (info?.status === 'ready') {
+          if (!quietReady) toast(`A narração da Página ${page.order_index} ficou pronta.`, 'success');
+        } else if (info?.status === 'error') toast(info.error ?? 'Não foi possível gerar o áudio.', 'error');
       }
       return true;
     });

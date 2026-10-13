@@ -13,7 +13,7 @@ import {
 import { downloadStoryMarkdown, type ExportScope } from '../download';
 import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
 import { audioPlayer } from '../audioPlayer';
-import { isPanelOpen, setPanelOpen } from '../audioUi';
+import { isPanelOpen, setPanelOpen, setQuietReadyToasts } from '../audioUi';
 import { ContinuousPlayback, type EndInfo, type StatusPage } from '../continuousPlayback';
 import { askGenerate, createContinuousBar } from '../continuousUi';
 import { icon } from '../icons';
@@ -115,6 +115,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     onStatus: (pages) => syncAudio(pages),
     onEnd: (info) => {
       modeOpened.clear();
+      setQuietReadyToasts(false);
       continuousEnded(info);
     },
   });
@@ -314,6 +315,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       else {
         try {
           await api('POST', `/api/sessions/${sessionId}/audio/batch`, { from_page_id: b.id });
+          setQuietReadyToasts(true); // sem um aviso "ficou pronta" por página gerada
           pages = await fetchPages();
         } catch (err) {
           const e = err as ApiError;
@@ -325,7 +327,10 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       }
     }
     if (disposed) return;
-    if (!continuous.start({ pages, fromPageId: b.id, mode }).ok) toast(`A Página ${b.order_index} ainda não tem áudio: não há o que reproduzir.`, 'info');
+    if (!continuous.start({ pages, fromPageId: b.id, mode }).ok) {
+      setQuietReadyToasts(false);
+      toast(`A Página ${b.order_index} ainda não tem áudio: não há o que reproduzir.`, 'info');
+    }
   }
 
   function pageArticle(b: Page, dimmed: boolean): HTMLElement {
@@ -828,6 +833,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     disposed = true;
     controller?.abort();
     continuous.dispose();
+    setQuietReadyToasts(false);
     audioPlayer.stop();
     document.title = 'Chronicler Engine';
   };
