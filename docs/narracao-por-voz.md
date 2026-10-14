@@ -67,11 +67,11 @@ Os modelos `gemini-3.8-flash-tts` e `gemini-3.8-flash-lite-tts` só funcionam be
 
 1. `cleanForSpeech` remove Markdown e símbolos (o modelo trata o texto como transcrição literal), preservando os parágrafos (viram pausas).
 2. `splitForSpeech` quebra o texto em pedaços de ≈ **1.500 caracteres** (`DEFAULT_CHUNK_CHARS`), por parágrafos/sentenças, **sempre entre parágrafos**. Cada pedaço é uma chamada independente (o modelo recomeça a prosódia a cada um). Como as páginas de diálogo são prosa com falas em travessão, sem `**Nome:**`, o corte não faz mais o modelo ler nomes ([Modo Diálogo](modo-dialogo.md#por-que-prosa-e-falas-literais)).
-3. Cada pedaço é sintetizado, o WAV decodificado ([`pcm.ts`](../src/tts/pcm.ts)), os pedaços são unidos com ≈ 250 ms de silêncio e codificados em **MP3 48 kbps mono** ([`mp3.ts`](../src/tts/mp3.ts), `@breezystack/lamejs`, cedendo o laço de eventos entre blocos): ≈ 6 KB/s, 8× menor que o WAV.
+3. Os pedaços são sintetizados **em paralelo** (`Promise.all`), cada WAV decodificado ([`pcm.ts`](../src/tts/pcm.ts)), os pedaços unidos em ordem com ≈ 250 ms de silêncio e codificados em **MP3 48 kbps mono** ([`mp3.ts`](../src/tts/mp3.ts), `@breezystack/lamejs`, cedendo o laço de eventos entre blocos): ≈ 6 KB/s, 8× menor que o WAV.
 
 ### `AudioService` ([`src/tts/service.ts`](../src/tts/service.ts))
 
-Um job por página, com progresso n/m e cancelamento; fila FIFO com **no máximo 2 sínteses simultâneas**; retentativas (2 s, 6 s, 15 s) em 429/5xx/rede; o áudio antigo só é substituído quando o novo fica pronto; e o resultado de um job é descartado se a página mudou ou sumiu enquanto ele rodava (conferido pelo hash do texto).
+Um job por página, com progresso n/m e cancelamento (os trechos de cada página são sintetizados em paralelo; se algum trecho falhar, os demais são cancelados na hora); fila FIFO entre páginas com **no máximo 2 sínteses simultâneas**; retentativas (2 s, 6 s, 15 s + jitter) em 429/5xx/rede; o áudio antigo só é substituído quando o novo fica pronto; e o resultado de um job é descartado se a página mudou ou sumiu enquanto ele rodava (conferido pelo hash do texto).
 
 ### Armazenamento e descarte
 

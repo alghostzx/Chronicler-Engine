@@ -52,7 +52,7 @@ Tudo abaixo está **implementado e testado** (suíte Vitest; `check:*` em Chromi
 - **Núcleo narrativo:** payload isolado (só prosa), saída JSON estruturada com `propertyOrdering`, SSE com parse incremental, edição direta, regeneração com truncamento atômico, ramificar, trava de concorrência por sessão.
 - **HP e compactação:** `countTokens` real com cache por hash; cisão 75/25 por peso; minuta de sinopse revisável; volumes (`chronicle_archives`); páginas arquivadas legíveis e exportáveis.
 - **Modo Diálogo:** persona isolada e sigilosa; conclusão **narrada** (prosa com falas literais, verificação de fidelidade, até 3 tentativas, *fallback* para transcrição crua); *Narrar diálogo* (reprocessar crua sem tocar nas seguintes); *Refazer* não destrutivo.
-- **Voz:** Gemini TTS pela Interactions API; MP3 48 kbps no SQLite; trechos de 1500 caracteres; geração automática (uma opção só, global/por crônica, para prosa e diálogo); **reprodução contínua** com modal de faltantes, geração em segundo plano; o **player mora numa barra fixa** (a página só mostra o status da geração e o menu *Opções do áudio*).
+- **Voz:** Gemini TTS pela Interactions API; MP3 48 kbps no SQLite; trechos de 1500 caracteres sintetizados em paralelo por página; geração automática (uma opção só, global/por crônica, para prosa e diálogo); **reprodução contínua** com modal de faltantes, geração em segundo plano; o **player mora numa barra fixa** (a página só mostra o status da geração e o menu *Opções do áudio*).
 - **Interface:** tela inicial (logo Srcery), Opções, Tome em cartões de página, gaveta de contexto, leitor de volume, 4 temas × claro/escuro, app shell no celular, tela cheia, PWA instalável (sem service worker).
 - **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5→v6).
 
@@ -94,6 +94,7 @@ Nenhuma fase está em andamento. O que resta é, em geral, **validação que só
 | 20 | Revisão geral da documentação: README enxuto, `docs/` por tema, `check:docs`, fim do design document | [Desenvolvimento](docs/desenvolvimento.md#checkdocs) |
 | 21 | Narração automática **única** (some a opção própria dos diálogos; schema v6) | [Narração por voz](docs/narracao-por-voz.md#geração-automática), [Modelo de dados](docs/modelo-de-dados.md#histórico-de-versões) |
 | 22 | **Player na barra fixa**: a página só mostra o status da geração (+ menu *Opções do áudio*); controles de mídia, anterior/próxima e Interromper numa barra sempre visível (Tome, modo contínuo e leitor de volume) | [Narração por voz](docs/narracao-por-voz.md#a-barra-do-player), [Interface](docs/interface.md#barra-do-player) |
+| 23 | **Paralelismo dos trechos de áudio por página**: trechos de 1500 caracteres sintetizados em paralelo (`Promise.all`) com cancelamento atômico e jitter de retentativas; fila FIFO com 2 páginas simultâneas mantida | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito) |
 
 Cada fase seguiu o mesmo ritmo: rascunho aprovado pelo autor → ramo → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval.
 
@@ -110,4 +111,4 @@ npm run check:audio         # voz e reprodução contínua
 npm run check:inicio        # tela inicial e Opções, 320–1920 px
 ```
 
-Estado da suíte ao fim da Fase 22: **364 testes** (27 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
+Estado da suíte ao fim da Fase 23: **365 testes** (27 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
