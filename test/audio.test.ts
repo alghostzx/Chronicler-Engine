@@ -108,8 +108,21 @@ describe('geração e leitura do áudio', () => {
     expect(res.headers['content-disposition']).toContain('P%C3%A1gina%201.mp3');
   });
 
-  it('página longa vira vários trechos, sequenciais, com progresso', async () => {
-    await setup(mockGateway(), { audio: { chunkChars: 60 } });
+  it('página longa vira vários trechos em paralelo, preservando ordem e progresso', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    await setup(
+      mockGateway({
+        synthesize: async (req) => {
+          inFlight++;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          await new Promise((r) => setTimeout(r, 10));
+          inFlight--;
+          return fakeWav(req.text);
+        },
+      }),
+      { audio: { chunkChars: 60 } },
+    );
     const text = Array.from({ length: 6 }, (_, i) => `Parágrafo número ${i + 1} da história.`).join('\n\n');
     const page = addPage(text);
     await generate(page.id);
@@ -118,6 +131,7 @@ describe('geração e leitura do áudio', () => {
     expect(sent.length).toBeGreaterThan(2);
     expect(sent.every((s) => s.length <= 60)).toBe(true);
     expect(sent.join('\n\n')).toBe(text);
+    expect(maxInFlight).toBeGreaterThanOrEqual(2);
     // duração = soma dos trechos + silêncios (250 ms) entre eles
     const spoken = sent.reduce((n, s) => n + s.length * 10, 0);
     expect(t.repos.audio.meta(page.id)!.duration_ms).toBeGreaterThanOrEqual(spoken + (sent.length - 1) * 250 - 5);
@@ -229,6 +243,26 @@ describe('falhas, tentativas e cancelamento', () => {
     const a = await settle(page.id);
     expect(a).toMatchObject({ status: 'ready', error: 'cota esgotada' });
     expect((await getAudio(page.id)).statusCode).toBe(200);
+  });
+
+  it('se um dos trechos paralelos falha, cancela os demais e registra erro', async () => {
+    await setup(
+      mockGateway({
+        synthesize: async (req) => {
+          if (req.text.includes('Falha')) throw new SynthesisError('Erro no trecho');
+          await new Promise((r) => setTimeout(r, 60));
+          return fakeWav(req.text);
+        },
+      }),
+      { audio: { chunkChars: 60 } },
+    );
+    const text = 'Primeiro trecho ok.\n\nFalha neste trecho.\n\nTerceiro trecho ok.';
+    const page = addPage(text);
+    await generate(page.id);
+    const res = await settle(page.id);
+    expect(res.status).toBe('error');
+    expect(res.error).toBe('Erro no trecho');
+    expect(audioRows()).toBe(0);
   });
 
   it('cancelar interrompe o job e nada é gravado', async () => {

@@ -278,14 +278,30 @@ export class AudioService {
   }
 
   private async run(job: Job): Promise<void> {
-    const { signal } = job.controller;
+    const userSignal = job.controller.signal;
+    const internalController = new AbortController();
+    const abortInternal = () => internalController.abort();
+    userSignal.addEventListener('abort', abortInternal, { once: true });
+    const signal = internalController.signal;
+
     try {
       const gateway = this.gatewayProvider();
-      const parts: Pcm[] = [];
-      for (const chunk of job.chunks) {
+      let completed = 0;
+      const chunkPromises = job.chunks.map(async (chunk) => {
         signal.throwIfAborted();
-        parts.push(await this.synthesizeChunk(gateway, chunk, job.settings, signal));
-        job.done = parts.length;
+        const pcm = await this.synthesizeChunk(gateway, chunk, job.settings, signal);
+        job.done = ++completed;
+        return pcm;
+      });
+      // Anexa catch para que, caso um trecho falhe ou seja cancelado, rejeições secundárias
+      // de outros trechos abortados não gerem UnhandledPromiseRejection no Node.js.
+      for (const p of chunkPromises) p.catch(() => {});
+      let parts: Pcm[];
+      try {
+        parts = await Promise.all(chunkPromises);
+      } catch (err) {
+        internalController.abort();
+        throw err;
       }
       const pcm = joinPcm(parts, this.gapMs);
       const mp3 = await encodeMp3(pcm, MP3_KBPS, signal);
@@ -308,11 +324,12 @@ export class AudioService {
       });
       this.jobs.delete(job.pageId);
     } catch (err) {
-      if (signal.aborted) return; // cancelado: quem cancelou já limpou o job
+      if (userSignal.aborted) return; // cancelado: quem cancelou já limpou o job
       job.state = 'error';
       job.error = toSynthesisError(err).message;
       job.finishedAt = Date.now();
     } finally {
+      userSignal.removeEventListener('abort', abortInternal);
       job.markFinished();
     }
   }
@@ -334,7 +351,8 @@ export class AudioService {
         const failure = toSynthesisError(err);
         const delay = this.retryDelaysMs[attempt];
         if (!failure.retryable || delay === undefined) throw failure;
-        await sleep(delay, signal);
+        const jitter = delay > 0 ? Math.floor(Math.random() * Math.min(delay * 0.2, 500)) : 0;
+        await sleep(delay + jitter, signal);
       }
     }
   }
