@@ -66,4 +66,27 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    description: 'cache de trechos de áudio por página (page_audio_chunks)',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS page_audio_chunks (
+            page_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            chunk_sha256 TEXT NOT NULL,
+            voice TEXT NOT NULL,
+            model TEXT NOT NULL,
+            style TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            audio BLOB NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (page_id, chunk_index),
+            FOREIGN KEY (page_id) REFERENCES narrative_pages(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_audio_chunks_lookup
+            ON page_audio_chunks(page_id, chunk_sha256, voice, model, style);
+      `);
+    },
+  },
 ];

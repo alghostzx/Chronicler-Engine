@@ -26,11 +26,14 @@
  * Versão 6: sai `sessions.tts_auto_dialogue` (e a configuração global dos diálogos): a narração
  * automática é uma só (`sessions.tts_auto` + padrão global) e vale para páginas de prosa e de diálogo.
  *
+ * Versão 7: cache de trechos de áudio por página (`page_audio_chunks`). Guarda cada trecho sintetizado
+ * (WAV) associado à página, permitindo reaproveitar trechos inalterados após edições pontuais de texto.
+ *
  * A partir da versão 4 o projeto (alpha) migra bancos existentes: ver `migrations.ts`. Esta constante
  * descreve o schema de um banco NOVO; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE`
  * da migração (um teste confere que os dois caminhos geram o mesmo schema).
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -117,10 +120,26 @@ CREATE TABLE IF NOT EXISTS page_audio (
     FOREIGN KEY (page_id) REFERENCES narrative_pages(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS page_audio_chunks (
+    page_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    chunk_sha256 TEXT NOT NULL,
+    voice TEXT NOT NULL,
+    model TEXT NOT NULL,
+    style TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    audio BLOB NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (page_id, chunk_index),
+    FOREIGN KEY (page_id) REFERENCES narrative_pages(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_pages_order ON narrative_pages(session_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_dialogue_msgs ON dialogue_messages(dialogue_session_id, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_dialogue
     ON dialogue_sessions(session_id) WHERE status = 'active';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dialogue_page
     ON dialogue_sessions(page_id) WHERE page_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_audio_chunks_lookup
+    ON page_audio_chunks(page_id, chunk_sha256, voice, model, style);
 `;

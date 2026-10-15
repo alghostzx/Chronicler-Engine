@@ -23,6 +23,28 @@ export interface PutAudioInput {
   audio: Buffer;
 }
 
+export interface AudioChunk {
+  page_id: string;
+  chunk_index: number;
+  chunk_sha256: string;
+  voice: string;
+  model: string;
+  style: string;
+  duration_ms: number;
+  audio: Buffer;
+  created_at: string;
+}
+
+export interface PutAudioChunkInput {
+  chunk_index: number;
+  chunk_sha256: string;
+  voice: string;
+  model: string;
+  style: string;
+  duration_ms: number;
+  audio: Buffer;
+}
+
 const META_COLUMNS = 'page_id, text_sha256, voice, model, style, mime, duration_ms, bytes, created_at';
 
 /**
@@ -86,14 +108,55 @@ export class AudioRepository {
     return this.meta(pageId)!;
   }
 
-  delete(pageId: string): boolean {
+  /** Retorna todos os trechos salvos para a página, ordenados por chunk_index. */
+  getChunks(pageId: string): AudioChunk[] {
+    return this.db
+      .prepare(
+        `SELECT page_id, chunk_index, chunk_sha256, voice, model, style, duration_ms, audio, created_at
+         FROM page_audio_chunks WHERE page_id = ? ORDER BY chunk_index ASC`,
+      )
+      .all(pageId) as AudioChunk[];
+  }
+
+  /** Substitui todos os trechos de uma página em transação atômica. */
+  replaceChunks(pageId: string, chunks: PutAudioChunkInput[]): void {
+    const insert = this.db.prepare(
+      `INSERT INTO page_audio_chunks (page_id, chunk_index, chunk_sha256, voice, model, style, duration_ms, audio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM page_audio_chunks WHERE page_id = ?').run(pageId);
+      for (const c of chunks) {
+        insert.run(pageId, c.chunk_index, c.chunk_sha256, c.voice, c.model, c.style, c.duration_ms, c.audio);
+      }
+    })();
+    this.reclaim();
+  }
+
+  /** Apaga apenas o MP3 consolidado de page_audio, preservando os trechos em page_audio_chunks para reuso. */
+  deleteAudio(pageId: string): boolean {
     const removed = this.db.prepare('DELETE FROM page_audio WHERE page_id = ?').run(pageId).changes > 0;
     if (removed) this.reclaim();
     return removed;
   }
 
+  /** Apaga o áudio consolidado e todos os trechos da página. */
+  delete(pageId: string): boolean {
+    let removed = false;
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM page_audio_chunks WHERE page_id = ?').run(pageId);
+      removed = this.db.prepare('DELETE FROM page_audio WHERE page_id = ?').run(pageId).changes > 0;
+    })();
+    if (removed) this.reclaim();
+    return removed;
+  }
+
   deleteAll(): number {
-    const n = this.db.prepare('DELETE FROM page_audio').run().changes;
+    let n = 0;
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM page_audio_chunks').run();
+      n = this.db.prepare('DELETE FROM page_audio').run().changes;
+    })();
     if (n > 0) this.reclaim();
     return n;
   }
