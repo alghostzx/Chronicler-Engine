@@ -40,7 +40,7 @@ async function boot(hash: string): Promise<void> {
   sessionId = repos.sessions.create({ title: 'Crônica do Teste', system_rules: 'R', world_context: '', active_theme: 'cyberpunk' }).id;
   repos.pages.append(sessionId, { player_instruction: 'a', generated_text: 'A neblina subia do porto.' });
   repos.pages.append(sessionId, { player_instruction: 'b', generated_text: 'Varn não acolhia ninguém.' });
-  app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), { repos, gatewayFactory: () => gateway, audio: { retryDelaysMs: [0] } });
+  app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), { repos, gatewayFactory: () => gateway, audio: { retryDelaysMs: [0], maxRequestsPerMinute: 10_000 } });
   await app.listen({ port: 0, host: '127.0.0.1' });
   const addr = app.server.address();
   const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;

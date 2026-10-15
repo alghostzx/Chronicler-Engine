@@ -126,7 +126,7 @@ export async function makeApp(
     repos,
     gatewayFactory: () => gateway,
     // Sem espera real entre as tentativas de síntese nos testes.
-    audio: { retryDelaysMs: [0, 0], ...extra.audio },
+    audio: { retryDelaysMs: [0, 0], maxRequestsPerMinute: 10_000, ...extra.audio },
   });
   return { app, repos, gateway };
 }

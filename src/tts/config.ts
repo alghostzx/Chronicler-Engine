@@ -1,5 +1,8 @@
 /** Configuração da narração: modelos, vozes pré-definidas e valores padrão. */
 
+/** Chamadas por minuto aceitas pelos modelos de voz no tier 1 pago do Gemini (variável `TTS_MAX_RPM` para outro tier). */
+export const DEFAULT_MAX_RPM = 10;
+
 export const TTS_MODELS: { id: string; label: string }[] = [
   { id: 'gemini-3.8-flash-tts', label: 'Gemini 3.8 Flash TTS (padrão)' },
   { id: 'gemini-3.8-flash-lite-tts', label: 'Gemini 3.8 Flash Lite TTS (mais barato)' },

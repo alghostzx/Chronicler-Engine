@@ -45,7 +45,7 @@ const app = await buildApp(loadConfig({ PUBLIC_DIR: path.resolve('public'), HOST
   repos,
   gatewayFactory: () => gateway,
   logger: false,
-  audio: { retryDelaysMs: [0, 0] },
+  audio: { retryDelaysMs: [0, 0], maxRequestsPerMinute: 10_000 },
 });
 await app.listen({ port: 0, host: '127.0.0.1' });
 const addr = app.server.address();
