@@ -214,7 +214,12 @@ export function audioControls(page: Page, opts: { sessionTitle: string }): Audio
     const a = page.audio;
     if (a?.status === 'generating') {
       const total = a.total ?? 0;
-      const label = a.queued ? 'Na fila para gerar a narração…' : total > 1 ? `Gerando a narração… ${a.done ?? 0}/${total}` : 'Gerando a narração…';
+      const progress = total > 1 ? ` ${a.done ?? 0}/${total}` : '';
+      const label = a.queued
+        ? 'Na fila para gerar a narração…'
+        : a.throttled
+          ? `Aguardando o limite da API${a.wait_ms ? ` (cerca de ${Math.max(1, Math.round(a.wait_ms / 1000))} s)` : ''}…${progress}`
+          : `Gerando a narração…${progress}`;
       const pct = total > 0 ? Math.round(((a.done ?? 0) / total) * 100) : 0;
       show(
         h(

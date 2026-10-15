@@ -721,3 +721,140 @@ describe('armazenamento', () => {
     expect(audioRows()).toBe(0);
   });
 });
+
+describe('limite de chamadas por minuto e uma página por vez', () => {
+  const WINDOW = 300;
+  /** Cada parágrafo (≈ 40 caracteres) vira um trecho próprio com `chunkChars: 60`. */
+  const paras = (tag: string, n: number) => Array.from({ length: n }, (_, i) => `${tag}: parágrafo número ${i + 1} da história.`).join('\n\n');
+  /** Gateway que registra o instante de início (e de fim) de cada chamada. */
+  function recording(ms = 10) {
+    const calls: { text: string; start: number; end: number }[] = [];
+    const gateway = mockGateway({
+      synthesize: async (req) => {
+        const call = { text: req.text, start: Date.now(), end: 0 };
+        calls.push(call);
+        await new Promise((r) => setTimeout(r, ms));
+        call.end = Date.now();
+        return fakeWav(req.text);
+      },
+    });
+    return { calls, gateway };
+  }
+  const limited = (rpm: number, window = WINDOW) => ({ audio: { chunkChars: 60, maxRequestsPerMinute: rpm, rateWindowMs: window, rateMarginMs: 0 } });
+
+  it('por padrão só uma página roda por vez: a segunda espera na fila e começa quando a primeira termina', async () => {
+    const { calls, gateway } = recording(20);
+    await setup(gateway, limited(10_000));
+    const a = addPage(paras('A', 3));
+    const b = addPage(paras('B', 3));
+    await generate(a.id);
+    await generate(b.id);
+    expect((await status(b.id)).queued).toBe(true);
+    await settle(a.id);
+    await settle(b.id);
+    const lastA = Math.max(...calls.filter((c) => c.text.startsWith('A')).map((c) => c.end));
+    const firstB = Math.min(...calls.filter((c) => c.text.startsWith('B')).map((c) => c.start));
+    expect(firstB).toBeGreaterThanOrEqual(lastA);
+  });
+
+  it('páginas de 7 e de 5 trechos (limite 10): nenhuma janela de 1 minuto passa de 10 chamadas; o excedente espera o cooldown', async () => {
+    const { calls, gateway } = recording();
+    await setup(gateway, limited(10));
+    const a = addPage(paras('A', 7));
+    const b = addPage(paras('B', 5));
+    await generate(a.id);
+    await generate(b.id);
+    expect((await settle(a.id)).status).toBe('ready');
+    expect((await settle(b.id)).status).toBe('ready');
+    expect(calls).toHaveLength(12);
+    for (let i = 10; i < calls.length; i++) expect(calls[i]!.start - calls[i - 10]!.start).toBeGreaterThanOrEqual(WINDOW - 8);
+    // o excedente (11ª e 12ª chamadas) esperou; as 10 primeiras saíram sem esperar
+    expect(calls[9]!.start - calls[0]!.start).toBeLessThan(WINDOW / 2);
+    expect(calls[10]!.start - calls[0]!.start).toBeGreaterThanOrEqual(WINDOW - 8);
+  });
+
+  it('páginas de 5 e de 4 trechos (limite 10): não há cooldown', async () => {
+    const { calls, gateway } = recording();
+    await setup(gateway, limited(10, 1500));
+    const a = addPage(paras('A', 5));
+    const b = addPage(paras('B', 4));
+    await generate(a.id);
+    await generate(b.id);
+    await settle(a.id);
+    await settle(b.id);
+    expect(calls).toHaveLength(9);
+    expect(calls[8]!.start - calls[0]!.start).toBeLessThan(700);
+  });
+
+  it('uma página com mais trechos que o limite termina, em ondas', async () => {
+    const { calls, gateway } = recording();
+    await setup(gateway, limited(10));
+    const page = addPage(paras('A', 12));
+    await generate(page.id);
+    const done = await settle(page.id);
+    expect(done.status).toBe('ready');
+    expect(calls).toHaveLength(12);
+    expect(calls[10]!.start - calls[0]!.start).toBeGreaterThanOrEqual(WINDOW - 8);
+    // a ordem do áudio final é a do texto (checada pela duração: soma dos trechos + silêncios)
+    const spoken = calls.reduce((n, c) => n + c.text.length * 10, 0);
+    expect(t.repos.audio.meta(page.id)!.duration_ms).toBeGreaterThanOrEqual(spoken + 11 * 250 - 5);
+  });
+
+  it('expõe throttled/wait_ms enquanto espera o limite, e nada de throttled antes ou depois', async () => {
+    const { gateway } = recording();
+    await setup(gateway, limited(2, 600));
+    const page = addPage(paras('A', 4));
+    await generate(page.id);
+    let seen: { throttled?: boolean; wait_ms?: number } | undefined;
+    for (let i = 0; i < 200 && !seen; i++) {
+      const s = await status(page.id);
+      if (s?.throttled) seen = s;
+      else await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(seen?.throttled).toBe(true);
+    expect(seen?.wait_ms).toBeGreaterThan(0);
+    expect(seen?.wait_ms).toBeLessThanOrEqual(600);
+    const done = await settle(page.id);
+    expect(done.status).toBe('ready');
+    expect(done.throttled).toBeUndefined();
+  });
+
+  it('cancelar durante a espera do limite interrompe o job, não faz mais chamadas e não deixa o fechamento esperando', async () => {
+    const { calls, gateway } = recording();
+    await setup(gateway, limited(1, 60_000));
+    const page = addPage(paras('A', 3));
+    await generate(page.id);
+    for (let i = 0; i < 200 && !(await status(page.id))?.throttled; i++) await new Promise((r) => setTimeout(r, 5));
+    expect((await status(page.id)).throttled).toBe(true);
+    const res = await t.app.inject({ method: 'POST', url: `/api/narrative/pages/${page.id}/audio/cancel` });
+    expect(res.statusCode).toBe(200);
+    expect(await status(page.id)).toBeNull();
+    await new Promise((r) => setTimeout(r, 40));
+    expect(calls).toHaveLength(1);
+    expect(audioRows()).toBe(0);
+  });
+
+  it('retentativas também contam no limite por minuto', async () => {
+    let failedOnce = false;
+    const calls: number[] = [];
+    const gateway = mockGateway({
+      synthesize: async (req) => {
+        calls.push(Date.now());
+        if (!failedOnce) {
+          failedOnce = true;
+          throw new SynthesisError('Limite atingido', true);
+        }
+        return fakeWav(req.text);
+      },
+    });
+    await setup(gateway, limited(2));
+    const a = addPage('Primeira.');
+    const b = addPage('Segunda.');
+    await generate(a.id);
+    await generate(b.id);
+    expect((await settle(a.id)).status).toBe('ready');
+    expect((await settle(b.id)).status).toBe('ready');
+    expect(calls).toHaveLength(3); // 1 falha + 1 retentativa + 1 da segunda página
+    expect(calls[2]! - calls[0]!).toBeGreaterThanOrEqual(WINDOW - 8);
+  });
+});

@@ -94,7 +94,8 @@ Nenhuma fase está em andamento. O que resta é, em geral, **validação que só
 | 20 | Revisão geral da documentação: README enxuto, `docs/` por tema, `check:docs`, fim do design document | [Desenvolvimento](docs/desenvolvimento.md#checkdocs) |
 | 21 | Narração automática **única** (some a opção própria dos diálogos; schema v6) | [Narração por voz](docs/narracao-por-voz.md#geração-automática), [Modelo de dados](docs/modelo-de-dados.md#histórico-de-versões) |
 | 22 | **Player na barra fixa**: a página só mostra o status da geração (+ menu *Opções do áudio*); controles de mídia, anterior/próxima e Interromper numa barra sempre visível (Tome, modo contínuo e leitor de volume) | [Narração por voz](docs/narracao-por-voz.md#a-barra-do-player), [Interface](docs/interface.md#barra-do-player) |
-| 23 | **Paralelismo dos trechos de áudio por página**: trechos de 1500 caracteres sintetizados em paralelo (`Promise.all`) com cancelamento atômico e jitter de retentativas; fila FIFO com 2 páginas simultâneas mantida | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito) |
+| 23 | **Paralelismo dos trechos de áudio por página**: trechos de 1500 caracteres sintetizados em paralelo (`Promise.all`) com cancelamento atômico e jitter de retentativas | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito) |
+| 24 | **Uma página por vez + limite de 10 chamadas/min** (`RateLimiter` de janela deslizante, `TTS_MAX_RPM`; conta retentativas e amostras; 429 bloqueia todos; UI "Aguardando o limite da API") | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito), [Decisões](docs/decisoes.md) |
 
 Cada fase seguiu o mesmo ritmo: rascunho aprovado pelo autor → ramo → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval.
 
@@ -111,4 +112,4 @@ npm run check:audio         # voz e reprodução contínua
 npm run check:inicio        # tela inicial e Opções, 320–1920 px
 ```
 
-Estado da suíte ao fim da Fase 23: **365 testes** (27 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
+Estado da suíte ao fim da Fase 24: **383 testes** (28 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
