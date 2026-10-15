@@ -50,7 +50,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
     gatewayFactory,
     models: new ModelService(gatewayProvider, repos.settings),
     tokens: new TokenCounter(gatewayProvider),
-    audio: new AudioService(repos, gatewayProvider, opts.audio),
+    audio: new AudioService(repos, gatewayProvider, { maxRequestsPerMinute: config.ttsMaxRpm, ...opts.audio }),
   } as AppContext;
   ctx.turns = new TurnRunner(ctx);
 

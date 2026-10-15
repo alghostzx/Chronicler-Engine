@@ -4,9 +4,10 @@ import { HttpError } from '../context.js';
 import type { AudioMeta } from '../db/repositories/audio.js';
 import type { Repositories } from '../db/index.js';
 import type { Page, Session } from '../db/types.js';
-import { TTS_DEFAULTS, TTS_SAMPLE_TEXT } from './config.js';
+import { DEFAULT_MAX_RPM, TTS_DEFAULTS, TTS_SAMPLE_TEXT } from './config.js';
 import { encodeMp3, MP3_KBPS } from './mp3.js';
 import { decodeAudio, durationMs, joinPcm, type Pcm } from './pcm.js';
+import { RateLimiter } from './rateLimiter.js';
 import { cleanForSpeech, DEFAULT_CHUNK_CHARS, splitForSpeech } from './text.js';
 
 export interface TtsSettings {
@@ -36,13 +37,21 @@ export interface AudioInfo {
   total?: number;
   /** Na fila, aguardando vaga (há no máximo `maxConcurrent` jobs rodando). */
   queued?: boolean;
+  /** Rodando, mas esperando o limite de requisições por minuto da API; `wait_ms` é a espera estimada até a próxima vaga. */
+  throttled?: boolean;
+  wait_ms?: number;
   /** Falha: em `error` não há áudio; em `ready`, a última tentativa de gerar de novo falhou. */
   error?: string;
 }
 
 export interface AudioServiceOptions {
-  /** Jobs de síntese simultâneos (respeita os limites da API). */
+  /** Páginas sintetizadas ao mesmo tempo (uma só: a prioridade é terminar cada página o quanto antes). */
   maxConcurrent?: number;
+  /** Chamadas à API de voz por minuto, somando trechos, retentativas e amostras (limite do tier; padrão 10). */
+  maxRequestsPerMinute?: number;
+  /** Janela e folga do limitador (testes usam valores curtos). */
+  rateWindowMs?: number;
+  rateMarginMs?: number;
   /** Espera antes de cada nova tentativa em falhas transitórias (429/5xx/rede). */
   retryDelaysMs?: number[];
   chunkChars?: number;
@@ -69,6 +78,7 @@ export const sha256 = (text: string): string => createHash('sha256').update(text
 
 const ERROR_RETENTION_MS = 60 * 60 * 1000;
 
+
 /**
  * Narração das páginas: gera o áudio em segundo plano (um job por página, com fila), guarda o MP3
  * no SQLite e invalida o que ficou obsoleto. Nunca bloqueia uma requisição nem um turno narrativo.
@@ -78,6 +88,7 @@ export class AudioService {
   private readonly queue: Job[] = [];
   private running = 0;
   private readonly maxConcurrent: number;
+  private readonly limiter: RateLimiter;
   private readonly retryDelaysMs: number[];
   private readonly chunkChars: number;
   private readonly gapMs: number;
@@ -87,7 +98,8 @@ export class AudioService {
     private readonly gatewayProvider: GatewayProvider,
     opts: AudioServiceOptions = {},
   ) {
-    this.maxConcurrent = opts.maxConcurrent ?? 2;
+    this.maxConcurrent = opts.maxConcurrent ?? 1;
+    this.limiter = new RateLimiter({ limit: opts.maxRequestsPerMinute ?? DEFAULT_MAX_RPM, windowMs: opts.rateWindowMs, marginMs: opts.rateMarginMs });
     this.retryDelaysMs = opts.retryDelaysMs ?? [2000, 6000, 15000];
     this.chunkChars = opts.chunkChars ?? DEFAULT_CHUNK_CHARS;
     this.gapMs = opts.gapMs ?? 250;
@@ -132,7 +144,14 @@ export class AudioService {
   private infoFor(page: Page, meta: AudioMeta | undefined): AudioInfo | null {
     const job = this.jobs.get(page.id);
     if (job && job.state !== 'error') {
-      return { status: 'generating', done: job.done, total: job.chunks.length, queued: job.state === 'queued' };
+      const throttled = job.state === 'running' && this.limiter.throttled;
+      return {
+        status: 'generating',
+        done: job.done,
+        total: job.chunks.length,
+        queued: job.state === 'queued',
+        ...(throttled ? { throttled: true, wait_ms: this.limiter.waitMs } : {}),
+      };
     }
     const valid = this.validMeta(page, meta);
     if (valid) {
@@ -343,6 +362,8 @@ export class AudioService {
   ): Promise<Pcm> {
     const req: SynthesizeRequest = { model: settings.model, text, voice: settings.voice, style: settings.style, signal };
     for (let attempt = 0; ; attempt++) {
+      // Toda chamada (inclusive retentativa) conta no limite por minuto da API.
+      await this.limiter.acquire(signal);
       try {
         const audio = await gateway.synthesize(req);
         return decodeAudio(audio.data, audio.mimeType);
@@ -352,6 +373,8 @@ export class AudioService {
         const delay = this.retryDelaysMs[attempt];
         if (!failure.retryable || delay === undefined) throw failure;
         const jitter = delay > 0 ? Math.floor(Math.random() * Math.min(delay * 0.2, 500)) : 0;
+        // Falha transitória (em geral 429): segura todos os trechos, não só este, pelo mesmo tempo.
+        this.limiter.penalize(delay + jitter);
         await sleep(delay + jitter, signal);
       }
     }

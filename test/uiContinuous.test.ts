@@ -55,7 +55,7 @@ async function boot(): Promise<void> {
   for (const t of ['A neblina subia do porto.', 'Varn não acolhia ninguém.', 'O sino tocou três vezes.']) {
     repos.pages.append(sessionId, { player_instruction: 'x', generated_text: t });
   }
-  app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), { repos, gatewayFactory: () => gateway, audio: { retryDelaysMs: [0] } });
+  app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), { repos, gatewayFactory: () => gateway, audio: { retryDelaysMs: [0], maxRequestsPerMinute: 10_000 } });
   await app.listen({ port: 0, host: '127.0.0.1' });
 }
 

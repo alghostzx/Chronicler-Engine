@@ -42,6 +42,7 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | `HOST` | `127.0.0.1` (`0.0.0.0` no contêiner) | Interface de escuta |
 | `DATABASE_PATH` | `./data/chronicler.db` (`/data/chronicler.db` no contêiner) | Arquivo SQLite |
 | `PUBLIC_DIR` | `./public` | Diretório do frontend estático |
+| `TTS_MAX_RPM` | `10` | Chamadas por minuto à API de voz do Gemini (limite do tier; veja [Narração por voz](narracao-por-voz.md#limites-conhecidos)) |
 
 A chave da API é configurada pela interface (e gravada no banco local). O arquivo `GEMINIKEY.txt`, usado apenas pelos scripts `scripts/live-*.ts`, está no `.gitignore`, assim como `data/`, `*.db*` e `public/assets/`.
 

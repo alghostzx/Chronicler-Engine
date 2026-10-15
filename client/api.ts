@@ -37,6 +37,9 @@ export interface AudioInfo {
   done?: number;
   total?: number;
   queued?: boolean;
+  /** Esperando o limite de requisições por minuto da API; `wait_ms` é a espera estimada. */
+  throttled?: boolean;
+  wait_ms?: number;
   error?: string;
 }
 

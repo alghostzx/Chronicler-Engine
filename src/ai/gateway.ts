@@ -228,7 +228,7 @@ export function toSynthesisError(err: unknown): SynthesisError {
   const message = typeof e?.message === 'string' ? e.message : String(err);
   const status = e?.status ?? e?.statusCode ?? Number(/\b([45]\d\d)\b/.exec(message)?.[1] ?? NaN);
   if (status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(message)) {
-    return new SynthesisError('O limite de uso da API do Gemini foi atingido. Tente de novo em instantes.', true);
+    return new SynthesisError('O limite de uso da API do Gemini foi atingido (por minuto ou por dia). Tente de novo em instantes.', true);
   }
   if (status === 401 || status === 403) {
     return new SynthesisError('A chave da API não tem permissão para usar o modelo de voz.');

@@ -33,14 +33,14 @@ const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubble
 const text = () => document.body.textContent ?? '';
 const modalButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')).find((b) => b.textContent === label);
 
-async function boot(hash: string): Promise<void> {
+async function boot(hash: string, audio: { maxRequestsPerMinute?: number; rateWindowMs?: number; rateMarginMs?: number } = {}): Promise<void> {
   gateway = mockGateway();
   repos = createRepositories(openDatabase(':memory:'));
   repos.settings.set('gemini_api_key', FAKE_KEY);
   sessionId = repos.sessions.create({ title: 'Crônica do Teste', system_rules: 'R', world_context: '', active_theme: 'cyberpunk' }).id;
   repos.pages.append(sessionId, { player_instruction: 'a', generated_text: 'A neblina subia do porto.' });
   repos.pages.append(sessionId, { player_instruction: 'b', generated_text: 'Varn não acolhia ninguém.' });
-  app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), { repos, gatewayFactory: () => gateway, audio: { retryDelaysMs: [0] } });
+  app = await buildApp(loadConfig({ PUBLIC_DIR: '/inexistente' }), { repos, gatewayFactory: () => gateway, audio: { retryDelaysMs: [0], maxRequestsPerMinute: 10_000, ...audio } });
   await app.listen({ port: 0, host: '127.0.0.1' });
   const addr = app.server.address();
   const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
@@ -222,6 +222,19 @@ describe('UI — narração das páginas', () => {
     click(menuItem(1, 'Apagar o áudio'));
     click(await waitFor(() => modalButton('Apagar'), 'confirmar apagar'));
     await waitFor(() => !barVisible(), 'barra escondida');
+  });
+
+  it('avisa que está aguardando o limite da API (e não parece travado) quando a cota por minuto acaba', async () => {
+    await boot('#/s/<id>', { maxRequestsPerMinute: 1, rateWindowMs: 2500, rateMarginMs: 0 });
+    await waitFor(() => card(2), 'cartão da página 2');
+    click(byLabel('Ouvir esta página', card(1))!);
+    await waitFor(() => !menuHidden(1), 'primeira página pronta');
+    click(byLabel('Ouvir esta página', card(2))!);
+    const status = await waitFor(() => card(2).querySelector('.audio-status-text')?.textContent?.includes('Aguardando o limite da API') && card(2).querySelector('.audio-status-text')!, 'aviso de espera pelo limite');
+    expect(status.textContent).toMatch(/cerca de \d+ s/);
+    expect(card(2).querySelector('[aria-label="Cancelar a geração do áudio"]')).not.toBeNull(); // dá para desistir esperando
+    await waitFor(() => !menuHidden(2), 'segunda página pronta depois do cooldown', 6000);
+    expect(gateway.synthRequests).toHaveLength(2);
   });
 
   it('mostra o erro da geração em pt-BR com opção de tentar de novo', async () => {

@@ -37,7 +37,7 @@ O botão **Reproduzir a partir daqui** (em cada página do Tome, menos a última
 
 | Opção | O que faz |
 | --- | --- |
-| **Gerar e reproduzir** | Gera as faltantes em segundo plano, em ordem, e toca a página clicada assim que ficar pronta; cada página seguinte toca quando a anterior termina, esperando a geração se for preciso. A geração é cerca de 4× mais rápida que a reprodução, então costuma ficar à frente de quem ouve |
+| **Gerar e reproduzir** | Gera as faltantes em segundo plano, em ordem, e toca a página clicada assim que ficar pronta; cada página seguinte toca quando a anterior termina, esperando a geração se for preciso. Gerar é bem mais rápido que ouvir, então a geração costuma ficar à frente de quem ouve, salvo quando o limite de chamadas por minuto segura (páginas longas em sequência) |
 | **Só reproduzir as que já têm** | Toca as páginas consecutivas que já têm áudio e **para na primeira sem áudio, sem pular nenhuma**. Se a própria página clicada não tem áudio, avisa que não há o que tocar |
 | **Cancelar** | Não faz nada |
 
@@ -71,7 +71,7 @@ Os modelos `gemini-3.8-flash-tts` e `gemini-3.8-flash-lite-tts` só funcionam be
 
 ### `AudioService` ([`src/tts/service.ts`](../src/tts/service.ts))
 
-Um job por página, com progresso n/m e cancelamento (os trechos de cada página são sintetizados em paralelo; se algum trecho falhar, os demais são cancelados na hora); fila FIFO entre páginas com **no máximo 2 sínteses simultâneas**; retentativas (2 s, 6 s, 15 s + jitter) em 429/5xx/rede; o áudio antigo só é substituído quando o novo fica pronto; e o resultado de um job é descartado se a página mudou ou sumiu enquanto ele rodava (conferido pelo hash do texto).
+Um job por página, com progresso n/m e cancelamento (os trechos de cada página são sintetizados em paralelo; se algum trecho falhar, os demais são cancelados na hora); fila FIFO entre páginas com **uma página sintetizada por vez**; um **limitador de chamadas por minuto** (janela deslizante de 60 s mais 1 s de folga; padrão **10**, ajustável por `TTS_MAX_RPM`, o limite do tier 1 pago) conta toda chamada à API, inclusive retentativas e amostras: o excedente espera sem travar nem falhar (uma página com mais trechos que o limite sai em ondas) e a interface mostra *Aguardando o limite da API (cerca de N s)*; retentativas (2 s, 6 s, 15 s + jitter) em 429/5xx/rede, e um 429 segura todos os trechos pelo mesmo tempo; o áudio antigo só é substituído quando o novo fica pronto; e o resultado de um job é descartado se a página mudou ou sumiu enquanto ele rodava (conferido pelo hash do texto).
 
 ### Armazenamento e descarte
 
@@ -86,3 +86,4 @@ Há **um único `<audio>`** no app ([`client/audioPlayer.ts`](../client/audioPla
 - Não foi possível *ouvir* o áudio no ambiente de desenvolvimento: a qualidade da voz é julgada pelo autor (a transcrição do MP3 confirma o texto, e um modelo descreveu a voz como masculina, grave, em português brasileiro neutro). Nomes inventados podem ser pronunciados de modo criativo.
 - A reprodução contínua não foi testada em celular real (tela bloqueada, iOS). Navegadores móveis podem suspender o JavaScript com a tela apagada, e a continuidade nesse caso depende do navegador. Pode haver uma pausa curta entre páginas, enquanto o próximo MP3 carrega.
 - ≈ 25 s de áudio levam 10–12 s para gerar.
+- **Cotas da API.** O padrão de 10 chamadas por minuto vem de fontes secundárias sobre o tier 1 pago e não foi conferido na página oficial; confira em *Rate limits* no AI Studio e ajuste `TTS_MAX_RPM` se o seu projeto tiver outro valor. Há também um limite **diário** de chamadas (reportado em torno de 100 no tier 1) que o app não controla: ao esgotá-lo, a página mostra o erro "limite de uso da API atingido" e é preciso esperar o dia seguinte. Cada trecho de ≈ 1.500 caracteres é uma chamada.
