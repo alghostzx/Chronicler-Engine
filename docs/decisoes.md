@@ -52,6 +52,7 @@ Por que o projeto é do jeito que é. Este documento guarda o **raciocínio** po
 | **Interromper só para a reprodução** | As gerações já iniciadas seguem no servidor: o dinheiro já foi gasto e o áudio fica pronto para depois |
 | **Um único `<audio>` global** | Tocar uma página pausa a outra; o modo contínuo usa o mesmo reprodutor e as teclas de mídia ganham próxima/anterior |
 | **O player mora numa barra fixa, não na página** | Um player dentro de cada cartão era difícil de achar com a página rolada para longe do que estava tocando. A página guarda só o status da geração (e o menu *Opções do áudio*); tocar/pausar, posição, velocidade e anterior/próxima ficam na barra, sempre visível, que serve a uma página avulsa e ao modo contínuo (e ao leitor de volumes) |
+| **Cache de trechos por página (síntese incremental)** | Pequenas edições pontuais de texto não devem reprocessar o áudio inteiro nem desperdiçar a cota de 10 RPM. A tabela `page_audio_chunks` guarda os trechos WAV já sintetizados. Ao re-narrar após edição, o serviço compara os hashes dos trechos (considerando texto, voz, modelo e estilo): trechos inalterados são lidos instantaneamente do SQLite e só os inéditos chamam a API do Gemini. Chunks são vinculados à página via `ON DELETE CASCADE` para não acumular dados órfãos, e apagar o áudio limpa os chunks |
 
 ## Invariantes e os testes que os protegem
 
@@ -71,6 +72,7 @@ Regras que não podem regredir. Cada uma tem testes que falham se ela for quebra
 | 10 | O schema migrado é idêntico ao schema novo, os dados são preservados e há rollback e backup | [`test/migrations.test.ts`](../test/migrations.test.ts) |
 | 11 | Áudio de texto que mudou é tratado como inexistente; descartes devolvem espaço ao arquivo | [`test/audio.test.ts`](../test/audio.test.ts) |
 | 12 | A chave da API nunca é devolvida por nenhum endpoint | [`test/settings.test.ts`](../test/settings.test.ts) |
+| 13 | Edição pontual de texto reutiliza os trechos inalterados em cache e só chama a API para trechos novos | [`test/audio.test.ts`](../test/audio.test.ts) |
 
 ## Limites conhecidos
 

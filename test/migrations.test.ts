@@ -52,7 +52,7 @@ describe('migrações do banco', () => {
     const fresh = openDatabase(':memory:');
     expect(migrated.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
     expect(schemaObjects(migrated)).toEqual(schemaObjects(fresh));
-    for (const table of ['sessions', 'narrative_pages', 'dialogue_sessions', 'dialogue_messages', 'page_audio', 'chronicle_archives', 'app_settings']) {
+    for (const table of ['sessions', 'narrative_pages', 'dialogue_sessions', 'dialogue_messages', 'page_audio', 'page_audio_chunks', 'chronicle_archives', 'app_settings']) {
       expect(columns(migrated, table), table).toEqual(columns(fresh, table));
     }
     // as chaves estrangeiras com cascata das colunas novas também valem no banco migrado
@@ -130,6 +130,38 @@ describe('migrações do banco', () => {
     expect(db.prepare('SELECT key FROM app_settings ORDER BY key').all()).toEqual([{ key: 'tts_auto_default' }, { key: 'tts_voice' }]);
     expect(db.prepare('SELECT COUNT(*) AS n FROM narrative_pages').get()).toEqual({ n: 1 });
     expect(fs.existsSync(`${file}.v5.bak`)).toBe(true);
+    db.close();
+  });
+
+  it('v6 → v7: cria page_audio_chunks sem tocar nos dados de page_audio existentes', () => {
+    // banco "v6": o v3 + as três primeiras migrações
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chronicler-mig-'));
+    const file = path.join(dir, 'chronicler.db');
+    const raw = new Database(file);
+    raw.pragma('foreign_keys = ON');
+    raw.exec(SCHEMA_V3_SQL);
+    MIGRATIONS[0]!.up(raw);
+    MIGRATIONS[1]!.up(raw);
+    MIGRATIONS[2]!.up(raw);
+    raw.pragma('user_version = 6');
+    raw.exec(`
+      INSERT INTO sessions (id, title, system_rules, world_context, tts_auto) VALUES ('s1', 'Crônica', 'r', 'w', 1);
+      INSERT INTO narrative_pages (id, session_id, order_index, player_instruction, generated_text) VALUES ('p1', 's1', 1, 'abre', 'Prosa.');
+      INSERT INTO page_audio (page_id, text_sha256, voice, model, style, duration_ms, bytes, audio) VALUES ('p1', 'hash123', 'Gacrux', 'm', 's', 1000, 3, x'010203');
+    `);
+    raw.close();
+
+    const db = openDatabase(file);
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
+    // Tabela page_audio_chunks existe e está vazia
+    expect(db.prepare('SELECT COUNT(*) AS n FROM page_audio_chunks').get()).toEqual({ n: 0 });
+    // page_audio anterior permanece intacto
+    expect(db.prepare('SELECT text_sha256, bytes, length(audio) AS n FROM page_audio WHERE page_id = ?').get('p1')).toEqual({
+      text_sha256: 'hash123',
+      bytes: 3,
+      n: 3,
+    });
+    expect(fs.existsSync(`${file}.v6.bak`)).toBe(true);
     db.close();
   });
 

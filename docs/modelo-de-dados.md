@@ -1,6 +1,6 @@
 # Modelo de dados e migrações
 
-O SQLite roda localmente (por padrão em `./data/chronicler.db`; `/data/chronicler.db` no contêiner) com o driver síncrono `better-sqlite3`. A fonte da verdade do schema é [`src/db/schema.ts`](../src/db/schema.ts) (`SCHEMA_VERSION = 6`); este documento explica o que cada parte significa.
+O SQLite roda localmente (por padrão em `./data/chronicler.db`; `/data/chronicler.db` no contêiner) com o driver síncrono `better-sqlite3`. A fonte da verdade do schema é [`src/db/schema.ts`](../src/db/schema.ts) (`SCHEMA_VERSION = 7`); este documento explica o que cada parte significa.
 
 ## Tabelas
 
@@ -9,7 +9,8 @@ erDiagram
   sessions ||--o{ narrative_pages : tem
   sessions ||--o{ chronicle_archives : tem
   sessions ||--o{ dialogue_sessions : tem
-  narrative_pages ||--o| page_audio : "tem (BLOB)"
+  narrative_pages ||--o| page_audio : "tem (BLOB MP3)"
+  narrative_pages ||--o{ page_audio_chunks : "tem (BLOBs WAV)"
   dialogue_sessions ||--o{ dialogue_messages : tem
   narrative_pages |o--o| dialogue_sessions : "page_id / redo_page_id"
 ```
@@ -25,6 +26,7 @@ Todas as tabelas filhas usam `ON DELETE CASCADE`: excluir uma sessão apaga pág
 | `dialogue_sessions` | Diálogos com NPC: `npc_name`, `player_name`, `dynamic_system_prompt` (**nunca exposto pela API**), `status` (`active`/`concluded`), `page_id` (a página em que virou), `redo_page_id` (página que um *Refazer* vai substituir) |
 | `dialogue_messages` | Falas da conversa em andamento (`sender` `player`/`npc`). **Apagadas ao encerrar**: a página é a fonte da verdade |
 | `page_audio` | O MP3 de cada página narrada (BLOB), em tabela separada para que listar páginas nunca carregue áudio |
+| `page_audio_chunks` | Cache dos trechos individuais sintetizados (WAV) de cada página, permitindo síntese incremental após edições pontuais de texto |
 
 ### `narrative_pages`
 
@@ -42,11 +44,18 @@ Todas as tabelas filhas usam `ON DELETE CASCADE`: excluir uma sessão apaga pág
 
 `page_id` (PK), `text_sha256` (hash do texto de quando o áudio foi gerado), `voice`, `model`, `style`, `mime`, `duration_ms`, `bytes`, `audio`. A leitura **confere o hash**: o áudio de um texto que já mudou é tratado como inexistente.
 
+### `page_audio_chunks`
+
+`(page_id, chunk_index)` (PK), `chunk_sha256` (hash do texto do trecho), `voice`, `model`, `style`, `duration_ms`, `audio` (WAV mono), `created_at`.
+Índice `idx_audio_chunks_lookup` em `(page_id, chunk_sha256, voice, model, style)`.
+Quando uma página tem o texto editado, os trechos individuais são preservados; a próxima narração compara os hashes do novo particionamento e só requisita à API do Gemini os trechos que realmente mudaram ou foram adicionados. Exclusão explícita de áudio ou exclusão em cascata da página remove os registros.
+
 ### Índices e invariantes impostos pelo banco
 
 - `idx_pages_order` em `(session_id, order_index)`; `idx_dialogue_msgs` em `(dialogue_session_id, created_at)`.
 - `idx_one_active_dialogue`: índice único parcial que impõe **no máximo um diálogo `active` por sessão**.
 - `idx_dialogue_page`: índice único parcial em `page_id` (uma página de diálogo pertence a um só diálogo).
+- `idx_audio_chunks_lookup`: busca rápida de trechos por página, hash e parâmetros de voz.
 
 ## `auto_vacuum` e o tamanho do arquivo
 
@@ -73,6 +82,7 @@ O controle de versão usa `PRAGMA user_version`. Política do projeto (alpha): *
 | 4 | Diálogo como página: `kind`, `npc_name`, `dialogue_sessions.player_name/page_id/redo_page_id`, `sessions.tts_auto_dialogue` (removida na v6) | v3 → v4: `ALTER TABLE`s; apaga diálogos já concluídos (não há página para ligá-los) |
 | 5 | Diálogo narrado: `narrative_pages.raw_dialogue` | v4 → v5: marca como cruas (`1`) todas as páginas `kind = 'dialogue'` já existentes |
 | 6 | Narração automática única: **remove** `sessions.tts_auto_dialogue` | v5 → v6: `DROP COLUMN` e apaga a configuração global `tts_auto_dialogue_default`; `tts_auto` e o padrão global passam a valer também para os diálogos |
+| 7 | Cache de trechos de áudio por página: tabela `page_audio_chunks` | v6 → v7: `CREATE TABLE` e `CREATE INDEX`; preserva o áudio existente em `page_audio` e viabiliza síntese incremental em edições pontuais |
 
 ### Como criar uma migração
 

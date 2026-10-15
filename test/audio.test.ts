@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SynthesisError } from '../src/ai/gateway.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
+import { sha256 } from '../src/tts/service.js';
 import { fakeWav, makeApp, mockGateway, narratorJson, npcJson, parseSse, withKey, type TestApp } from './helpers.js';
 
 let t: TestApp;
@@ -856,5 +857,128 @@ describe('limite de chamadas por minuto e uma página por vez', () => {
     expect((await settle(b.id)).status).toBe('ready');
     expect(calls).toHaveLength(3); // 1 falha + 1 retentativa + 1 da segunda página
     expect(calls[2]! - calls[0]!).toBeGreaterThanOrEqual(WINDOW - 8);
+  });
+});
+
+describe('reaproveitamento incremental de trechos (cache por chunk)', () => {
+  it('edição pontual de página reutiliza os trechos inalterados e só chama a API para o trecho novo', async () => {
+    const calledTexts: string[] = [];
+    await setup(
+      mockGateway({
+        synthesize: async (req) => {
+          calledTexts.push(req.text);
+          return fakeWav(req.text);
+        },
+      }),
+      { audio: { chunkChars: 30 } },
+    );
+
+    const p1 = 'Primeiro parágrafo longo.';
+    const p2 = 'Segundo parágrafo longo.';
+    const p3 = 'Terceiro parágrafo longo.';
+    const initialText = `${p1}\n\n${p2}\n\n${p3}`;
+
+    const page = addPage(initialText);
+    await generate(page.id);
+    const firstAudio = await settle(page.id);
+    expect(firstAudio.status).toBe('ready');
+    expect(calledTexts).toEqual([p1, p2, p3]);
+
+    // Chunks foram persistidos na tabela page_audio_chunks
+    const initialChunks = t.repos.audio.getChunks(page.id);
+    expect(initialChunks).toHaveLength(3);
+    expect(initialChunks[0]!.chunk_sha256).toBe(sha256(p1));
+    expect(initialChunks[1]!.chunk_sha256).toBe(sha256(p2));
+    expect(initialChunks[2]!.chunk_sha256).toBe(sha256(p3));
+
+    // Edita o 2º parágrafo mantendo o 1º e o 3º inalterados
+    const p2Novo = 'Segundo parágrafo MODIFICADO.';
+    const updatedText = `${p1}\n\n${p2Novo}\n\n${p3}`;
+    const editRes = await t.app.inject({
+      method: 'PUT',
+      url: `/api/narrative/pages/${page.id}`,
+      payload: { generated_text: updatedText },
+    });
+    expect(editRes.statusCode).toBe(200);
+    // MP3 consolidado foi invalidado
+    expect(t.repos.audio.meta(page.id)).toBeUndefined();
+    // Mas os chunks continuam guardados para reaproveitamento
+    expect(t.repos.audio.getChunks(page.id)).toHaveLength(3);
+
+    // Gera o áudio novamente para a página editada
+    calledTexts.length = 0;
+    await generate(page.id);
+    const secondAudio = await settle(page.id);
+    expect(secondAudio.status).toBe('ready');
+
+    // Apenas o trecho novo foi sintetizado na API do Gemini!
+    expect(calledTexts).toEqual([p2Novo]);
+
+    // O áudio final foi regerado e os chunks atualizados
+    expect(t.repos.audio.meta(page.id)).toBeDefined();
+    const updatedChunks = t.repos.audio.getChunks(page.id);
+    expect(updatedChunks).toHaveLength(3);
+    expect(updatedChunks[0]!.chunk_sha256).toBe(sha256(p1));
+    expect(updatedChunks[1]!.chunk_sha256).toBe(sha256(p2Novo));
+    expect(updatedChunks[2]!.chunk_sha256).toBe(sha256(p3));
+  });
+
+  it('alteração de voz nas configurações ignora o cache da voz antiga', async () => {
+    const calledVoices: string[] = [];
+    await setup(
+      mockGateway({
+        synthesize: async (req) => {
+          calledVoices.push(req.voice);
+          return fakeWav(req.text);
+        },
+      }),
+      { audio: { chunkChars: 30 } },
+    );
+
+    const p1 = 'Primeiro trecho curto.';
+    const p2 = 'Segundo trecho curto.';
+    const page = addPage(`${p1}\n\n${p2}`);
+    await generate(page.id);
+    await settle(page.id);
+    expect(calledVoices).toEqual(['Gacrux', 'Gacrux']);
+
+    // Troca a voz para Aoede na rota correta de configurações
+    const setRes = await t.app.inject({
+      method: 'PUT',
+      url: '/api/settings/tts',
+      payload: { voice: 'Aoede' },
+    });
+    expect(setRes.statusCode).toBe(200);
+
+    // Edita o texto levemente
+    await t.app.inject({
+      method: 'PUT',
+      url: `/api/narrative/pages/${page.id}`,
+      payload: { generated_text: `${p1}\n\nSegundo trecho mudou.` },
+    });
+
+    calledVoices.length = 0;
+    await generate(page.id);
+    await settle(page.id);
+
+    // Ambos os trechos são sintetizados com a nova voz (não mistura vozes)
+    expect(calledVoices).toEqual(['Aoede', 'Aoede']);
+  });
+
+  it('DELETE do áudio apaga tanto o consolidado quanto os trechos em page_audio_chunks', async () => {
+    await setup(mockGateway({ synthesize: async (req) => fakeWav(req.text) }), {
+      audio: { chunkChars: 30 },
+    });
+    const p1 = 'Primeiro trecho curto.';
+    const p2 = 'Segundo trecho curto.';
+    const page = addPage(`${p1}\n\n${p2}`);
+    await generate(page.id);
+    await settle(page.id);
+    expect(t.repos.audio.getChunks(page.id)).toHaveLength(2);
+
+    const res = await t.app.inject({ method: 'DELETE', url: `/api/narrative/pages/${page.id}/audio` });
+    expect(res.statusCode).toBe(200);
+    expect(t.repos.audio.meta(page.id)).toBeUndefined();
+    expect(t.repos.audio.getChunks(page.id)).toHaveLength(0);
   });
 });
