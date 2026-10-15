@@ -88,8 +88,8 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       }
       const updated = repos.pages.updateText(page.id, req.body.generated_text)!;
       repos.sessions.touch(page.session_id);
-      // O áudio narrava o texto antigo: some junto com ele (a narração nova é opcional).
-      audio.discard(page.id);
+      // O áudio consolidado narrava o texto antigo e é invalidado; os trechos continuam em cache para reuso incremental.
+      audio.invalidate(page.id);
       return { page: audio.decorate([updated])[0] };
     },
   );

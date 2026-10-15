@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import { toSynthesisError, type GatewayProvider, type GeminiGateway, type SynthesizeRequest } from '../ai/gateway.js';
 import { HttpError } from '../context.js';
-import type { AudioMeta } from '../db/repositories/audio.js';
+import type { AudioChunk, AudioMeta, PutAudioChunkInput } from '../db/repositories/audio.js';
 import type { Repositories } from '../db/index.js';
 import type { Page, Session } from '../db/types.js';
 import { DEFAULT_MAX_RPM, TTS_DEFAULTS, TTS_SAMPLE_TEXT } from './config.js';
 import { encodeMp3, MP3_KBPS } from './mp3.js';
-import { decodeAudio, durationMs, joinPcm, type Pcm } from './pcm.js';
+import { decodeAudio, durationMs, encodeWav, joinPcm, type Pcm } from './pcm.js';
 import { RateLimiter } from './rateLimiter.js';
 import { cleanForSpeech, DEFAULT_CHUNK_CHARS, splitForSpeech } from './text.js';
 
@@ -135,7 +135,7 @@ export class AudioService {
   private validMeta(page: Page, meta: AudioMeta | undefined): AudioMeta | undefined {
     if (!meta) return undefined;
     if (meta.text_sha256 !== sha256(page.generated_text)) {
-      this.repos.audio.delete(page.id);
+      this.repos.audio.deleteAudio(page.id);
       return undefined;
     }
     return meta;
@@ -255,7 +255,16 @@ export class AudioService {
     this.cancelMany([...this.jobs.keys()]);
   }
 
-  /** A página foi editada ou regenerada: cancela o job e apaga o áudio salvo. */
+  /**
+   * O texto da página mudou (edição pontual ou regeneração): cancela o job e remove o MP3 consolidado,
+   * mas preserva os trechos em `page_audio_chunks` para servirem de cache na próxima geração.
+   */
+  invalidate(pageId: string): void {
+    this.cancel(pageId);
+    this.repos.audio.deleteAudio(pageId);
+  }
+
+  /** Descarta explicitamente o áudio da página e todos os seus trechos em cache. */
   discard(pageId: string): void {
     this.cancel(pageId);
     this.repos.audio.delete(pageId);
@@ -304,11 +313,44 @@ export class AudioService {
     const signal = internalController.signal;
 
     try {
-      const gateway = this.gatewayProvider();
+      // 1. Trechos já sintetizados desta página que coincidam em hash, voz, modelo e estilo.
+      // Se a página já tinha áudio válido para o MESMO texto exato, o usuário pediu para refazer a narração
+      // do zero (nova interpretação da API); caso contrário (edição pontual), aproveitamos os trechos inalterados.
+      const currentMeta = this.repos.audio.meta(job.pageId);
+      const isRegenerateExact = currentMeta?.text_sha256 === job.hash;
+      const existingChunks = isRegenerateExact ? [] : this.repos.audio.getChunks(job.pageId);
+      const cachedByHash = new Map<string, AudioChunk>();
+      for (const ec of existingChunks) {
+        if (
+          ec.voice === job.settings.voice &&
+          ec.model === job.settings.model &&
+          ec.style === job.settings.style
+        ) {
+          cachedByHash.set(ec.chunk_sha256, ec);
+        }
+      }
+
+      const chunkHashes = job.chunks.map((c) => sha256(c));
+      const cachedPcms = new Map<number, Pcm>();
       let completed = 0;
-      const chunkPromises = job.chunks.map(async (chunk) => {
+
+      for (let i = 0; i < job.chunks.length; i++) {
+        const hash = chunkHashes[i]!;
+        const cached = cachedByHash.get(hash);
+        if (cached) {
+          cachedPcms.set(i, decodeAudio(cached.audio));
+          completed++;
+        }
+      }
+      job.done = completed;
+
+      const gateway = completed < job.chunks.length ? this.gatewayProvider() : null;
+
+      const chunkPromises = job.chunks.map(async (chunk, index) => {
+        const cached = cachedPcms.get(index);
+        if (cached) return cached;
         signal.throwIfAborted();
-        const pcm = await this.synthesizeChunk(gateway, chunk, job.settings, signal);
+        const pcm = await this.synthesizeChunk(gateway!, chunk, job.settings, signal);
         job.done = ++completed;
         return pcm;
       });
@@ -341,6 +383,22 @@ export class AudioService {
         duration_ms: durationMs(pcm),
         audio: mp3,
       });
+
+      const chunkInputs: PutAudioChunkInput[] = parts.map((partPcm, index) => {
+        const cached = cachedByHash.get(chunkHashes[index]!);
+        const audioWav = cached ? cached.audio : encodeWav(partPcm);
+        return {
+          chunk_index: index,
+          chunk_sha256: chunkHashes[index]!,
+          voice: job.settings.voice,
+          model: job.settings.model,
+          style: job.settings.style,
+          duration_ms: durationMs(partPcm),
+          audio: audioWav,
+        };
+      });
+      this.repos.audio.replaceChunks(job.pageId, chunkInputs);
+
       this.jobs.delete(job.pageId);
     } catch (err) {
       if (userSignal.aborted) return; // cancelado: quem cancelou já limpou o job
