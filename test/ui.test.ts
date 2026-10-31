@@ -353,7 +353,7 @@ describe('UI — sessão', () => {
     expect(text()).toContain('As demais páginas não mudam');
     gateway.queue(narratorJson('O mercador abriu um sorriso.\n\n— Bom dia, — disse Aldric.\n\n— Olá, viajante! — saudou o mercador.'));
     click(await waitFor(() => button('Narrar diálogo'), 'confirmar'));
-    await waitFor(() => card().textContent!.includes('O mercador abriu um sorriso.') && !document.querySelector('.is-ghost'), 'diálogo narrado');
+    await waitFor(() => card()?.textContent?.includes('O mercador abriu um sorriso.') && !document.querySelector('.is-ghost'), 'diálogo narrado');
     expect(card().querySelectorAll('.dialogue-speaker')).toHaveLength(0);
     expect(card().querySelector('[aria-label="Narrar diálogo"]')).toBeNull();
     expect(document.querySelectorAll('section.page-card[data-page-id]').length).toBe(3);
