@@ -6,7 +6,7 @@
 
 ## Resumo do projeto
 
-**Chronicler Engine**: app web local de escrita/RPG narrativo. O jogador escreve instruções; o Gemini é o **Narrador** e responde em prosa, uma **página** por instrução, num *Tome*. Fastify + `better-sqlite3` no servidor; TypeScript puro + Tailwind 3 no cliente (bundle esbuild em `public/assets/`, ignorado pelo git); SQLite como único armazenamento (inclusive áudio). Interface em pt-BR. Repositório público (`github.com/alghostzx/Chronicler-Engine`, MIT), 100% gerado por IA; cada *push* em `main` reconstrói a imagem do GHCR. Schema atual: **v6**. Node ≥ 22.
+**Chronicler Engine**: app web local de escrita/RPG narrativo. O jogador escreve instruções; o Gemini é o **Narrador** e responde em prosa, uma **página** por instrução, num *Tome*. Fastify + `better-sqlite3` no servidor; TypeScript puro + Tailwind 3 no cliente (bundle esbuild em `public/assets/`, ignorado pelo git); SQLite como único armazenamento (inclusive áudio). Interface em pt-BR. Repositório público (`github.com/alghostzx/Chronicler-Engine`, MIT), 100% gerado por IA; cada *push* em `main` reconstrói a imagem do GHCR. Schema atual: **v7**. Node ≥ 22.
 
 ## Mapa de documentação (fonte da verdade)
 
@@ -54,7 +54,7 @@ Tudo abaixo está **implementado e testado** (suíte Vitest; `check:*` em Chromi
 - **Modo Diálogo:** persona isolada e sigilosa; conclusão **narrada** (prosa com falas literais, verificação de fidelidade, até 3 tentativas, *fallback* para transcrição crua); *Narrar diálogo* (reprocessar crua sem tocar nas seguintes); *Refazer* não destrutivo.
 - **Voz:** Gemini TTS pela Interactions API; MP3 48 kbps no SQLite; trechos de 1500 caracteres sintetizados em paralelo por página; geração automática (uma opção só, global/por crônica, para prosa e diálogo); **reprodução contínua** com modal de faltantes, geração em segundo plano; o **player mora numa barra fixa** (a página só mostra o status da geração e o menu *Opções do áudio*).
 - **Interface:** tela inicial (logo Srcery), Opções, Tome em cartões de página, gaveta de contexto, leitor de volume, 4 temas × claro/escuro, app shell no celular, tela cheia, PWA instalável (sem service worker).
-- **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5→v6).
+- **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5→v6→v7).
 
 ## Pendências e riscos abertos
 
