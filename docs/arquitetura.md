@@ -54,10 +54,10 @@ A interface é **fixa em pt-BR**. O modelo padrão do Narrador é `gemini-3.8-fl
 ## Ciclo de uma geração
 
 1. O cliente envia `POST /api/sessions/:id/narrative/next` com o `player_instruction`.
-2. O `TurnRunner` adquire a **trava da sessão** (uma geração por vez; `409` se houver outra ou um diálogo ativo).
+2. O `TurnRunner.withClaim` adquire a **trava da sessão** (uma geração por vez; `409` se houver outra ou um diálogo ativo) garantindo sua liberação em bloco `finally`, imune a erros na montagem dos argumentos ou na abertura do SSE.
 3. O `contextBuilder` monta o payload: regras como `systemInstruction`; um único turno de usuário com *Contexto do Mundo*, *Corpus Narrativo* (só o `generated_text` das páginas ativas) e a *Ação do Jogador*.
-4. O Gemini responde em **JSON estruturado** (`narrative_text` + `dialogue_trigger`). O servidor faz *parse* incremental do JSON e repassa os trechos de `narrative_text` ao cliente por SSE, em tempo real.
-5. Só no fechamento do payload a página é gravada (e o `dialogue_trigger`, se houver, abre um diálogo). **Se algo falhar no meio — JSON inválido, erro da API, cliente desconectado — nada é gravado.**
+4. O Gemini responde em **JSON estruturado** (`narrative_text` + `dialogue_trigger`). O gateway monitora inatividade entre fragmentos (timeout de 30s aborta a requisição como `GenerationError`). O servidor faz *parse* incremental do JSON e repassa os trechos de `narrative_text` ao cliente por SSE, em tempo real.
+5. Só no fechamento do payload a página é gravada (e o `dialogue_trigger`, se houver, abre um diálogo). **Se algo falhar no meio — JSON inválido, timeout, erro da API, cliente desconectado — nada é gravado.**
 6. O cliente recarrega a sessão do servidor (fonte única da verdade) e recalcula o HP.
 
 ### Eventos SSE
@@ -78,7 +78,7 @@ Erros **antes** do início do stream voltam como JSON com status HTTP normal (po
 
 ### Concorrência
 
-Há **uma geração por sessão por vez**. Narrar, regenerar, ramificar, compactar e encerrar diálogo são recusados (`409`) enquanto houver diálogo ativo ou outra geração. Isso, junto com as transações descritas em [Narrador](narrador.md), garante que uma falha nunca apague dados.
+Há **uma geração por sessão por vez**. Narrar, regenerar, ramificar, compactar e encerrar diálogo são recusados (`409`) enquanto houver diálogo ativo ou outra geração. A trava é gerenciada pelo `TurnRunner.withClaim`, que garante a liberação mesmo diante de exceções inesperadas antes da abertura do stream ou em falhas assíncronas. Isso, junto com as transações descritas em [Narrador](narrador.md), garante que uma falha nunca apague dados.
 
 ## Segurança e privacidade
 

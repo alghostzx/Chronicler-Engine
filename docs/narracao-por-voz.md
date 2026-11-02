@@ -76,8 +76,8 @@ Um job por página, com progresso n/m e cancelamento (trechos reaproveitados do 
 
 ### Armazenamento e descarte
 
-A tabela `page_audio` ([modelo de dados](modelo-de-dados.md)) guarda o MP3 consolidado; a tabela `page_audio_chunks` guarda os trechos brutos individuais (WAV mono 24 kHz) usados para o cache de síntese incremental. Os blobs **nunca** vão nas listagens (o JSON traz só metadados em `page.audio`).
-Ao editar o texto de uma página, o MP3 consolidado antigo é invalidado, mas os registros em `page_audio_chunks` permanecem até a próxima narração bem-sucedida (quando são substituídos pelo novo conjunto de trechos). O descarte total (deletando `page_audio` e `page_audio_chunks`) ocorre na exclusão explícita de áudio (`DELETE /api/narrative/pages/:id/audio` ou `DELETE /api/audio`), na exclusão ou truncamento em cascata da página e em *Narrar diálogo*. Páginas de volumes continuam narráveis.
+A tabela `page_audio` ([modelo de dados](modelo-de-dados.md)) guarda o MP3 consolidado; a tabela `page_audio_chunks` guarda os trechos brutos individuais (WAV mono 24 kHz) usados para o cache de síntese incremental. A contabilidade de espaço (`storage_usage` nas configurações e em `DELETE /api/audio`) soma os bytes de ambas as tabelas para refletir o consumo real em disco. Os blobs **nunca** vão nas listagens (o JSON traz só metadados em `page.audio`).
+Ao editar o texto de uma página, o MP3 consolidado antigo é invalidado, mas os registros em `page_audio_chunks` permanecem até a próxima narração bem-sucedida (quando são substituídos pelo novo conjunto de trechos). O descarte dos trechos em cache (`page_audio_chunks`) ocorre automaticamente na **compactação da crônica** (as páginas consumidas em volumes mantêm o MP3 consolidado em `page_audio`, mas liberam os WAVs em cache, já que não serão mais editadas). O descarte total (deletando `page_audio` e `page_audio_chunks`) ocorre na exclusão explícita de áudio (`DELETE /api/narrative/pages/:id/audio` ou `DELETE /api/audio`), na exclusão ou truncamento em cascata da página e em *Narrar diálogo*. Páginas de volumes continuam narráveis.
 
 ### Cliente
 

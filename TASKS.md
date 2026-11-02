@@ -97,6 +97,7 @@ Nenhuma fase está em andamento. O que resta é, em geral, **validação que só
 | 23 | **Paralelismo dos trechos de áudio por página**: trechos de 1500 caracteres sintetizados em paralelo (`Promise.all`) com cancelamento atômico e jitter de retentativas | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito) |
 | 24 | **Uma página por vez + limite de 10 chamadas/min** (`RateLimiter` de janela deslizante, `TTS_MAX_RPM`; conta retentativas e amostras; 429 bloqueia todos; UI "Aguardando o limite da API") | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito), [Decisões](docs/decisoes.md) |
 | 25 | **Cache de trechos por página (síntese incremental; schema v7)**: tabela `page_audio_chunks` para armazenar trechos em WAV; após edições pontuais de texto, compara hashes por chunk e só sintetiza via Gemini TTS os trechos alterados, economizando cota de 10 RPM | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito), [Modelo de dados](docs/modelo-de-dados.md#histórico-de-versões) |
+| 26 | **Estabilidade, timeouts, travas infalíveis e higienização de rotas**: timeout de inatividade de 30 s no Gemini; `TurnRunner.withClaim` para evitar vazamento do lock de sessão; gate de testes e typecheck no CI; transação única atômica no áudio (`AudioRepository.save`); descarte de trechos em cache ao arquivar volumes; `src/routes/common.ts` eliminando duplicações de rota; `tsconfig.test.json` e `npm run typecheck:all` | [Arquitetura](docs/arquitetura.md#ciclo-de-uma-geração), [Desenvolvimento](docs/desenvolvimento.md#comandos) |
 
 Cada fase seguiu o mesmo ritmo: rascunho aprovado pelo autor → ramo → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval.
 
@@ -104,7 +105,7 @@ Cada fase seguiu o mesmo ritmo: rascunho aprovado pelo autor → ramo → commit
 
 ```bash
 npm test                    # Vitest (inclui test/docs.test.ts = check:docs)
-npm run typecheck && npm run typecheck:client
+npm run typecheck:all       # Verificação completa de tipos (servidor, cliente, testes e scripts)
 npm run build               # servidor (dist/) + cliente (public/assets/)
 npm run check:docs          # links, âncoras e rotas da documentação
 npm run check:paginas       # 8 temas, cartão de página (Chromium)
@@ -113,4 +114,4 @@ npm run check:audio         # voz e reprodução contínua
 npm run check:inicio        # tela inicial e Opções, 320–1920 px
 ```
 
-Estado da suíte ao fim da Fase 25: **387 testes** (28 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
+Estado da suíte ao fim da Fase 26: **392 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).

@@ -73,6 +73,8 @@ Regras que não podem regredir. Cada uma tem testes que falham se ela for quebra
 | 11 | Áudio de texto que mudou é tratado como inexistente; descartes devolvem espaço ao arquivo | [`test/audio.test.ts`](../test/audio.test.ts) |
 | 12 | A chave da API nunca é devolvida por nenhum endpoint | [`test/settings.test.ts`](../test/settings.test.ts) |
 | 13 | Edição pontual de texto reutiliza os trechos inalterados em cache e só chama a API para trechos novos | [`test/audio.test.ts`](../test/audio.test.ts) |
+| 14 | `TurnRunner.withClaim` garante liberação da trava da sessão mesmo sob falhas antes do stream; inatividade de 30s no Gemini encerra com timeout | [`test/stability.test.ts`](../test/stability.test.ts) |
+| 15 | Compactação da crônica descarta os trechos WAV em cache (`page_audio_chunks`) das páginas arquivadas, mantendo o MP3 consolidado | [`test/compaction.test.ts`](../test/compaction.test.ts) |
 
 ## Limites conhecidos
 

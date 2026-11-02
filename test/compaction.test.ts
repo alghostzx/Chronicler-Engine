@@ -237,5 +237,47 @@ describe('compactação (rotas)', () => {
       expect(t.repos.archives.list(sessionId)).toHaveLength(0);
       expect(t.repos.sessions.get(sessionId)!.world_context).toBe('Mundo base.');
     });
+
+    it('descarta os trechos WAV em cache de páginas arquivadas ao consolidar volume', async () => {
+      seed(4);
+      const activePages = t.repos.pages.listActive(sessionId);
+      const p1 = activePages[0]!;
+      const p4 = activePages[3]!;
+
+      // Simula áudio e chunks salvos na página 1 (que será arquivada) e página 4 (que continuará ativa)
+      const fakeChunk = {
+        chunk_index: 0,
+        chunk_sha256: 'h1',
+        voice: 'Gacrux',
+        model: 'gemini-3.8-flash-tts',
+        style: '',
+        duration_ms: 100,
+        audio: Buffer.from('RIFF...fake chunk'),
+      };
+      const fakeAudio = {
+        text_sha256: 'h1',
+        voice: 'Gacrux',
+        model: 'gemini-3.8-flash-tts',
+        style: '',
+        duration_ms: 100,
+        audio: Buffer.from('ID3...fake mp3'),
+      };
+      t.repos.audio.save(p1.id, fakeAudio, [fakeChunk]);
+      t.repos.audio.save(p4.id, fakeAudio, [fakeChunk]);
+
+      expect(t.repos.audio.getChunks(p1.id)).toHaveLength(1);
+      expect(t.repos.audio.getChunks(p4.id)).toHaveLength(1);
+
+      // Consolida páginas 1..3 em um volume
+      const res = await commit({ summary_text: 'Sinopse.', covered_page_start_index: 1, covered_page_end_index: 3 });
+      expect(res.statusCode).toBe(200);
+
+      // Na página 1 arquivada: os chunks de cache foram liberados, mas o MP3 consolidado continua intacto para leitura
+      expect(t.repos.audio.getChunks(p1.id)).toHaveLength(0);
+      expect(t.repos.audio.meta(p1.id)).toBeDefined();
+
+      // Na página 4 mantida ativa: chunks continuam para futuro reuso
+      expect(t.repos.audio.getChunks(p4.id)).toHaveLength(1);
+    });
   });
 });

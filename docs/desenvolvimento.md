@@ -23,7 +23,8 @@ npm run dev            # servidor com recarga em http://127.0.0.1:3000
 | --- | --- |
 | `npm run dev` | Servidor com recarga (`tsx watch`) |
 | `npm test` | Suíte de testes (Vitest; Gemini mockado, UI em jsdom) |
-| `npm run typecheck` / `npm run typecheck:client` | Verificação de tipos do servidor / do cliente |
+| `npm run typecheck` / `typecheck:client` / `typecheck:test` | Verificação de tipos do servidor / do cliente / dos testes e scripts |
+| `npm run typecheck:all` | Roda todas as verificações de tipos do projeto |
 | `npm run build` | Compila o servidor (`dist/`) e o cliente (`public/assets/`) |
 | `npm run build:server` / `npm run build:client` | Cada metade do build |
 | `npm start` | Executa o build de produção |

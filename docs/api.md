@@ -35,7 +35,7 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 | Rota | Descrição |
 | --- | --- |
 | `POST /api/sessions/:id/narrative/next` | `{ player_instruction }`: gera a próxima página por SSE (`start`, `chunk`, `page`, `dialogue_trigger`, `error`, `done`) |
-| `PUT /api/narrative/pages/:id` | `{ generated_text }`: edição direta; preserva as seguintes; descarta o áudio da página |
+| `PUT /api/narrative/pages/:id` | `{ generated_text }`: edição direta (máximo 20.000 caracteres); preserva as seguintes; descarta o MP3 da página (preservando trechos em cache para sintetizar só as mudanças) |
 | `POST /api/narrative/pages/:id/regenerate` | `{ player_instruction, confirm_truncate? }` (SSE): refaz a página; `409 truncation_required` com `pages_to_discard` se houver seguintes e faltar a confirmação |
 | `POST /api/narrative/pages/:id/branch` | `{ confirm_truncate? }`: descarta as seguintes (sem gerar); `{ discarded, last_page_id }` |
 
@@ -57,7 +57,7 @@ Detalhes: [Modo Diálogo](modo-dialogo.md).
 | Rota | Descrição |
 | --- | --- |
 | `POST /api/sessions/:id/compact/preview` | Minuta da sinopse (não grava nada) |
-| `POST /api/sessions/:id/compact/commit` | `{ summary_text, covered_page_start_index, covered_page_end_index }`: cria o volume e arquiva as páginas, numa transação |
+| `POST /api/sessions/:id/compact/commit` | `{ summary_text, covered_page_start_index, covered_page_end_index }`: cria o volume, arquiva as páginas e descarta os trechos WAV em cache, numa transação |
 | `GET /api/archives/:id/pages` | `{ archive, pages }`: as páginas de um volume, sob demanda |
 | `GET /api/archives/:id/export` | Markdown de um volume (`?include_summary=false` omite a sinopse) |
 
@@ -71,13 +71,13 @@ Funcionamento em [Narração por voz](narracao-por-voz.md).
 | `GET /api/narrative/pages/:id/audio/status` | Estado do job/áudio da página (`generating` com `done`/`total`, `ready`, `error`) |
 | `POST /api/narrative/pages/:id/audio/cancel` | Cancela a geração da página |
 | `GET /api/narrative/pages/:id/audio` | O MP3, com `Range` (`206`/`416`), `ETag`, `Cache-Control: private, no-cache`; `?download=true` baixa como anexo |
-| `DELETE /api/narrative/pages/:id/audio` | Apaga o áudio da página |
+| `DELETE /api/narrative/pages/:id/audio` | Apaga o áudio da página e seus trechos em cache |
 | `GET /api/sessions/:id/audio` | `{ pages: [{ page_id, order_index, kind, audio }] }`: estado do áudio de todas as páginas ativas, sem bytes (reprodução contínua) |
 | `POST /api/sessions/:id/audio/batch` | `{ from_page_id }`: agenda, em ordem, as páginas dali até a última que não têm áudio válido nem job (retenta as com erro); `{ started, pages }`; `409 missing_api_key` antes de agendar; idempotente |
 | `POST /api/sessions/:id/audio/cancel` | `{ page_ids }`: cancela jobs só de páginas dessa sessão; `{ cancelled, pages }` |
-| `GET /api/settings/tts` | Configuração (`auto_default`, `model`, `voice`, `style`) mais `defaults`, `models`, `voices`, `style_max` e `usage` |
+| `GET /api/settings/tts` | Configuração (`auto_default`, `model`, `voice`, `style`) mais `defaults`, `models`, `voices`, `style_max` e `usage` (soma de `page_audio` e `page_audio_chunks`) |
 | `PUT /api/settings/tts` | Atualiza a configuração (ao menos um campo) |
 | `POST /api/settings/tts/sample` | Gera uma amostra de voz (MP3) com a configuração atual ou a informada; não é guardada |
-| `DELETE /api/audio` | Apaga **todos** os áudios; `{ deleted, usage }` |
+| `DELETE /api/audio` | Apaga **todos** os áudios e trechos em cache; `{ deleted, usage }` |
 
 As listagens de páginas e o evento SSE `page` já trazem `audio` (metadados; os blobs nunca vão em listagens). `tts_auto` entra no `PUT /api/sessions/:id/context`.
