@@ -1,12 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type AppContext } from '../context.js';
 import { buildVolumeMarkdown, contentDisposition, volumeTitle } from '../export.js';
-
-const idParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string', minLength: 1 } },
-};
+import { idParams, requireSession } from './common.js';
 
 /**
  * Volumes da crônica. As páginas consumidas por um volume saem do contexto da IA, mas continuam
@@ -18,8 +13,7 @@ export function registerArchiveRoutes(app: FastifyInstance, ctx: AppContext): vo
   const requireArchive = (id: string) => {
     const archive = repos.archives.get(id);
     if (!archive) throw new HttpError(404, 'Volume não encontrado.');
-    const session = repos.sessions.get(archive.session_id);
-    if (!session) throw new HttpError(404, 'Sessão não encontrada.');
+    const session = requireSession(repos, archive.session_id);
     const pages = repos.pages.listArchivedRange(session.id, archive.covered_page_start_index, archive.covered_page_end_index);
     return { archive, session, pages };
   };

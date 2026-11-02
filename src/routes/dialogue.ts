@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildNpcRequest, formatDialoguePage, parseNpcReply } from '../ai/dialogue.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { DialogueSession } from '../db/types.js';
+import { idParams, requireSession } from './common.js';
 import { friendlyError } from './turnRunner.js';
 
 /** Visão pública do diálogo: o `dynamic_system_prompt` do NPC (segredos do NPC) nunca sai do servidor. */
@@ -16,12 +17,6 @@ export function publicDialogue(d: DialogueSession) {
     created_at: d.created_at,
   };
 }
-
-const idParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string', minLength: 1 } },
-};
 
 export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos, turns } = ctx;
@@ -38,7 +33,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     '/api/sessions/:id/dialogue/active',
     { schema: { params: idParams } },
     async (req) => {
-      if (!repos.sessions.get(req.params.id)) throw new HttpError(404, 'Sessão não encontrada.');
+      requireSession(repos, req.params.id);
       const dialogue = repos.dialogues.getActive(req.params.id);
       return {
         dialogue: dialogue ? publicDialogue(dialogue) : null,
@@ -63,7 +58,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     },
     async (req) => {
       const dialogue = requireActiveDialogue(req.params.id);
-      const session = repos.sessions.get(dialogue.session_id)!;
+      const session = requireSession(repos, dialogue.session_id);
       const lockKey = `d:${dialogue.id}`;
       return turns.withClaim(lockKey, async () => {
         if (turns.isBusy(session.id)) {
@@ -107,7 +102,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
     { schema: { params: idParams } },
     async (req, reply) => {
       const dialogue = requireActiveDialogue(req.params.id);
-      const session = repos.sessions.get(dialogue.session_id)!;
+      const session = requireSession(repos, dialogue.session_id);
       const messages = repos.dialogues.listMessages(dialogue.id);
       if (messages.length === 0) {
         throw new HttpError(409, 'Nenhuma fala foi trocada. Cancele o diálogo em vez de encerrá-lo.');

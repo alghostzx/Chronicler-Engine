@@ -44,15 +44,22 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   const repos = opts.repos ?? openRepositories(config.databasePath);
   const gatewayFactory = opts.gatewayFactory ?? defaultGatewayFactory;
   const gatewayProvider = createGatewayProvider(repos.settings, undefined, gatewayFactory);
-  const ctx = {
+  let turns!: TurnRunner;
+  const ctx: AppContext = {
     repos,
     gatewayProvider,
     gatewayFactory,
     models: new ModelService(gatewayProvider, repos.settings),
     tokens: new TokenCounter(gatewayProvider),
     audio: new AudioService(repos, gatewayProvider, { maxRequestsPerMinute: config.ttsMaxRpm, logger: app.log, ...opts.audio }),
-  } as AppContext;
-  ctx.turns = new TurnRunner(ctx);
+    get turns() {
+      return turns;
+    },
+    set turns(t: TurnRunner) {
+      turns = t;
+    },
+  };
+  turns = new TurnRunner(ctx);
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {
     if (err instanceof HttpError) {

@@ -334,12 +334,12 @@ for (const theme of THEMES) {
       await listen.click();
       await card.locator('.audio-panel:not(.hidden)').waitFor({ timeout: 5000 });
       await page.waitForTimeout(250);
-      mark('gerando', await page.evaluate(inspectAudio, { expect: 'generating' }));
+      mark('gerando', await page.evaluate(inspectAudio, { expect: 'generating' as const }));
       await card.scrollIntoViewIfNeeded();
       if (theme === 'medieval' || theme === 'cyberpunk') await shot('gerando');
       await card.locator('.page-action-menu').waitFor({ state: 'visible', timeout: SYNTH_DELAY_MS * 4 + 5000 });
       await page.waitForTimeout(250);
-      mark('pronto (só o menu no cartão)', await page.evaluate(inspectAudio, { expect: 'idle' }));
+      mark('pronto (só o menu no cartão)', await page.evaluate(inspectAudio, { expect: 'idle' as const }));
       if ((await bar.locator(':scope:not(.hidden)').count()) !== 0) problems.push('[pronto] a barra do player não deveria abrir sozinha ao terminar de gerar');
 
       // O áudio gerado é servido como MP3.
@@ -375,7 +375,7 @@ for (const theme of THEMES) {
       await listen.click();
       await bar.locator(':scope:not(.hidden)').waitFor({ timeout: 3000 }).catch(() => problems.push('[player] a barra não apareceu ao ouvir a página'));
       await page.waitForTimeout(800);
-      mark('barra/uma página', await page.evaluate(inspectBar, { mode: 'single', title: TITLE }));
+      mark('barra/uma página', await page.evaluate(inspectBar, { mode: 'single' as const, title: TITLE }));
       const playing = await card.locator('.page-action-listen.is-playing').count();
       if (!playing) {
         if (BROWSER === 'firefox') console.log(`    (aviso) ${tag}: Firefox headless não iniciou a reprodução do MP3`);
@@ -400,7 +400,7 @@ for (const theme of THEMES) {
       const confirm = page.getByRole('button', { name: /^(Apagar|Confirmar|Sim)/ }).last();
       await confirm.click({ timeout: 3000 }).catch(() => problems.push('[apagar] confirmação não apareceu'));
       await page.waitForTimeout(400);
-      mark('após apagar', await page.evaluate(inspectAudio, { expect: 'idle' }));
+      mark('após apagar', await page.evaluate(inspectAudio, { expect: 'idle' as const }));
       if ((await card.locator('.page-action-menu:visible').count()) !== 0) problems.push('[apagar] o menu de opções deveria sumir sem áudio');
       if ((await bar.locator(':scope:not(.hidden)').count()) !== 0) problems.push('[apagar] a barra deveria sumir ao apagar o áudio da página que tocava');
 
@@ -416,7 +416,7 @@ for (const theme of THEMES) {
           await page.waitForSelector('[data-player-bar]:not(.hidden)[data-mode="continuous"]', { timeout: SYNTH_DELAY_MS * 4 + 5000 });
           await page.waitForSelector('[data-player-bar] input.audio-seek:not([disabled])', { timeout: SYNTH_DELAY_MS * 4 + 5000 }); // tocando
           await page.waitForTimeout(300);
-          mark('contínuo/barra', await page.evaluate(inspectBar, { mode: 'continuous', title: TITLE }));
+          mark('contínuo/barra', await page.evaluate(inspectBar, { mode: 'continuous' as const, title: TITLE }));
           if ((await page.locator('.page-card .audio-seek, .page-card .audio-player').count()) !== 0) problems.push('[contínuo] as páginas não devem ter player');
           if ((theme === 'medieval' && mode === 'light') || (theme === 'cyberpunk' && mode === 'dark')) await shot('continuo');
           // Próxima / anterior da barra
@@ -448,7 +448,7 @@ for (const theme of THEMES) {
       await vcard.getByRole('button', { name: 'Ouvir esta página' }).click();
       await bar.locator(':scope:not(.hidden)').waitFor({ timeout: 3000 }).catch(() => problems.push('[volume] a barra não apareceu'));
       await page.waitForTimeout(500);
-      mark('volume/barra', await page.evaluate(inspectBar, { mode: 'single', title: TITLE }));
+      mark('volume/barra', await page.evaluate(inspectBar, { mode: 'single' as const, title: TITLE }));
       if (theme === 'cyberpunk' && mode === 'dark') await shot('volume');
 
       // 3) Gaveta → aba Voz (padrão por sessão)

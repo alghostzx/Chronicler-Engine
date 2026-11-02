@@ -2,23 +2,15 @@ import type { FastifyInstance } from 'fastify';
 import { appendChronicle, buildCompactionRequest, splitForCompaction } from '../ai/compaction.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { Session } from '../db/types.js';
+import { assertNoActiveDialogue, idParams, requireSession } from './common.js';
 import { friendlyError } from './turnRunner.js';
-
-const idParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string', minLength: 1 } },
-};
 
 export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos, turns } = ctx;
 
   const requireCompactable = (id: string): Session => {
-    const session = repos.sessions.get(id);
-    if (!session) throw new HttpError(404, 'Sessão não encontrada.');
-    if (repos.dialogues.getActive(id)) {
-      throw new HttpError(409, 'Há um diálogo ativo nesta sessão. Encerre-o antes de compactar.');
-    }
+    const session = requireSession(repos, id);
+    assertNoActiveDialogue(repos, id, 'Há um diálogo ativo nesta sessão. Encerre-o antes de compactar.');
     return session;
   };
 

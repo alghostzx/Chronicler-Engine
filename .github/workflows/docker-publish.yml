@@ -22,10 +22,8 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Checagem de Tipos (Servidor e Cliente)
-        run: |
-          npm run typecheck
-          npm run typecheck:client
+      - name: Checagem de Tipos (Servidor, Cliente, Testes e Scripts)
+        run: npm run typecheck:all
 
       - name: Rodar Testes Automatizados
         run: npm test

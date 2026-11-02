@@ -2,15 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { HttpError, type AppContext } from '../context.js';
 import { buildStoryMarkdown, contentDisposition, type ExportScope } from '../export.js';
 import { DEFAULT_SYSTEM_RULES } from '../prompts/narrator.js';
+import { idParams, requireSession as getSession } from './common.js';
 import { publicDialogue } from './dialogue.js';
 
 export const THEMES = ['medieval', 'cyberpunk', 'pos-apocaliptico', 'contemporaneo'] as const;
-
-const idParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string', minLength: 1 } },
-};
 
 const sessionFields = {
   title: { type: 'string', minLength: 1, maxLength: 200 },
@@ -25,11 +20,7 @@ const sessionFields = {
 export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos } = ctx;
 
-  const requireSession = (id: string) => {
-    const session = repos.sessions.get(id);
-    if (!session) throw new HttpError(404, 'Sessão não encontrada.');
-    return session;
-  };
+  const requireSession = (id: string) => getSession(repos, id);
 
   app.get('/api/sessions', async () => ({ sessions: repos.sessions.list() }));
 

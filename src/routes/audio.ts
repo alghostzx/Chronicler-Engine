@@ -4,12 +4,7 @@ import { HttpError, type AppContext } from '../context.js';
 import type { Page } from '../db/types.js';
 import { contentDisposition } from '../export.js';
 import { TTS_DEFAULTS, TTS_MODELS, TTS_STYLE_MAX, TTS_VOICES } from '../tts/config.js';
-
-const idParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string', minLength: 1 } },
-};
+import { idParams, requirePage as getPage, requireSession as getSession } from './common.js';
 
 const modelField = { type: 'string', pattern: '^[A-Za-z0-9._-]{3,100}$' };
 const voiceField = { type: 'string', pattern: '^[A-Za-z0-9._-]{2,100}$' };
@@ -41,18 +36,8 @@ export function parseRange(header: string, size: number): { start: number; end: 
 export function registerAudioRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos, audio } = ctx;
 
-  const requirePage = (id: string): Page => {
-    const page = repos.pages.get(id);
-    if (!page) throw new HttpError(404, 'Página não encontrada.');
-    return page;
-  };
-
-  // --- Reprodução contínua: estado e geração em lote --------------------------------------------
-  const requireSession = (id: string) => {
-    const session = repos.sessions.get(id);
-    if (!session) throw new HttpError(404, 'Sessão não encontrada.');
-    return session;
-  };
+  const requirePage = (id: string): Page => getPage(repos, id);
+  const requireSession = (id: string) => getSession(repos, id);
   /** Estado do áudio de cada página ativa da sessão, em ordem (sem os bytes). */
   const sessionAudio = (sessionId: string) => {
     const pages = repos.pages.listActive(sessionId);

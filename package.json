@@ -21,6 +21,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:client": "tsc -p client/tsconfig.json --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "typecheck:all": "npm run typecheck && npm run typecheck:client && npm run typecheck:test",
     "fonts": "node scripts/copy-fonts.mjs",
     "screenshots": "tsx scripts/screenshots.ts",
     "check:paginas": "tsx scripts/check-pages.ts",

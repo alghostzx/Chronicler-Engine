@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildNarratorRequest } from '../ai/contextBuilder.js';
 import { computeHp } from '../ai/tokens.js';
 import { HttpError, type AppContext } from '../context.js';
+import { idParams, requireSession } from './common.js';
 
 export function registerTokenRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos } = ctx;
@@ -12,10 +13,9 @@ export function registerTokenRoutes(app: FastifyInstance, ctx: AppContext): void
    */
   app.get<{ Params: { id: string } }>(
     '/api/sessions/:id/token-count',
-    { schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1 } } } } },
+    { schema: { params: idParams } },
     async (req) => {
-      const session = repos.sessions.get(req.params.id);
-      if (!session) throw new HttpError(404, 'Sessão não encontrada.');
+      const session = requireSession(repos, req.params.id);
 
       const model = await ctx.models.resolve(session);
       const payload = buildNarratorRequest({

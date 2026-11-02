@@ -66,6 +66,7 @@ console.log('Páginas:', repos.pages.listActive(sessionId).length, '| diálogo a
 
 // Reprocessamento: uma página crua (como as de antes) vira prosa sem tocar nas seguintes.
 const raw = repos.pages.append(sessionId, {
+  player_instruction: null,
   kind: 'dialogue',
   npc_name: 'Elena',
   raw_dialogue: true,

@@ -94,6 +94,7 @@ async function newDialogueSession(): Promise<string> {
   gateway.queue(narratorJson(STORY[3][1], { activate: false }));
   await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: STORY[3][0] } });
   repos.pages.append(id, {
+    player_instruction: null,
     kind: 'dialogue',
     npc_name: 'Elena',
     raw_dialogue: true,
@@ -262,7 +263,7 @@ for (const theme of THEMES) {
       await open(page, `#/s/${tomeId}`, '.page-card[data-page-id]');
       const classes = await page.evaluate(() => document.documentElement.className);
       if (!classes.includes(`theme-${theme}`) || !classes.includes(`mode-${mode}`)) report.problems.push(`classes do <html> inesperadas: ${classes}`);
-      const tome = await page.evaluate(inspect, 'tome');
+      const tome = await page.evaluate(inspect, 'tome' as const);
       mark('tome', tome.problems);
       if (tome.cards !== 5) report.problems.push(`[tome] esperava 5 cartões, achou ${tome.cards}`);
       await page.evaluate(() => (document.getElementById('tome-scroll')!.scrollTop = 0));
@@ -309,13 +310,13 @@ for (const theme of THEMES) {
       await open(page, `#/s/${volumeId}`, '.page-card[data-page-id]');
       const notice = await page.locator('nav[aria-label^="Páginas anteriores"] a').first().textContent();
       if (!notice?.includes('Volume 1')) report.problems.push('[tome com volume] aviso de volumes ausente');
-      const afterVolume = await page.evaluate(inspect, 'tome');
+      const afterVolume = await page.evaluate(inspect, 'tome' as const);
       mark('tome com volume', afterVolume.problems);
       const numbers = await page.locator('.page-card-title').allTextContents();
       if (numbers[0] === 'Página 1') report.problems.push('[tome com volume] numeração deveria continuar absoluta (não recomeçar em 1)');
 
       await open(page, `#/s/${volumeId}/v/1`, '.page-card[data-page-id]');
-      const reader = await page.evaluate(inspect, 'volume');
+      const reader = await page.evaluate(inspect, 'volume' as const);
       mark('leitor', reader.problems);
       if (reader.cards < 2) report.problems.push(`[leitor] páginas do volume ausentes (${reader.cards})`);
       const titles = await page.locator('.page-card-title').allTextContents();
@@ -341,7 +342,7 @@ for (const theme of THEMES) {
       //    crua (rótulos de falante + "Narrar diálogo") e o estado de refazer (página marcada, seguintes
       //    esmaecidas), sem perder nada ao descartar.
       await open(page, `#/s/${dialogueSessionId}`, '.page-card[data-page-id]');
-      const dlgTome = await page.evaluate(inspect, 'tome');
+      const dlgTome = await page.evaluate(inspect, 'tome' as const);
       mark('diálogo', dlgTome.problems);
       if (dlgTome.cards !== 4) report.problems.push(`[diálogo] esperava 4 cartões, achou ${dlgTome.cards}`);
       const dlgCard = page.locator('.page-card[data-page-index="2"]');
@@ -376,7 +377,7 @@ for (const theme of THEMES) {
       await page.getByRole('dialog').getByRole('button', { name: 'Refazer diálogo' }).click();
       try {
         await page.getByText('Refazendo diálogo — Falando com: Elena').waitFor({ timeout: 4000 });
-        const redo = await page.evaluate(inspect, 'tome');
+        const redo = await page.evaluate(inspect, 'tome' as const);
         mark('refazer diálogo', redo.problems);
         const state = await page.evaluate(() => ({
           replacing: !!document.querySelector('.page-card.is-replaced [data-badge="replacing"]'),

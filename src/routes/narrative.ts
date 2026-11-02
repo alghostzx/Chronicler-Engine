@@ -2,14 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { buildNarratorRequest } from '../ai/contextBuilder.js';
 import { parseDialoguePage } from '../ai/dialogueProse.js';
 import { HttpError, type AppContext } from '../context.js';
-import { publicDialogue } from './dialogue.js';
 import type { Session } from '../db/types.js';
-
-const idParams = {
-  type: 'object',
-  required: ['id'],
-  properties: { id: { type: 'string', minLength: 1 } },
-};
+import { assertNoActiveDialogue, assertNotArchived, assertNotBusy, idParams, requirePage, requireSession } from './common.js';
+import { publicDialogue } from './dialogue.js';
 
 const instructionBody = {
   type: 'object',
@@ -21,25 +16,17 @@ const instructionBody = {
 export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { repos, turns, audio } = ctx;
 
-  const requireSession = (id: string): Session => {
-    const session = repos.sessions.get(id);
-    if (!session) throw new HttpError(404, 'Sessão não encontrada.');
-    return session;
-  };
-
-  const assertNoActiveDialogue = (sessionId: string) => {
-    if (repos.dialogues.getActive(sessionId)) {
-      throw new HttpError(409, 'Há um diálogo ativo nesta sessão. Encerre-o antes de narrar.');
-    }
-  };
+  const getSession = (id: string): Session => requireSession(repos, id);
+  const getPage = (id: string) => requirePage(repos, id);
+  const checkNoActiveDialogue = (sessionId: string) => assertNoActiveDialogue(repos, sessionId);
 
   // --- Próxima página -------------------------------------------------------------------
   app.post<{ Params: { id: string }; Body: { player_instruction: string } }>(
     '/api/sessions/:id/narrative/next',
     { schema: { params: idParams, body: instructionBody } },
     async (req, reply) => {
-      const session = requireSession(req.params.id);
-      assertNoActiveDialogue(session.id);
+      const session = getSession(req.params.id);
+      checkNoActiveDialogue(session.id);
       await turns.withClaim(session.id, async () => {
         const instruction = req.body.player_instruction;
 
@@ -81,12 +68,9 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req) => {
-      const page = repos.pages.get(req.params.id);
-      if (!page) throw new HttpError(404, 'Página não encontrada.');
-      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser editadas.');
-      if (turns.isBusy(page.session_id)) {
-        throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
-      }
+      const page = getPage(req.params.id);
+      assertNotArchived(page, 'editadas');
+      assertNotBusy(turns, page.session_id);
       const updated = repos.pages.updateText(page.id, req.body.generated_text)!;
       repos.sessions.touch(page.session_id);
       // O áudio consolidado narrava o texto antigo e é invalidado; os trechos continuam em cache para reuso incremental.
@@ -116,14 +100,13 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req, reply) => {
-      const page = repos.pages.get(req.params.id);
-      if (!page) throw new HttpError(404, 'Página não encontrada.');
-      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser regeneradas.');
+      const page = getPage(req.params.id);
+      assertNotArchived(page, 'regeneradas');
       if (page.kind === 'dialogue') {
         throw new HttpError(409, 'Páginas de diálogo não têm prompt para re-gerar. Use “Refazer diálogo” ou edite o texto.');
       }
-      const session = requireSession(page.session_id);
-      assertNoActiveDialogue(session.id);
+      const session = getSession(page.session_id);
+      checkNoActiveDialogue(session.id);
 
       const active = repos.pages.listActive(session.id);
       const following = active.filter((b) => b.order_index > page.order_index);
@@ -179,16 +162,15 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     '/api/narrative/pages/:id/narrate-dialogue',
     { schema: { params: idParams } },
     async (req, reply) => {
-      const page = repos.pages.get(req.params.id);
-      if (!page) throw new HttpError(404, 'Página não encontrada.');
-      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser narradas.');
+      const page = getPage(req.params.id);
+      assertNotArchived(page, 'narradas');
       if (page.kind !== 'dialogue') throw new HttpError(409, 'Só páginas de diálogo podem ser narradas.');
       if (!page.raw_dialogue) throw new HttpError(409, 'Esta página de diálogo já foi narrada.');
       if (parseDialoguePage(page.generated_text).length === 0) {
         throw new HttpError(409, 'A página não tem falas para narrar.');
       }
-      const session = requireSession(page.session_id);
-      assertNoActiveDialogue(session.id);
+      const session = getSession(page.session_id);
+      checkNoActiveDialogue(session.id);
       await turns.withClaim(session.id, async () => {
         const rawTranscript = page.generated_text;
         await turns.runDialoguePage(req, reply, {
@@ -230,15 +212,12 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req, reply) => {
-      const page = repos.pages.get(req.params.id);
-      if (!page) throw new HttpError(404, 'Página não encontrada.');
-      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser refeitas.');
+      const page = getPage(req.params.id);
+      assertNotArchived(page, 'refeitas');
       if (page.kind !== 'dialogue') throw new HttpError(409, 'Só páginas de diálogo podem ser refeitas.');
-      const session = requireSession(page.session_id);
-      assertNoActiveDialogue(session.id);
-      if (turns.isBusy(session.id)) {
-        throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
-      }
+      const session = getSession(page.session_id);
+      checkNoActiveDialogue(session.id);
+      assertNotBusy(turns, session.id);
       const previous = repos.dialogues.getByPage(page.id);
       if (!previous) throw new HttpError(409, 'Esta página não guarda a persona do NPC; não é possível refazer o diálogo.');
 
@@ -273,14 +252,11 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       },
     },
     async (req, reply) => {
-      const page = repos.pages.get(req.params.id);
-      if (!page) throw new HttpError(404, 'Página não encontrada.');
-      if (page.is_archived) throw new HttpError(409, 'Páginas arquivadas não podem ser ponto de ramificação.');
-      const session = requireSession(page.session_id);
-      assertNoActiveDialogue(session.id);
-      if (turns.isBusy(session.id)) {
-        throw new HttpError(409, 'Já existe uma geração em andamento nesta sessão.');
-      }
+      const page = getPage(req.params.id);
+      assertNotArchived(page, 'ponto de ramificação');
+      const session = getSession(page.session_id);
+      checkNoActiveDialogue(session.id);
+      assertNotBusy(turns, session.id);
 
       const following = repos.pages.listActive(session.id).filter((b) => b.order_index > page.order_index);
       if (following.length > 0 && req.body?.confirm_truncate !== true) {
