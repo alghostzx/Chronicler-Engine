@@ -135,6 +135,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       titleEl.textContent = s.title;
       void refreshTokens(); // evento: contexto salvo → recalcula o HP
     },
+    onClose: () => {
+      if (drawerOpen) toggleDrawer();
+    },
   });
   drawerWrap.appendChild(drawer.el);
 

@@ -10,6 +10,7 @@ export interface DrawerHooks {
   getArchives(): Archive[];
   /** Sessão atualizada pelo servidor (após salvar). */
   onSessionSaved(session: Session): void;
+  onClose?: () => void;
 }
 
 const readLabel = (n: number): string => (n === 1 ? 'Ler a página' : `Ler as ${formatNumber(n)} páginas`);
@@ -53,26 +54,39 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
   }
 
   function renderTabs() {
-    mount(
-      tabsBar,
-      ...TABS.map((t) =>
+    const tabs: HTMLElement[] = TABS.map((t) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          role: 'tab',
+          'aria-selected': t.id === tab ? 'true' : 'false',
+          class: `flex-1 px-2 py-2 font-display text-sm transition ${t.id === tab ? 'border-b-2 border-accent text-accent' : 'text-muted hover:text-ink'}`,
+          onClick: () => {
+            tab = t.id;
+            renderTabs();
+            renderContent();
+          },
+        },
+        t.label,
+      ),
+    );
+    if (hooks.onClose) {
+      tabs.push(
         h(
           'button',
           {
             type: 'button',
-            role: 'tab',
-            'aria-selected': t.id === tab ? 'true' : 'false',
-            class: `flex-1 px-2 py-2 font-display text-sm transition ${t.id === tab ? 'border-b-2 border-accent text-accent' : 'text-muted hover:text-ink'}`,
-            onClick: () => {
-              tab = t.id;
-              renderTabs();
-              renderContent();
-            },
+            class: 'px-3 py-2 text-muted hover:text-ink lg:hidden',
+            'aria-label': 'Fechar contexto',
+            title: 'Fechar contexto',
+            onClick: hooks.onClose,
           },
-          t.label,
+          icon('close', 18),
         ),
-      ),
-    );
+      );
+    }
+    mount(tabsBar, ...tabs);
   }
 
   function textareaTab(opts: {

@@ -166,10 +166,11 @@ export function confirmModal(
 }
 
 // --- Texto -----------------------------------------------------------------------------------
-/** Divide a prosa em parágrafos (linhas em branco separam; linhas simples também). */
+/** Divide a prosa em parágrafos (linhas em branco separam; quebras de linha normalizadas). */
 export function paragraphs(text: string): string[] {
   return text
-    .split(/\n{2,}|\r?\n/)
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 }

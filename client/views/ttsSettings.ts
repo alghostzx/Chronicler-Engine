@@ -6,6 +6,7 @@ const formatBytes = (bytes: number): string =>
 
 /** Amostra em reprodução (só uma por vez). */
 let sampleAudio: HTMLAudioElement | null = null;
+let sampleBlobUrl: string | null = null;
 
 /**
  * Cartão "Narração por voz" da tela inicial: padrão global da geração automática, modelo/voz/estilo,
@@ -65,10 +66,23 @@ export function createTtsSettingsCard(): HTMLElement {
           const err = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
           throw new Error(err.code === 'missing_api_key' ? 'Configure a chave da API do Gemini acima para ouvir a amostra.' : (err.error ?? `Erro HTTP ${res.status}`));
         }
-        const url = URL.createObjectURL(await res.blob());
+        const blob = await res.blob();
+        if (sampleBlobUrl) {
+          URL.revokeObjectURL(sampleBlobUrl);
+          sampleBlobUrl = null;
+        }
         sampleAudio?.pause();
+        const url = URL.createObjectURL(blob);
+        sampleBlobUrl = url;
         sampleAudio = new Audio(url);
-        sampleAudio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
+        const cleanup = () => {
+          if (sampleBlobUrl === url) {
+            URL.revokeObjectURL(url);
+            sampleBlobUrl = null;
+          }
+        };
+        sampleAudio.addEventListener('ended', cleanup, { once: true });
+        sampleAudio.addEventListener('error', cleanup, { once: true });
         await sampleAudio.play();
       } catch (err) {
         toast((err as Error).message, 'error');

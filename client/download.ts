@@ -46,7 +46,7 @@ export async function downloadMarkdown(url: string, fallbackName = 'cronica.md')
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  setTimeout(() => URL.revokeObjectURL(href), 1_000);
   return name;
 }
 
