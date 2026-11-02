@@ -260,7 +260,7 @@ export class AudioService {
   }
 
   /**
-   * O texto da página mudou (edição pontual ou regeneração): cancela o job e remove o MP3 consolidado,
+   * O texto da página foi editado manualmente: cancela o job e remove o MP3 consolidado,
    * mas preserva os trechos em `page_audio_chunks` para servirem de cache na próxima geração.
    */
   invalidate(pageId: string): void {

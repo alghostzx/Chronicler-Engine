@@ -65,8 +65,8 @@ export class TurnRunner {
   }
 
   /**
-   * Executa um turno do Narrador via SSE. A chave `session.id` deve ter sido reservada com
-   * `claim` antes; é liberada aqui ao final. Eventos:
+   * Executa um turno do Narrador via SSE (deve ser chamado dentro de `withClaim(session.id, ...)`).
+   * Eventos:
    *  - `start`  {model}
    *  - `chunk`  {text}              (parse incremental de narrative_text)
    *  - `page`  {page, discarded}  (no fechamento do payload, após persistir)
@@ -85,17 +85,10 @@ export class TurnRunner {
     },
   ): Promise<void> {
     const { session } = opts;
-    // Falhas antes de abrir o SSE (ex.: sem chave) ainda retornam JSON normal e precisam
-    // liberar a reserva.
-    let gateway: GeminiGateway;
-    let model: string;
-    try {
-      gateway = this.ctx.gatewayProvider();
-      model = await this.ctx.models.resolve(session);
-    } catch (err) {
-      this.release(session.id);
-      throw err;
-    }
+    // Falhas antes de abrir o SSE (ex.: sem chave) ainda retornam JSON normal; a liberação da
+    // reserva fica a cargo do `withClaim` externo.
+    const gateway = this.ctx.gatewayProvider();
+    const model = await this.ctx.models.resolve(session);
 
     const sse = openSse(req, reply);
     try {
@@ -125,17 +118,17 @@ export class TurnRunner {
         sse.send('error', { message: friendlyError(err) });
       }
     } finally {
-      this.release(session.id);
       sse.end();
     }
   }
 
   /**
-   * Narra um diálogo (encerrar um diálogo ou "Narrar diálogo" numa página crua) via SSE. O Narrador escreve
-   * a prosa em volta das falas, que precisam voltar literais (`checkDialogueFidelity`); reprovado, tenta de
-   * novo até `MAX_NARRATION_ATTEMPTS` vezes (evento `retry`, o cliente esvazia o texto em tela). Esgotadas as
-   * tentativas: com `fallbackToRaw` grava a transcrição crua (`narration: 'fallback'`); sem ele, avisa por
-   * `error` e nada muda. Erros da API também não gravam nada. A chave `session.id` deve ter sido reservada.
+   * Narra um diálogo (encerrar um diálogo ou "Narrar diálogo" numa página crua) via SSE (deve ser chamado
+   * dentro de `withClaim(session.id, ...)`). O Narrador escreve a prosa em volta das falas, que precisam
+   * voltar literais (`checkDialogueFidelity`); reprovado, tenta de novo até `MAX_NARRATION_ATTEMPTS` vezes
+   * (evento `retry`, o cliente esvazia o texto em tela). Esgotadas as tentativas: com `fallbackToRaw` grava
+   * a transcrição crua (`narration: 'fallback'`); sem ele, avisa por `error` e nada muda. Erros da API também
+   * não gravam nada.
    * Eventos: `start`, `chunk`, `retry` {attempt, of}, `page` {page, discarded, narration}, `error`, `done`.
    */
   async runDialoguePage(
@@ -152,15 +145,8 @@ export class TurnRunner {
     },
   ): Promise<void> {
     const { session } = opts;
-    let gateway: GeminiGateway;
-    let model: string;
-    try {
-      gateway = this.ctx.gatewayProvider();
-      model = await this.ctx.models.resolve(session);
-    } catch (err) {
-      this.release(session.id);
-      throw err;
-    }
+    const gateway = this.ctx.gatewayProvider();
+    const model = await this.ctx.models.resolve(session);
 
     const sse = openSse(req, reply);
     try {
@@ -211,7 +197,6 @@ export class TurnRunner {
         sse.send('error', { message: friendlyError(err) });
       }
     } finally {
-      this.release(session.id);
       sse.end();
     }
   }

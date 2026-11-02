@@ -65,7 +65,7 @@ Docker Compose, Podman, atualização, backup e solução de problemas: [Instala
 | [API](docs/api.md) | Todas as rotas REST e SSE |
 | [Desenvolvimento](docs/desenvolvimento.md) | Rodar localmente, comandos, testes, verificações visuais, convenções |
 | [Decisões](docs/decisoes.md) | Por que é assim, invariantes e testes, limites conhecidos |
-| [TASKS.md](TASKS.md) | Diário de trabalho para agentes de IA (estado, histórico, pendências) |
+| [TASKS.md](TASKS.md) / [AGENTS.md](AGENTS.md) | Diário de trabalho e guia rápido de entrada para agentes de IA |
 
 ## Licença
 

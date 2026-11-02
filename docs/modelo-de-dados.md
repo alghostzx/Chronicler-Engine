@@ -65,12 +65,12 @@ Quando uma página tem o texto editado, os trechos individuais são preservados;
 
 O controle de versão usa `PRAGMA user_version`. Política do projeto (alpha): **bancos existentes são migrados**; só se quebra o banco (exigindo apagar `./data`) quando migrar for muito trabalhoso ou inflaria o programa com migrações demais. Quando isso acontecer, o README e a mensagem de erro dizem.
 
-[`src/db/migrations.ts`](../src/db/migrations.ts):
+O *runner* vive em [`src/db/connection.ts`](../src/db/connection.ts) e a lista ordenada `MIGRATIONS` vive em [`src/db/migrations.ts`](../src/db/migrations.ts):
 
-- Cada migração roda numa **transação**, junto com a troca do `user_version`; se falhar, nada muda.
-- Antes de migrar um banco em arquivo, o *runner* faz `wal_checkpoint(TRUNCATE)` e copia o arquivo para `<banco>.v<versão-antiga>.bak`.
+- Cada passo de migração roda numa **transação própria** (`db.transaction`), junto com a troca do `user_version`; se um passo falhar, aquele passo é revertido (em uma cadeia ex.: v3 → v7 que falhe na v7, o banco para na v6 e a cópia `.v3.bak` preserva o estado inicial).
+- Antes de migrar um banco em arquivo, `openDatabase` faz `wal_checkpoint(TRUNCATE)` e copia o arquivo para `<banco>.v<versão-antiga>.bak`.
 - `MIN_MIGRATABLE_VERSION = 3`: bancos v1/v2 (de antes de `page_audio` e de `auto_vacuum`) e bancos de versão **mais nova** que a do programa são recusados na abertura, com mensagem explicando.
-- `SCHEMA_SQL` descreve o schema de um banco **novo**; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE` das migrações, e [`test/migrations.test.ts`](../test/migrations.test.ts) confere que os dois caminhos geram o mesmo schema.
+- `SCHEMA_SQL` ([`src/db/schema.ts`](../src/db/schema.ts)) descreve o schema de um banco **novo**; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE` das migrações, e [`test/migrations.test.ts`](../test/migrations.test.ts) confere que os dois caminhos geram o mesmo schema.
 
 ### Histórico de versões
 
@@ -86,7 +86,10 @@ O controle de versão usa `PRAGMA user_version`. Política do projeto (alpha): *
 
 ### Como criar uma migração
 
-1. Aumente `SCHEMA_VERSION` em `schema.ts` e atualize `SCHEMA_SQL`.
-2. Acrescente `{ version, description, up }` em `MIGRATIONS`.
-3. Rode `npm test`: `migrations.test.ts` compara o banco novo com o migrado.
-4. Atualize a tabela acima e o aviso de [Instalação e operação](instalacao-e-operacao.md#atualizar-e-migrar-o-banco) se algo mudar para o usuário.
+1. **Schema e tipos:** aumente `SCHEMA_VERSION` em [`src/db/schema.ts`](../src/db/schema.ts), atualize o comentário do cabeçalho e o `SCHEMA_SQL` (respeitando a ordem exata das colunas de um `ALTER TABLE`), e ajuste [`src/db/types.ts`](../src/db/types.ts) (e os repositórios afetados em `src/db/repositories/`).
+2. **Passo de migração:** acrescente `{ version, description, up }` ao array `MIGRATIONS` em [`src/db/migrations.ts`](../src/db/migrations.ts).
+3. **Testes ([`test/migrations.test.ts`](../test/migrations.test.ts)):**
+   - Se adicionou ou removeu uma tabela, atualize o array fixo de nomes de tabelas no teste `migrar o v3 produz o mesmo schema de um banco novo` (senão as colunas da nova tabela não serão comparadas).
+   - Adicione um teste específico `v(N-1) → vN` montando um banco na versão anterior a partir da fixture [`test/fixtures/schemaV3.ts`](../test/fixtures/schemaV3.ts) seguida de `MIGRATIONS[0..k].up(raw)`, abrindo com `openDatabase` e verificando a transformação de dados e a criação do `.v(N-1).bak`.
+4. **Documentação:** atualize a tabela de histórico acima, o número do schema em [`TASKS.md`](../TASKS.md) e o aviso de [Instalação e operação](instalacao-e-operacao.md#atualizar-e-migrar-o-banco) se algo mudar para o usuário.
+5. **Verificação:** rode `npm run typecheck:all` e `npm test`.

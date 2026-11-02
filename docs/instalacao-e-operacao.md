@@ -87,7 +87,7 @@ A interface **não tem autenticação** e o banco guarda a chave da API em texto
 
 ### Atualizar e migrar o banco
 
-O projeto está em **alpha**, mas o banco **é migrado automaticamente** ao subir (a partir do schema v3), depois de salvar uma cópia ao lado (`chronicler.db.v3.bak`, `chronicler.db.v4.bak`… com o nome da versão antiga). Se um passo falhar, nada é alterado.
+O projeto está em **alpha**, mas o banco **é migrado automaticamente** ao subir (a partir do schema v3), depois de salvar uma cópia ao lado (`chronicler.db.v3.bak`, `chronicler.db.v4.bak`… com o nome da versão antiga). Cada passo de migração roda numa transação própria: se um passo falhar, ele é desfeito por inteiro e a cópia `.bak` preserva o banco original.
 
 - As páginas de diálogo criadas antes do schema v5 passam a ser tratadas como transcrição crua e podem ser reprocessadas com *Narrar diálogo*.
 - No schema v6 a opção separada de narração automática dos diálogos deixou de existir: valores antigos dela são descartados, e as páginas de diálogo seguem a opção única de cada crônica (ou o padrão global).

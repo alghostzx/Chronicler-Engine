@@ -28,13 +28,13 @@ O antigo *design document* (um arquivo único com especificação + diário de d
 ## Regras de trabalho (acordadas com o autor)
 
 - **Idioma:** responder ao autor em **pt-BR**, de forma concisa, em Markdown. Código em inglês/português como já está; interface e docs em pt-BR.
-- **Git:** funcionalidade nova em ramo `feature/...` (ou de tópico: `docs/...`) com **commits parciais**; depois *merge* em `main` com `--no-ff`. **`git push` e remoção de ramo só depois de perguntar ao autor e receber o aval** (ele diz "make it so" / "punch it"). Comandos de escrita do git, vitest, navegadores, npm e `tsx` com rede precisam rodar **fora do sandbox**.
+- **Git:** funcionalidade nova em ramo `feature/...` (ou de tópico: `docs/...`) com **commits parciais**; depois *merge* em `main` com `--no-ff`. Bugfixes e pequenos patches (ex.: ajustes pontuais ou atualização de documentação) podem ser commitados diretamente em `main`. **`git push` e remoção de ramo só depois de perguntar ao autor e receber o aval** (ele diz "make it so" / "punch it"). Comandos de escrita do git, vitest, navegadores, npm e `tsx` com rede precisam rodar **fora do sandbox**.
 - **Segredos:** nunca imprimir nem versionar a chave do Gemini. `GEMINIKEY.txt`, `data/`, `*.db*` e `public/assets/` são ignorados pelo git. Apagar artefatos temporários locais.
 - **Honestidade:** declarar o que não pôde ser verificado (celular real, áudio ouvido, iOS). Ver [Limites conhecidos](docs/decisoes.md#limites-conhecidos).
 - **Comentários:** preservar comentários e docstrings que não tenham relação com a mudança. Comentários de código apontam para `docs/*.md`.
 - **Documentação:** cada mudança de comportamento atualiza **só o documento do tema** (e este arquivo, se mudar o estado). Rode `npm run check:docs` (também roda no `npm test`).
 - **Migrações:** mudou o schema? Crie a migração ([como](docs/modelo-de-dados.md#como-criar-uma-migração)); só quebrar o banco quando migrar for muito trabalhoso.
-- **Fim de cada fase:** `npm test`, `npm run typecheck`, `npm run typecheck:client`, `npm run build`; e, se mexeu na UI, as verificações visuais relevantes.
+- **Fim de cada fase:** `npm run typecheck:all`, `npm test`, `npm run build`, `npm run check:docs`; e, se mexeu na UI, as verificações visuais relevantes.
 
 ### Armadilhas conhecidas (de sessões anteriores)
 
@@ -99,7 +99,7 @@ Nenhuma fase está em andamento. O que resta é, em geral, **validação que só
 | 25 | **Cache de trechos por página (síntese incremental; schema v7)**: tabela `page_audio_chunks` para armazenar trechos em WAV; após edições pontuais de texto, compara hashes por chunk e só sintetiza via Gemini TTS os trechos alterados, economizando cota de 10 RPM | [Narração por voz](docs/narracao-por-voz.md#como-o-áudio-é-feito), [Modelo de dados](docs/modelo-de-dados.md#histórico-de-versões) |
 | 26 | **Estabilidade, timeouts, travas infalíveis e higienização de rotas**: timeout de inatividade de 30 s no Gemini; `TurnRunner.withClaim` para evitar vazamento do lock de sessão; gate de testes e typecheck no CI; transação única atômica no áudio (`AudioRepository.save`); descarte de trechos em cache ao arquivar volumes; `src/routes/common.ts` eliminando duplicações de rota; `tsconfig.test.json` e `npm run typecheck:all` | [Arquitetura](docs/arquitetura.md#ciclo-de-uma-geração), [Desenvolvimento](docs/desenvolvimento.md#comandos) |
 
-Cada fase seguiu o mesmo ritmo: rascunho aprovado pelo autor → ramo → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval.
+As fases de funcionalidades seguiram o ritmo: rascunho aprovado pelo autor → ramo `feature/...` → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval (bugfixes e pequenos patches podem ir direto em `main`).
 
 ## Verificação (comandos)
 

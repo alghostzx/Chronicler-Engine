@@ -71,7 +71,7 @@ export function linksOf(md: string): string[] {
 }
 
 function docFiles(root: string): string[] {
-  const files = ['README.md', 'TASKS.md'].filter((f) => existsSync(path.join(root, f)));
+  const files = ['README.md', 'TASKS.md', 'AGENTS.md'].filter((f) => existsSync(path.join(root, f)));
   const docsDir = path.join(root, 'docs');
   if (existsSync(docsDir)) {
     for (const f of readdirSync(docsDir).sort()) if (f.endsWith('.md')) files.push(`docs/${f}`);

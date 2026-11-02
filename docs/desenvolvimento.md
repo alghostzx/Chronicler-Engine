@@ -49,15 +49,16 @@ A chave da API é configurada pela interface (e gravada no banco local). O arqui
 
 ## Testes
 
-`npm test` roda o Vitest em `test/`. O Gemini é sempre simulado (`test/helpers.ts`); a UI roda em **jsdom executando o bundle real do cliente contra o servidor Fastify** numa porta de loopback.
+`npm test` roda o Vitest em `test/`. O Gemini é sempre simulado ([`test/helpers.ts`](../test/helpers.ts): `makeApp`, `withKey`, `FakeGateway`); a UI roda em **jsdom executando o bundle real do cliente contra o servidor Fastify** numa porta de loopback.
 
-| Área | Arquivos principais |
+| Área | Arquivos principais (`test/<nome>.test.ts`) |
 | --- | --- |
-| Núcleo narrativo | `contextBuilder`, `narrative`, `narrativeStream`, `tokens`, `compaction` |
+| Saúde, configurações e sessões | `health`, `settings`, `sessions` |
+| Núcleo narrativo e estabilidade | `contextBuilder`, `narrative`, `narrativeStream`, `tokens`, `compaction`, `stability` (`TurnRunner.withClaim` e timeout de 30 s) |
 | Diálogo | `dialogue`, `dialogueProse` |
 | Páginas, volumes e exportação | `archives`, `export`, `repositories`, `pageThemes` |
-| Banco | `repositories`, [`migrations.test.ts`](../test/migrations.test.ts) |
-| Voz | `ttsUnits`, `audio`, `continuousPlayback` |
+| Banco | `repositories`, [`migrations.test.ts`](../test/migrations.test.ts) (usa [`test/fixtures/schemaV3.ts`](../test/fixtures/schemaV3.ts)) |
+| Voz e limitador de taxa | `ttsUnits`, `rateLimiter`, `audio`, `continuousPlayback` |
 | Interface | `ui`, `uiAudio`, `uiContinuous`, `clientSse`, `clientTheme`, `mobile`, `static`, `logo` |
 | Documentação | `docs` (executa o `check:docs`) |
 
@@ -83,17 +84,44 @@ Scripts de verificação **com a API real** (exigem `GEMINIKEY.txt`; fora da su�
 
 [`scripts/check-docs.ts`](../scripts/check-docs.ts) mantém a documentação sem links mortos. Ele confere:
 
-- todo link e imagem relativos de `README.md`, `TASKS.md` e `docs/*.md` aponta para um arquivo existente;
+- todo link e imagem relativos de `README.md`, `TASKS.md`, `AGENTS.md` e `docs/*.md` aponta para um arquivo existente;
 - toda âncora `#seção` existe no arquivo de destino (regras de *slug* do GitHub);
 - a tabela de rotas de [`api.md`](api.md) bate exatamente com as rotas registradas em `src/routes/*.ts` e `src/server.ts`;
 - não restam referências ao antigo design document (nem ao arquivo, nem ao símbolo de seção numerada) no código, nos testes e nos documentos.
 
 Ele também roda dentro de `npm test` (`test/docs.test.ts`).
 
+## Receitas de manutenção
+
+### Como adicionar ou alterar uma rota
+
+1. **Onde registrar:** coloque a rota no arquivo da área correspondente em `src/routes/<área>.ts`. Se criar um módulo novo de rotas, registre `registerXRoutes(app, ctx)` em [`src/server.ts`](../src/server.ts).
+2. **Formato exigido pelo `check:docs`:** declare sempre `app.get('/api/...', ...)` (ou `post`/`put`/`delete`/`patch`, com ou sem tipo genérico `app.get<{ Params: IdParams }>('/api/...')`) usando **aspas simples** no caminho literal. A regex de [`scripts/check-docs.ts`](../scripts/check-docs.ts) extrai as rotas do código por esse padrão.
+3. **Validação, guardas e erros:**
+   - Em schemas de `body`, inclua sempre `additionalProperties: false` (o Fastify está configurado para rejeitar campos desconhecidos com `400`).
+   - Reutilize os helpers de [`src/routes/common.ts`](../src/routes/common.ts): `idParams` (schema de `:id`), `requireSession(repos, id)`, `requirePage(repos, id)` (devolvem `404`), `assertNoActiveDialogue(repos, sessionId)`, `assertNotArchived(page, action)` e `assertNotBusy(turns, sessionId, message?)` (devolvem `409`).
+   - Para erros de domínio, lance `new HttpError(statusCode, message, code?)` de [`src/context.ts`](../src/context.ts). O `setErrorHandler` de `server.ts` formata `{ error, code? }` e também traduz `MissingApiKeyError` em `409 { error, code: 'missing_api_key' }`.
+   - Se a rota iniciar uma geração na sessão, envolva toda a preparação e execução em `await turns.withClaim(session.id, async () => { ... })`.
+4. **Documentação e testes:**
+   - Acrescente ou atualize a linha correspondente na tabela de [`docs/api.md`](api.md) (primeira coluna no formato `` `METHOD /api/...` ``).
+   - Adicione testes em `test/<área>.test.ts` usando `const t = await makeApp()` (ou `await withKey(t.app)` quando precisar de chave configurada) de [`test/helpers.ts`](../test/helpers.ts) e chamadas `t.app.inject({ method, url, payload })`.
+   - Rode `npm run check:docs`, `npm run typecheck:all` e `npm test`.
+
+### Como criar uma migração de schema
+
+Siga os 5 passos detalhados em [Modelo de dados — Como criar uma migração](modelo-de-dados.md#como-criar-uma-migração) (incluindo a atualização do array de tabelas em `test/migrations.test.ts`).
+
+## Integração Contínua (CI)
+
+O workflow [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml) dispara em todo *push* na branch `main` e em tags `v*.*.*`:
+
+1. **Job `check` (gate de qualidade):** em `ubuntu-latest` com Node 22, executa `npm ci`, `npm run typecheck:all` (servidor, cliente, testes e scripts), `npm test` e `npm run check:docs`.
+2. **Job `build-and-push` (`needs: check`):** só roda se `check` passar; constrói a imagem Docker multi-stage (que executa `npm run build` no estágio `builder`) e publica no GitHub Container Registry (`ghcr.io/alghostzx/chronicler-engine`).
+
 ## Convenções do projeto
 
-- **Fluxo de trabalho:** funcionalidades novas em um ramo `feature/…` (ou de tópico), com commits parciais, e *merge* em `main` com `--no-ff`. Cada *push* em `main` reconstrói a imagem do GHCR.
-- **Documentação:** cada assunto vive em **um** documento de `docs/` (índice no [README](../README.md#documentação)). Ao mudar o comportamento, atualize só o documento do tema e rode `npm run check:docs`; não crie um novo "diário" por funcionalidade. O [`TASKS.md`](../TASKS.md) é o diário para agentes.
+- **Fluxo de trabalho:** funcionalidades novas em um ramo `feature/…` (ou de tópico), com commits parciais, e *merge* em `main` com `--no-ff`. Bugfixes e pequenos patches (ex.: ajustes pontuais ou documentação) podem ser commitados diretamente em `main`. Cada *push* em `main` passa pelo job `check` e reconstrói a imagem do GHCR.
+- **Documentação:** cada assunto vive em **um** documento de `docs/` (índice no [README](../README.md#documentação)). Ao mudar o comportamento, atualize só o documento do tema e rode `npm run check:docs`; não crie um novo "diário" por funcionalidade. O [`TASKS.md`](../TASKS.md) é o diário para agentes (e [`AGENTS.md`](../AGENTS.md) é o ponto de entrada rápido).
 - **Segredos:** a chave do Gemini nunca é impressa nem versionada.
 - **Migrações:** mudou o schema? Veja [como criar uma migração](modelo-de-dados.md#como-criar-uma-migração).
 - **Contêineres:** detalhes em [Instalação e operação](instalacao-e-operacao.md) e [Arquitetura](arquitetura.md#empacotamento-docker).

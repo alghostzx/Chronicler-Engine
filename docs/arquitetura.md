@@ -33,7 +33,7 @@ Tudo roda localmente, para um único usuário, em um contêiner. Só o texto (e 
 | Cliente | TypeScript puro, **sem framework**; Tailwind CSS 3; empacotado com esbuild |
 | Fontes e ícones | Fontes locais (`@fontsource`, subconjunto latino em `woff2`); ícones SVG inline. **Nenhum CDN** |
 | Testes | Vitest (Gemini simulado, UI em jsdom contra o servidor real) e verificações visuais com Chromium/Firefox headless via `playwright-core` |
-| Entrega | Imagem de contêiner única (Node 22 Alpine, multi-stage), publicada no GHCR a cada *push* em `main` |
+| Entrega | Imagem de contêiner única (Node 22 Alpine, multi-stage), publicada no GHCR em *push* para `main` ou tags `v*.*.*` após passar pelo job de verificação (`typecheck:all`, `npm test`, `check:docs`) no CI ([Desenvolvimento](desenvolvimento.md#integração-contínua-ci)) |
 
 A interface é **fixa em pt-BR**. O modelo padrão do Narrador é `gemini-3.8-flash`; o app consulta `models.list` e oferece os modelos de texto disponíveis.
 
@@ -41,22 +41,22 @@ A interface é **fixa em pt-BR**. O modelo padrão do Narrador é `gemini-3.8-fl
 
 | Pasta | Conteúdo |
 | --- | --- |
-| [`src/`](../src) | Servidor: `server.ts` (monta o Fastify), `context.ts` (dependências compartilhadas), `config.ts`, `export.ts` (Markdown) |
-| [`src/routes/`](../src/routes) | Rotas REST/SSE por área: `sessions`, `narrative`, `dialogue`, `compaction`, `tokens`, `archives`, `audio`, `settings`; `turnRunner.ts` (travas e SSE compartilhados) |
-| [`src/ai/`](../src/ai) | Gateway do Gemini (`gateway.ts`), construção do contexto (`contextBuilder.ts`), Narrador e streaming (`narrator.ts`, `narrativeStream.ts`), diálogo (`dialogue.ts`, `dialogueProse.ts`), compactação, HP (`tokens.ts`), lista de modelos |
-| [`src/db/`](../src/db) | Conexão, [schema e migrações](modelo-de-dados.md), repositórios por tabela |
-| [`src/tts/`](../src/tts) | Narração por voz: limpeza e quebra de texto, PCM/WAV, MP3, `AudioService` (fila de jobs) |
-| [`src/prompts/`](../src/prompts) | Regras padrão do Narrador |
-| [`client/`](../client) | Cliente: roteador (`main.ts`), telas em `views/`, componentes (`pageCard`, `controls`, `audioUi`, `continuousUi`…), tema, SSE, ícones |
-| [`scripts/`](../scripts) | Build do cliente, fontes, ícones, logo, capturas, verificações visuais (`check-*`) e testes manuais contra a API real (`live-*`) |
-| [`test/`](../test) | Suíte Vitest |
+| [`src/`](../src) | Servidor: `server.ts` (Fastify, `setErrorHandler` — converte `HttpError` e `MissingApiKeyError` → `409 missing_api_key` —, `SIGTERM`/`SIGINT` e handlers de `unhandledRejection`/`uncaughtException`), `context.ts` (`AppContext`, `HttpError`), `config.ts` (`loadConfig` com validação `positiveInt` e fallback para o padrão), `export.ts` (Markdown) |
+| [`src/routes/`](../src/routes) | Rotas REST/SSE por área (`sessions`, `narrative`, `dialogue`, `compaction`, `tokens`, `archives`, `audio`, `settings`); `common.ts` (schemas e guardas compartilhados: `idParams`, `requireSession`, `requirePage`, `assertNoActiveDialogue`, `assertNotArchived`, `assertNotBusy`), `turnRunner.ts` (travas em memória e execução SSE), `sse.ts` (`openSse`) |
+| [`src/ai/`](../src/ai) | Gateway do Gemini (`gateway.ts`, com timeout `GENERATION_IDLE_TIMEOUT_MS` = 30 s em `streamGenerate` e `SYNTHESIS_TIMEOUT_MS` = 180 s em `synthesize`), construção do contexto (`contextBuilder.ts`), Narrador e streaming (`narrator.ts`, `narratorSchema.ts`, `narrativeStream.ts`), diálogo (`dialogue.ts`, `dialogueProse.ts`), compactação (`compaction.ts`), HP (`tokens.ts`), lista de modelos (`models.ts`) |
+| [`src/db/`](../src/db) | `connection.ts` (abertura, pragmas WAL/`auto_vacuum` e *runner* de migrações com backup `.bak`), [`schema.ts` e `migrations.ts`](modelo-de-dados.md), `types.ts`, `index.ts` (`createRepositories`, `repos.transaction`), `repositories/` por tabela (`sessions`, `pages`, `dialogues`, `archives`, `audio`, `settings`) |
+| [`src/tts/`](../src/tts) | Narração por voz: `service.ts` (`AudioService`, fila de jobs), `rateLimiter.ts` (janela deslizante RPM), `config.ts` (vozes e modelos), `text.ts` (`cleanForSpeech`, `splitForSpeech`), `pcm.ts` (WAV), `mp3.ts` (`@breezystack/lamejs`) |
+| [`src/prompts/`](../src/prompts) | Regras padrão do Narrador (`defaultSystemRules.ts`) |
+| [`client/`](../client) | Cliente: roteador (`main.ts`), cliente HTTP (`api.ts`), SSE (`sse.ts`), temas (`theme.ts`), utilitários (`dom.ts`, `download.ts`, `viewport.ts`, `icons.ts`), áudio (`audioPlayer.ts`, `audioUi.ts`, `playerBar.ts`, `continuousPlayback.ts`, `continuousUi.ts`), telas em `views/` (`home.ts`, `session.ts`) e componentes em `components/` (`pageCard`, `controls`, `drawer`, `dialogueModal`, `compactionModal`, `archiveReaderModal`, `confirmModal`) |
+| [`scripts/`](../scripts) | Build do cliente (`build-client.mjs`), fontes, ícones, logo, capturas, `check-docs.ts`, verificações visuais (`check-*`) e testes manuais contra a API real (`live-*`) |
+| [`test/`](../test) | Suíte Vitest, utilitários de teste em `helpers.ts` (`makeApp`, `withKey`, `FakeGateway`) e fixture de migração em `fixtures/schemaV3.ts` |
 
 ## Ciclo de uma geração
 
 1. O cliente envia `POST /api/sessions/:id/narrative/next` com o `player_instruction`.
-2. O `TurnRunner.withClaim` adquire a **trava da sessão** (uma geração por vez; `409` se houver outra ou um diálogo ativo) garantindo sua liberação em bloco `finally`, imune a erros na montagem dos argumentos ou na abertura do SSE.
+2. A rota confere `assertNoActiveDialogue` (`409` se houver diálogo ativo) e o `TurnRunner.withClaim(session.id, ...)` adquire a **trava da sessão** (`409` se já houver geração em curso), garantindo sua liberação em bloco `finally` mesmo diante de falhas na montagem do payload ou antes da abertura do SSE.
 3. O `contextBuilder` monta o payload: regras como `systemInstruction`; um único turno de usuário com *Contexto do Mundo*, *Corpus Narrativo* (só o `generated_text` das páginas ativas) e a *Ação do Jogador*.
-4. O Gemini responde em **JSON estruturado** (`narrative_text` + `dialogue_trigger`). O gateway monitora inatividade entre fragmentos (timeout de 30s aborta a requisição como `GenerationError`). O servidor faz *parse* incremental do JSON e repassa os trechos de `narrative_text` ao cliente por SSE, em tempo real.
+4. O Gemini responde em **JSON estruturado** (`narrative_text` + `dialogue_trigger`). `GeminiGatewayImpl.streamGenerate` monitora inatividade (`GENERATION_IDLE_TIMEOUT_MS` = 30 s, contados desde antes de `generateContentStream` — cobrindo tanto o tempo até o 1º fragmento quanto intervalos entre fragmentos — e abortando como `GenerationError`). O servidor faz *parse* incremental do JSON e repassa os trechos de `narrative_text` ao cliente por SSE, em tempo real.
 5. Só no fechamento do payload a página é gravada (e o `dialogue_trigger`, se houver, abre um diálogo). **Se algo falhar no meio — JSON inválido, timeout, erro da API, cliente desconectado — nada é gravado.**
 6. O cliente recarrega a sessão do servidor (fonte única da verdade) e recalcula o HP.
 
@@ -76,9 +76,13 @@ Usados por `narrative/next`, `regenerate`, `dialogue/:id/conclude` e `narrate-di
 
 Erros **antes** do início do stream voltam como JSON com status HTTP normal (por exemplo `409 missing_api_key`).
 
-### Concorrência
+### Concorrência e timeouts
 
-Há **uma geração por sessão por vez**. Narrar, regenerar, ramificar, compactar e encerrar diálogo são recusados (`409`) enquanto houver diálogo ativo ou outra geração. A trava é gerenciada pelo `TurnRunner.withClaim`, que garante a liberação mesmo diante de exceções inesperadas antes da abertura do stream ou em falhas assíncronas. Isso, junto com as transações descritas em [Narrador](narrador.md), garante que uma falha nunca apague dados.
+O `TurnRunner` mantém um `Set<string>` em memória para serializar operações concorrentes (`409 Conflict`):
+
+- **Chave da sessão (`session.id`):** adquirida com `turns.withClaim(session.id, ...)` por `narrative/next`, `regenerate`, `narrate-dialogue`, `dialogue/:id/conclude`, `compact/preview` e `compact/commit`. Rotas mutantes síncronas que não podem coexistir com uma geração em andamento (`PUT /narrative/pages/:id`, `branch`, `redo-dialogue` e `dialogue/:id/cancel`) apenas consultam a trava via `assertNotBusy(turns, session.id)`. Além disso, `assertNoActiveDialogue` bloqueia (`409`) narrar, regenerar, editar, ramificar, refazer/reprocessar diálogo e compactar enquanto existir um diálogo `active` na sessão. Rotas de leitura, `PUT /sessions/:id/context`, `DELETE /sessions/:id` e jobs de áudio em segundo plano não disputam a trava de turno.
+- **Chave do diálogo (`d:<dialogue.id>`):** adquirida com `turns.withClaim('d:' + dialogue.id, ...)` em `POST /api/dialogue/:id/message` (e consultada em `conclude` e `cancel`) para impedir falas simultâneas na mesma conversa com o NPC.
+- **Timeouts na API do Gemini:** todo chamador de `streamGenerate` (narrativa, regeneração, conclusão/reprocessamento de diálogo, fala de NPC em `/dialogue/:id/message` e minuta de compactação em `/compact/preview`) está sujeito ao timeout de inatividade de **30 s** (`GENERATION_IDLE_TIMEOUT_MS`). A síntese de voz (`synthesize`) tem timeout de **180 s** (`SYNTHESIS_TIMEOUT_MS`). Chamadas rápidas de metadados (`countTokens` e `listModels`) não aplicam timer próprio.
 
 ## Segurança e privacidade
 
@@ -96,14 +100,14 @@ Há **uma geração por sessão por vez**. Narrar, regenerar, ramificar, compact
 | --- | --- |
 | `base` | Alpine + `python3 make g++` (só para o *fallback* de compilação) |
 | `deps` | `npm ci --omit=dev --ignore-scripts`; valida o carregamento do `better-sqlite3` (que já traz binários `musl` pré-compilados) e só recompila do código-fonte se a validação falhar |
-| `builder` | `npm ci` + `npm run build` (`tsc` + esbuild + Tailwind) |
+| `builder` | `npm ci --ignore-scripts` + `npm run build` (`tsc` + esbuild + Tailwind) |
 | `runner` | Sem toolchain nem devDependencies: copia `node_modules` de produção, `dist/` e `public/` |
 
 - **Node 22**, não 20: o `better-sqlite3` 13 exige Node ≥ 22 (`engines: ">=22"`).
 - `HOST=0.0.0.0` dentro do contêiner (o padrão do app fora dele é `127.0.0.1`).
 - [`docker-entrypoint.sh`](../docker-entrypoint.sh) usa `su-exec`: corrige a posse do volume `/data` (o Docker cria *bind mounts* como root) e roda o servidor como o usuário `node`. Só faz `chown`/`su-exec` quando roda como root, o que é o que permite o **Podman rootless** funcionar com `userns_mode: keep-id` ([`docker-compose.podman.yml`](../docker-compose.podman.yml)).
 - `HEALTHCHECK` consulta `/api/health` (ignorado no formato OCI do Podman, que só mostra um aviso no *build*).
-- **Encerramento gracioso:** como PID 1 do contêiner o Node ignoraria `SIGTERM`; o servidor trata `SIGTERM`/`SIGINT` com `app.close()` (limite de 3 s para conexões SSE abertas), então `stop`/`down` não esperam 10 s.
+- **Encerramento gracioso:** como PID 1 do contêiner o Node ignoraria `SIGTERM`; o servidor trata `SIGTERM`/`SIGINT` com `app.close()` (limite de 3 s para conexões SSE abertas; se estourar o timeout, encerra com código `1`), então `stop`/`down` não esperam 10 s.
 - O [`.dockerignore`](../.dockerignore) também exclui testes, `.git/`, `node_modules/` e `public/assets/` (recompilado no *build*).
 
 Operação (subir, atualizar, backup): [Instalação e operação](instalacao-e-operacao.md).
