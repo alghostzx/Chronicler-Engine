@@ -4,9 +4,9 @@ O Chronicler Engine é um **PWA instalável** (tem manifesto web e ícones): dá
 
 ## Instalar
 
-- **Android (Chrome):** abra o endereço do servidor, menu ⋮ → *Instalar app* (ou *Adicionar à tela inicial*).
+- **Android (Chrome ou Firefox):** abra o endereço do servidor, menu ⋮ → *Instalar* / *Instalar app* (ou *Adicionar aplicativo à tela inicial*).
 - **iPhone (Safari):** *Compartilhar* → *Adicionar à Tela de Início*.
-- **Requer HTTPS** (ou `localhost`): o navegador só oferece a instalação em origem segura. Atrás de um proxy reverso com certificado (por exemplo `https://game.example.com`) funciona; em `http://IP-da-rede-local:3000` o Chrome apenas cria um atalho comum.
+- **Requer HTTPS** (ou `localhost`): o navegador só oferece a instalação em origem segura. Atrás de um proxy reverso com certificado e camada de autenticação por cookie (por exemplo Nginx + Authelia via `auth_request` em `https://game.example.com`) funciona sem precisar abrir exceções de autenticação, pois o `<link rel="manifest">` usa `crossorigin="use-credentials"`. Em `http://IP-da-rede-local:3000` o navegador apenas cria um atalho comum.
 
 > [!WARNING]
 > Para abrir o servidor de outro aparelho, ponha **autenticação** na frente (proxy reverso ou VPN): a interface não tem login e o banco guarda a chave da API. Veja [Instalação e operação](instalacao-e-operacao.md#segurança).

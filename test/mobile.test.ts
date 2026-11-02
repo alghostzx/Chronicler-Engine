@@ -32,8 +32,8 @@ describe('viewport e metas para celular', () => {
     expect(vp).not.toContain('maximum-scale');
   });
 
-  it('declara o manifesto, a cor da barra de status e os metadados de app (Android e iOS)', () => {
-    expect(INDEX).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
+  it('declara o manifesto (com envio de credenciais para proxies com autenticação), a cor da barra de status e os metadados de app (Android e iOS)', () => {
+    expect(INDEX).toContain('<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />');
     expect(meta('theme-color')).toMatch(/^#[0-9a-f]{6}$/i);
     expect(meta('mobile-web-app-capable')).toBe('yes');
     expect(meta('apple-mobile-web-app-capable')).toBe('yes');
