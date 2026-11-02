@@ -57,6 +57,7 @@ export interface AudioServiceOptions {
   chunkChars?: number;
   /** Silêncio entre trechos. */
   gapMs?: number;
+  logger?: { debug(obj: unknown, msg?: string): void; warn(obj: unknown, msg?: string): void; error(obj: unknown, msg?: string): void };
 }
 
 interface Job {
@@ -92,6 +93,7 @@ export class AudioService {
   private readonly retryDelaysMs: number[];
   private readonly chunkChars: number;
   private readonly gapMs: number;
+  private readonly logger?: { debug(obj: unknown, msg?: string): void; warn(obj: unknown, msg?: string): void; error(obj: unknown, msg?: string): void };
 
   constructor(
     private readonly repos: Repositories,
@@ -103,6 +105,7 @@ export class AudioService {
     this.retryDelaysMs = opts.retryDelaysMs ?? [2000, 6000, 15000];
     this.chunkChars = opts.chunkChars ?? DEFAULT_CHUNK_CHARS;
     this.gapMs = opts.gapMs ?? 250;
+    this.logger = opts.logger;
   }
 
   // --- Configuração ----------------------------------------------------------------------------
@@ -131,7 +134,7 @@ export class AudioService {
   }
 
   // --- Estado ----------------------------------------------------------------------------------
-  /** Metadados do áudio salvo, descartando-o se o texto da página mudou desde a narração. */
+  /** Metadados do áudio salvo, ignorando-o se o texto da página mudou desde a narração. */
   private validMeta(page: Page, meta: AudioMeta | undefined): AudioMeta | undefined {
     if (!meta) return undefined;
     if (meta.text_sha256 !== sha256(page.generated_text)) {
@@ -230,7 +233,8 @@ export class AudioService {
     try {
       this.start(page);
       return true;
-    } catch {
+    } catch (err) {
+      this.logger?.debug({ err, pageId: page.id, sessionId: session.id }, 'Falha ao iniciar narração automática da página');
       return false;
     }
   }
@@ -375,15 +379,6 @@ export class AudioService {
         this.jobs.delete(job.pageId);
         return;
       }
-      this.repos.audio.put(job.pageId, {
-        text_sha256: job.hash,
-        voice: job.settings.voice,
-        model: job.settings.model,
-        style: job.settings.style,
-        duration_ms: durationMs(pcm),
-        audio: mp3,
-      });
-
       const chunkInputs: PutAudioChunkInput[] = parts.map((partPcm, index) => {
         const cached = cachedByHash.get(chunkHashes[index]!);
         const audioWav = cached ? cached.audio : encodeWav(partPcm);
@@ -397,7 +392,19 @@ export class AudioService {
           audio: audioWav,
         };
       });
-      this.repos.audio.replaceChunks(job.pageId, chunkInputs);
+
+      this.repos.audio.save(
+        job.pageId,
+        {
+          text_sha256: job.hash,
+          voice: job.settings.voice,
+          model: job.settings.model,
+          style: job.settings.style,
+          duration_ms: durationMs(pcm),
+          audio: mp3,
+        },
+        chunkInputs,
+      );
 
       this.jobs.delete(job.pageId);
     } catch (err) {

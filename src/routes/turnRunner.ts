@@ -47,6 +47,16 @@ export class TurnRunner {
     this.busy.delete(key);
   }
 
+  /** Executa uma ação assíncrona garantindo reserva e liberação infalível da chave. */
+  async withClaim<T>(key: string, fn: () => Promise<T>, message?: string): Promise<T> {
+    this.claim(key, message);
+    try {
+      return await fn();
+    } finally {
+      this.release(key);
+    }
+  }
+
   /** Cria o diálogo pedido pelo Narrador, se houver `dialogue_trigger` ativo e válido. */
   maybeCreateDialogue(sessionId: string, result: NarratorResult): DialogueSession | undefined {
     const t = result.dialogue_trigger;

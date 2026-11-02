@@ -133,11 +133,61 @@ export class AudioRepository {
     this.reclaim();
   }
 
+  /** Grava o áudio consolidado e os trechos individuais em uma única transação atômica. */
+  save(pageId: string, audioInput: PutAudioInput, chunks: PutAudioChunkInput[]): AudioMeta {
+    const insertAudio = this.db.prepare(
+      `INSERT INTO page_audio (page_id, text_sha256, voice, model, style, mime, duration_ms, bytes, audio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(page_id) DO UPDATE SET
+         text_sha256 = excluded.text_sha256, voice = excluded.voice, model = excluded.model,
+         style = excluded.style, mime = excluded.mime, duration_ms = excluded.duration_ms,
+         bytes = excluded.bytes, audio = excluded.audio, created_at = CURRENT_TIMESTAMP`,
+    );
+    const insertChunk = this.db.prepare(
+      `INSERT INTO page_audio_chunks (page_id, chunk_index, chunk_sha256, voice, model, style, duration_ms, audio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    this.db.transaction(() => {
+      insertAudio.run(
+        pageId,
+        audioInput.text_sha256,
+        audioInput.voice,
+        audioInput.model,
+        audioInput.style,
+        audioInput.mime ?? 'audio/mpeg',
+        audioInput.duration_ms,
+        audioInput.audio.length,
+        audioInput.audio,
+      );
+      this.db.prepare('DELETE FROM page_audio_chunks WHERE page_id = ?').run(pageId);
+      for (const c of chunks) {
+        insertChunk.run(pageId, c.chunk_index, c.chunk_sha256, c.voice, c.model, c.style, c.duration_ms, c.audio);
+      }
+    })();
+    this.reclaim();
+    return this.meta(pageId)!;
+  }
+
   /** Apaga apenas o MP3 consolidado de page_audio, preservando os trechos em page_audio_chunks para reuso. */
   deleteAudio(pageId: string): boolean {
     const removed = this.db.prepare('DELETE FROM page_audio WHERE page_id = ?').run(pageId).changes > 0;
     if (removed) this.reclaim();
     return removed;
+  }
+
+  /** Descarta os trechos em cache de uma lista de páginas (usado ao arquivar páginas em volumes). */
+  deleteChunksForPages(pageIds: string[]): number {
+    if (pageIds.length === 0) return 0;
+    let count = 0;
+    this.db.transaction(() => {
+      const stmt = this.db.prepare('DELETE FROM page_audio_chunks WHERE page_id = ?');
+      for (const id of pageIds) {
+        count += stmt.run(id).changes;
+      }
+    })();
+    if (count > 0) this.reclaim();
+    return count;
   }
 
   /** Apaga o áudio consolidado e todos os trechos da página. */
@@ -162,9 +212,16 @@ export class AudioRepository {
   }
 
   usage(): { count: number; bytes: number } {
-    return this.db
+    const mp3 = this.db
       .prepare('SELECT COUNT(*) AS count, COALESCE(SUM(bytes), 0) AS bytes FROM page_audio')
       .get() as { count: number; bytes: number };
+    const chunks = this.db
+      .prepare('SELECT COALESCE(SUM(length(audio)), 0) AS bytes FROM page_audio_chunks')
+      .get() as { bytes: number };
+    return {
+      count: mp3.count,
+      bytes: mp3.bytes + chunks.bytes,
+    };
   }
 
   /**

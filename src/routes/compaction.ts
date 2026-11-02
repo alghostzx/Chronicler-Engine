@@ -33,8 +33,7 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
         throw new HttpError(409, 'É preciso ao menos 2 páginas ativas para compactar a crônica.');
       }
 
-      turns.claim(session.id);
-      try {
+      return turns.withClaim(session.id, async () => {
         const gateway = ctx.gatewayProvider();
         const model = await ctx.models.resolve(session);
         const { systemInstruction, userText } = buildCompactionRequest({ session, past: split.past });
@@ -60,9 +59,7 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
           next_volume_number: repos.archives.list(session.id).length + 1,
           model,
         };
-      } finally {
-        turns.release(session.id);
-      }
+      });
     },
   );
 
@@ -93,8 +90,7 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
       const summary = req.body.summary_text.trim();
       if (summary.length === 0) throw new HttpError(400, 'A sinopse não pode ser vazia.');
 
-      turns.claim(session.id);
-      try {
+      return turns.withClaim(session.id, async () => {
         const active = repos.pages.listActive(session.id);
         // A faixa precisa ser exatamente um prefixo das páginas ativas, preservando ao menos o último.
         const valid =
@@ -107,7 +103,11 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
           throw new HttpError(409, 'A faixa de páginas mudou desde a minuta. Gere uma nova minuta da sinopse.');
         }
 
-        return repos.transaction(() => {
+        const archivedIds = active
+          .filter((b) => b.order_index >= start && b.order_index <= end)
+          .map((b) => b.id);
+
+        const result = repos.transaction(() => {
           const archive = repos.archives.create(session.id, {
             summary_text: summary,
             covered_page_start_index: start,
@@ -119,9 +119,12 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
           })!;
           return { archive, session: updated, archived_pages: archived };
         });
-      } finally {
-        turns.release(session.id);
-      }
+
+        // Libera os trechos WAV em cache das páginas arquivadas (preserva o MP3 consolidado)
+        repos.audio.deleteChunksForPages(archivedIds);
+
+        return result;
+      });
     },
   );
 }

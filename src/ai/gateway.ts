@@ -100,6 +100,8 @@ export class MissingApiKeyError extends Error {
   }
 }
 
+export const GENERATION_IDLE_TIMEOUT_MS = 30_000;
+
 export class GeminiGatewayImpl implements GeminiGateway {
   private readonly ai: GoogleGenAI;
 
@@ -124,34 +126,72 @@ export class GeminiGatewayImpl implements GeminiGateway {
   }
 
   async *streamGenerate(req: GenerateRequest): AsyncIterable<string> {
-    const stream = await this.ai.models.generateContentStream({
-      model: req.model,
-      contents: [
-        ...(req.history ?? []).map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-        { role: 'user', parts: [{ text: req.userText }] },
-      ],
-      config: {
-        systemInstruction: req.systemInstruction,
-        abortSignal: req.signal,
-        ...(req.responseJsonSchema !== undefined
-          ? { responseMimeType: 'application/json', responseJsonSchema: req.responseJsonSchema }
-          : {}),
-      },
-    });
+    const internalController = new AbortController();
+    const externalSignal = req.signal;
+    if (externalSignal?.aborted) throw externalSignal.reason;
 
-    let finishReason: string | undefined;
-    let blockReason: string | undefined;
-    for await (const chunk of stream) {
-      blockReason = chunk.promptFeedback?.blockReason ?? blockReason;
-      finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
-      const text = chunk.text;
-      if (text) yield text;
-    }
-    if (blockReason) {
-      throw new GenerationError(`A solicitação foi bloqueada pela API (${blockReason}).`);
-    }
-    if (finishReason && finishReason !== 'STOP') {
-      throw new GenerationError(`A geração terminou de forma anormal (${finishReason}).`);
+    const onExternalAbort = () => internalController.abort(externalSignal?.reason);
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+
+    let timedOut = false;
+    let timer: NodeJS.Timeout | undefined;
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timedOut = true;
+        internalController.abort(new Error('timeout'));
+      }, GENERATION_IDLE_TIMEOUT_MS);
+      timer.unref?.();
+    };
+
+    resetTimer();
+
+    try {
+      const stream = await this.ai.models.generateContentStream({
+        model: req.model,
+        contents: [
+          ...(req.history ?? []).map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+          { role: 'user', parts: [{ text: req.userText }] },
+        ],
+        config: {
+          systemInstruction: req.systemInstruction,
+          abortSignal: internalController.signal,
+          ...(req.responseJsonSchema !== undefined
+            ? { responseMimeType: 'application/json', responseJsonSchema: req.responseJsonSchema }
+            : {}),
+        },
+      });
+
+      let finishReason: string | undefined;
+      let blockReason: string | undefined;
+      for await (const chunk of stream) {
+        resetTimer();
+        blockReason = chunk.promptFeedback?.blockReason ?? blockReason;
+        finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
+        let text: string | undefined;
+        try {
+          text = chunk.text;
+        } catch {
+          // Se o chunk foi bloqueado antes de produzir candidatos válidos, o getter .text
+          // lança exceção no SDK do Gemini; capturamos para que a verificação de blockReason/finishReason
+          // abaixo lance a GenerationError padronizada.
+        }
+        if (text) yield text;
+      }
+      if (blockReason) {
+        throw new GenerationError(`A solicitação foi bloqueada pela API (${blockReason}).`);
+      }
+      if (finishReason && finishReason !== 'STOP') {
+        throw new GenerationError(`A geração terminou de forma anormal (${finishReason}).`);
+      }
+    } catch (err) {
+      if (timedOut) {
+        throw new GenerationError('Tempo limite de inatividade na geração excedido (30 s sem resposta da API).');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
 

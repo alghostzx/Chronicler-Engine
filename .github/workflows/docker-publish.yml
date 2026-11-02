@@ -6,8 +6,36 @@ on:
     tags: [ 'v*.*.*' ]
 
 jobs:
+  check:
+    name: Testes e Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Checagem de Tipos (Servidor e Cliente)
+        run: |
+          npm run typecheck
+          npm run typecheck:client
+
+      - name: Rodar Testes Automatizados
+        run: npm test
+
+      - name: Verificar Integridade de Documentação
+        run: npm run check:docs
+
   build-and-push:
     name: Build e Push para GHCR
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: read

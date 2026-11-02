@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { MissingApiKeyError } from '../ai/gateway.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { Page } from '../db/types.js';
 import { contentDisposition } from '../export.js';
@@ -253,7 +254,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: AppContext): void
         const mp3 = await audio.sample(req.body ?? {});
         return reply.header('Content-Type', 'audio/mpeg').header('Cache-Control', 'no-store').send(mp3);
       } catch (err) {
-        if (err instanceof HttpError || (err as Error).name === 'MissingApiKeyError') throw err;
+        if (err instanceof HttpError || err instanceof MissingApiKeyError) throw err;
         req.log.warn({ err }, 'Falha ao gerar a amostra de voz');
         throw new HttpError(502, err instanceof Error ? err.message : 'Falha ao gerar a amostra de voz.');
       }

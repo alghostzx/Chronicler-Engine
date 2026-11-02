@@ -40,27 +40,28 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
     async (req, reply) => {
       const session = requireSession(req.params.id);
       assertNoActiveDialogue(session.id);
-      turns.claim(session.id);
-      const instruction = req.body.player_instruction;
+      await turns.withClaim(session.id, async () => {
+        const instruction = req.body.player_instruction;
 
-      await turns.run(req, reply, {
-        session,
-        request: buildNarratorRequest({
+        await turns.run(req, reply, {
           session,
-          precedingPages: repos.pages.listActive(session.id),
-          playerInstruction: instruction,
-        }),
-        persist: (result, model) =>
-          repos.transaction(() => {
-            const page = repos.pages.append(session.id, {
-              player_instruction: instruction,
-              generated_text: result.narrative_text,
-              model_identifier: model,
-            });
-            const dialogue = turns.maybeCreateDialogue(session.id, result);
-            repos.sessions.touch(session.id);
-            return { page, discarded: 0, dialogue };
+          request: buildNarratorRequest({
+            session,
+            precedingPages: repos.pages.listActive(session.id),
+            playerInstruction: instruction,
           }),
+          persist: (result, model) =>
+            repos.transaction(() => {
+              const page = repos.pages.append(session.id, {
+                player_instruction: instruction,
+                generated_text: result.narrative_text,
+                model_identifier: model,
+              });
+              const dialogue = turns.maybeCreateDialogue(session.id, result);
+              repos.sessions.touch(session.id);
+              return { page, discarded: 0, dialogue };
+            }),
+        });
       });
     },
   );
@@ -75,7 +76,7 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
           type: 'object',
           required: ['generated_text'],
           additionalProperties: false,
-          properties: { generated_text: { type: 'string', minLength: 1 } },
+          properties: { generated_text: { type: 'string', minLength: 1, maxLength: 20000 } },
         },
       },
     },
@@ -134,38 +135,39 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
           pages_to_discard: following.length,
         });
       }
-      turns.claim(session.id);
-      const instruction = req.body.player_instruction;
+      await turns.withClaim(session.id, async () => {
+        const instruction = req.body.player_instruction;
 
-      await turns.run(req, reply, {
-        session,
-        // O corpus de regeneração contém apenas as páginas ativas ANTERIORES a K.
-        request: buildNarratorRequest({
+        await turns.run(req, reply, {
           session,
-          precedingPages: active.filter((b) => b.order_index < page.order_index),
-          playerInstruction: instruction,
-        }),
-        // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem
-        // numa única transação, então uma falha de geração nunca apaga dados (docs/narrador.md#regeneração-com-truncamento).
-        persist: (result, model) => {
-          const outcome = repos.transaction(() => {
-            const discarded = repos.pages.deleteAfter(session.id, page.order_index);
-            const updated = repos.pages.replaceGeneration(page.id, {
-              player_instruction: instruction,
-              generated_text: result.narrative_text,
-              model_identifier: model,
-            })!;
-            // Páginas posteriores caem por CASCADE; esta continua (mesmo id), então o áudio
-            // dela é apagado explicitamente.
-            repos.audio.delete(page.id);
-            const dialogue = turns.maybeCreateDialogue(session.id, result);
-            repos.sessions.touch(session.id);
-            return { page: updated, discarded, dialogue };
-          });
-          audio.cancelMany([page.id, ...following.map((p) => p.id)]);
-          repos.audio.reclaim();
-          return outcome;
-        },
+          // O corpus de regeneração contém apenas as páginas ativas ANTERIORES a K.
+          request: buildNarratorRequest({
+            session,
+            precedingPages: active.filter((b) => b.order_index < page.order_index),
+            playerInstruction: instruction,
+          }),
+          // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem
+          // numa única transação, então uma falha de geração nunca apaga dados (docs/narrador.md#regeneração-com-truncamento).
+          persist: (result, model) => {
+            const outcome = repos.transaction(() => {
+              const discarded = repos.pages.deleteAfter(session.id, page.order_index);
+              const updated = repos.pages.replaceGeneration(page.id, {
+                player_instruction: instruction,
+                generated_text: result.narrative_text,
+                model_identifier: model,
+              })!;
+              // Páginas posteriores caem por CASCADE; esta continua (mesmo id), então o áudio
+              // dela é apagado explicitamente.
+              repos.audio.delete(page.id);
+              const dialogue = turns.maybeCreateDialogue(session.id, result);
+              repos.sessions.touch(session.id);
+              return { page: updated, discarded, dialogue };
+            });
+            audio.cancelMany([page.id, ...following.map((p) => p.id)]);
+            repos.audio.reclaim();
+            return outcome;
+          },
+        });
       });
     },
   );
@@ -187,31 +189,31 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       }
       const session = requireSession(page.session_id);
       assertNoActiveDialogue(session.id);
-      turns.claim(session.id);
-
-      const rawTranscript = page.generated_text;
-      await turns.runDialoguePage(req, reply, {
-        session,
-        rawTranscript,
-        // O contexto é a história até a página (as seguintes continuam como estão, sem entrar no pedido).
-        precedingPages: repos.pages.listActive(session.id).filter((p) => p.order_index < page.order_index),
-        fallbackToRaw: false,
-        persist: (text, model) => {
-          const outcome = repos.transaction(() => {
-            const updated = repos.pages.replaceGeneration(page.id, {
-              player_instruction: rawTranscript,
-              generated_text: text,
-              model_identifier: model,
-              raw_dialogue: false,
-            })!;
-            repos.audio.delete(page.id); // o áudio lia a transcrição crua
-            repos.sessions.touch(session.id);
-            return { page: updated, discarded: 0, narration: 'narrated' as const };
-          });
-          audio.cancelMany([page.id]);
-          repos.audio.reclaim();
-          return outcome;
-        },
+      await turns.withClaim(session.id, async () => {
+        const rawTranscript = page.generated_text;
+        await turns.runDialoguePage(req, reply, {
+          session,
+          rawTranscript,
+          // O contexto é a história até a página (as seguintes continuam como estão, sem entrar no pedido).
+          precedingPages: repos.pages.listActive(session.id).filter((p) => p.order_index < page.order_index),
+          fallbackToRaw: false,
+          persist: (text, model) => {
+            const outcome = repos.transaction(() => {
+              const updated = repos.pages.replaceGeneration(page.id, {
+                player_instruction: rawTranscript,
+                generated_text: text,
+                model_identifier: model,
+                raw_dialogue: false,
+              })!;
+              repos.audio.delete(page.id); // o áudio lia a transcrição crua
+              repos.sessions.touch(session.id);
+              return { page: updated, discarded: 0, narration: 'narrated' as const };
+            });
+            audio.cancelMany([page.id]);
+            repos.audio.reclaim();
+            return outcome;
+          },
+        });
       });
     },
   );

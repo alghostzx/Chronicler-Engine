@@ -16,7 +16,7 @@ export interface AppConfig {
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
-    port: Number(env.PORT ?? 3000),
+    port: positiveInt(env.PORT, 3000),
     host: env.HOST ?? '127.0.0.1',
     databasePath: env.DATABASE_PATH ?? path.resolve(process.cwd(), 'data', 'chronicler.db'),
     publicDir: env.PUBLIC_DIR ?? path.resolve(process.cwd(), 'public'),

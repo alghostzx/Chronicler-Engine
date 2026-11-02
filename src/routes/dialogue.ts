@@ -65,8 +65,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
       const dialogue = requireActiveDialogue(req.params.id);
       const session = repos.sessions.get(dialogue.session_id)!;
       const lockKey = `d:${dialogue.id}`;
-      turns.claim(lockKey, 'Aguarde a resposta anterior do NPC.');
-      try {
+      return turns.withClaim(lockKey, async () => {
         if (turns.isBusy(session.id)) {
           throw new HttpError(409, 'O diálogo está sendo encerrado.');
         }
@@ -94,9 +93,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
           req.log.error({ err }, 'Falha na resposta do NPC');
           throw new HttpError(502, friendlyError(err).replace('narrativa', 'resposta do NPC'));
         }
-      } finally {
-        turns.release(lockKey);
-      }
+      }, 'Aguarde a resposta anterior do NPC.');
     },
   );
 
@@ -129,44 +126,44 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
       }
       const active = repos.pages.listActive(session.id);
       const following = redo ? active.filter((p) => p.order_index > redo.order_index) : [];
-      turns.claim(session.id);
-
-      await turns.runDialoguePage(req, reply, {
-        session,
-        rawTranscript,
-        // No refazer, o contexto é a história antes da página que será substituída.
-        precedingPages: redo ? active.filter((p) => p.order_index < redo.order_index) : active,
-        fallbackToRaw: true,
-        persist: (text, model, narration) => {
-          const raw = narration === 'fallback';
-          const outcome = repos.transaction(() => {
-            let page;
-            let discarded = 0;
+      await turns.withClaim(session.id, async () => {
+        await turns.runDialoguePage(req, reply, {
+          session,
+          rawTranscript,
+          // No refazer, o contexto é a história antes da página que será substituída.
+          precedingPages: redo ? active.filter((p) => p.order_index < redo.order_index) : active,
+          fallbackToRaw: true,
+          persist: (text, model, narration) => {
+            const raw = narration === 'fallback';
+            const outcome = repos.transaction(() => {
+              let page;
+              let discarded = 0;
+              if (redo) {
+                discarded = repos.pages.deleteAfter(session.id, redo.order_index);
+                repos.dialogues.deleteByPage(redo.id);
+                page = repos.pages.replaceGeneration(redo.id, { player_instruction: rawTranscript, generated_text: text, model_identifier: model, raw_dialogue: raw })!;
+                repos.audio.delete(redo.id); // o áudio narrava a conversa antiga
+              } else {
+                page = repos.pages.append(session.id, {
+                  player_instruction: rawTranscript,
+                  generated_text: text,
+                  model_identifier: model,
+                  kind: 'dialogue',
+                  npc_name: dialogue.npc_name,
+                  raw_dialogue: raw,
+                });
+              }
+              repos.dialogues.conclude(dialogue.id, page.id);
+              repos.sessions.touch(session.id);
+              return { page, discarded, narration };
+            });
             if (redo) {
-              discarded = repos.pages.deleteAfter(session.id, redo.order_index);
-              repos.dialogues.deleteByPage(redo.id);
-              page = repos.pages.replaceGeneration(redo.id, { player_instruction: rawTranscript, generated_text: text, model_identifier: model, raw_dialogue: raw })!;
-              repos.audio.delete(redo.id); // o áudio narrava a conversa antiga
-            } else {
-              page = repos.pages.append(session.id, {
-                player_instruction: rawTranscript,
-                generated_text: text,
-                model_identifier: model,
-                kind: 'dialogue',
-                npc_name: dialogue.npc_name,
-                raw_dialogue: raw,
-              });
+              ctx.audio.cancelMany([redo.id, ...following.map((p) => p.id)]);
+              repos.audio.reclaim();
             }
-            repos.dialogues.conclude(dialogue.id, page.id);
-            repos.sessions.touch(session.id);
-            return { page, discarded, narration };
-          });
-          if (redo) {
-            ctx.audio.cancelMany([redo.id, ...following.map((p) => p.id)]);
-            repos.audio.reclaim();
-          }
-          return outcome;
-        },
+            return outcome;
+          },
+        });
       });
     },
   );

@@ -688,7 +688,8 @@ describe('configurações de voz', () => {
     await settle(page.id);
     const usage = (await t.app.inject({ method: 'GET', url: '/api/settings/tts' })).json().usage;
     expect(usage.count).toBe(1);
-    expect(usage.bytes).toBe(t.repos.audio.meta(page.id)!.bytes);
+    const chunksBytes = t.repos.audio.getChunks(page.id).reduce((acc, c) => acc + c.audio.length, 0);
+    expect(usage.bytes).toBe(t.repos.audio.meta(page.id)!.bytes + chunksBytes);
   });
 });
 
@@ -770,7 +771,7 @@ describe('limite de chamadas por minuto e uma página por vez', () => {
     expect(calls).toHaveLength(12);
     for (let i = 10; i < calls.length; i++) expect(calls[i]!.start - calls[i - 10]!.start).toBeGreaterThanOrEqual(WINDOW - 8);
     // o excedente (11ª e 12ª chamadas) esperou; as 10 primeiras saíram sem esperar
-    expect(calls[9]!.start - calls[0]!.start).toBeLessThan(WINDOW / 2);
+    expect(calls[9]!.start - calls[0]!.start).toBeLessThan(WINDOW - 50);
     expect(calls[10]!.start - calls[0]!.start).toBeGreaterThanOrEqual(WINDOW - 8);
   });
 

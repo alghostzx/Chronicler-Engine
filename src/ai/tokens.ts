@@ -45,7 +45,11 @@ export class TokenCounter {
       .update(JSON.stringify([req.model, req.systemInstruction ?? '', req.userText]))
       .digest('hex');
     const hit = this.cache.get(key);
-    if (hit !== undefined) return hit;
+    if (hit !== undefined) {
+      this.cache.delete(key);
+      this.cache.set(key, hit);
+      return hit;
+    }
 
     const tokens = await this.gatewayProvider().countTokens(req);
     if (this.cache.size >= MAX_CACHE_ENTRIES) {

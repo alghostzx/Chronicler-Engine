@@ -50,7 +50,7 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
     gatewayFactory,
     models: new ModelService(gatewayProvider, repos.settings),
     tokens: new TokenCounter(gatewayProvider),
-    audio: new AudioService(repos, gatewayProvider, { maxRequestsPerMinute: config.ttsMaxRpm, ...opts.audio }),
+    audio: new AudioService(repos, gatewayProvider, { maxRequestsPerMinute: config.ttsMaxRpm, logger: app.log, ...opts.audio }),
   } as AppContext;
   ctx.turns = new TurnRunner(ctx);
 
@@ -96,6 +96,15 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
 async function main(): Promise<void> {
   const config = loadConfig();
   const app = await buildApp(config, { logger: true });
+
+  process.on('unhandledRejection', (reason) => {
+    app.log.error({ err: reason }, 'unhandledRejection capturado');
+  });
+  process.on('uncaughtException', (err) => {
+    app.log.fatal({ err }, 'uncaughtException capturado; encerrando processo');
+    process.exit(1);
+  });
+
   await app.listen({ port: config.port, host: config.host });
 
   // Como PID 1 de um contêiner, o Node ignora SIGTERM/SIGINT sem handler: encerra de forma graciosa.
@@ -105,7 +114,10 @@ async function main(): Promise<void> {
     closing = true;
     app.log.info(`${signal} recebido; encerrando…`);
     // Conexões SSE abertas podem segurar o close(): garante a saída em poucos segundos.
-    const force = setTimeout(() => process.exit(0), 3000);
+    const force = setTimeout(() => {
+      app.log.warn('Encerramento forçado após tempo limite de 3 s');
+      process.exit(1);
+    }, 3000);
     force.unref();
     app.close().then(
       () => process.exit(0),
