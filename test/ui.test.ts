@@ -489,9 +489,16 @@ describe('UI — sessão', () => {
     expect(cards.map((c) => c.querySelector('.page-card-title')?.textContent)).toEqual(['Página 1', 'Página 2']);
     expect(text()).toContain('Segundo capítulo.');
     expect(text()).not.toContain('Terceiro capítulo.');
-    // Somente leitura: o rodapé só tem o ícone de ouvir (sem editar nem ramificar).
+    // Somente leitura: o rodapé só tem os ícones de ouvir e reproduzir a partir daqui (sem editar nem ramificar).
     const readOnlyActions = Array.from(document.querySelectorAll('.page-card-actions button.page-action'));
-    expect(readOnlyActions.map((b) => b.getAttribute('aria-label'))).toEqual(['Ouvir esta página', 'Ouvir esta página']);
+    expect(readOnlyActions.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Ouvir esta página',
+      'Reproduzir a partir daqui',
+      'Ouvir esta página',
+      'Reproduzir a partir daqui',
+    ]);
+    expect((readOnlyActions[1] as HTMLButtonElement).disabled).toBe(false);
+    expect((readOnlyActions[3] as HTMLButtonElement).disabled).toBe(true); // última página do volume
     expect(document.querySelector('textarea')).toBeNull();
     expect(byLabel('Salvar volume em Markdown')).not.toBeNull();
     expect(document.querySelector('a[aria-label="Voltar ao Tome"]')!.getAttribute('href')).toMatch(/^#\/s\//);

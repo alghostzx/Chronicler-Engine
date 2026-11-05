@@ -82,21 +82,21 @@ export function pageCard(o: PageCardOptions): HTMLElement {
   // Grupo à esquerda do rodapé (a dica ancora no início); as ações de edição ficam à direita.
   const start = h('div', { class: 'page-card-actions-start' }, audio.button, audio.menu.el);
   const footer: HTMLElement[] = [start];
+  const last = (o.laterCount ?? 0) === 0;
+  const playFrom = iconButton({
+    icon: 'playFrom',
+    label: PAGE_ACTIONS.playFromHere,
+    tip: last
+      ? 'Esta já é a última página; use “Ouvir”'
+      : 'Reproduzir a partir daqui, em sequência, até a última página (pergunta antes de gerar o que faltar)',
+    align: 'start',
+    up: true,
+    extraClass: 'page-action',
+    disabled: last,
+    onClick: o.onPlayFromHere,
+  });
+  start.append(playFrom);
   if (!o.readonly) {
-    const last = (o.laterCount ?? 0) === 0;
-    const playFrom = iconButton({
-      icon: 'playFrom',
-      label: PAGE_ACTIONS.playFromHere,
-      tip: last
-        ? 'Esta já é a última página; use “Ouvir”'
-        : 'Reproduzir a partir daqui, em sequência, até a última página (pergunta antes de gerar o que faltar)',
-      align: 'start',
-      up: true,
-      extraClass: 'page-action',
-      disabled: last,
-      onClick: o.onPlayFromHere,
-    });
-    start.append(playFrom);
     const dialogue = page.kind === 'dialogue';
     const action = (icon: 'pencil' | 'prompt' | 'narrateDialogue' | 'redoDialogue' | 'branch', label: string, tip: string, onClick?: () => void, disabled = false) =>
       iconButton({ icon, label, tip, align: 'end', up: true, extraClass: 'page-action', disabled: disabled || !!o.busy, onClick });
