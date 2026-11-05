@@ -36,11 +36,12 @@ async function route(): Promise<void> {
   title = null;
 
   // Sessão e leitor de volume são "app shell" (sem rolagem do documento); o resto rola normalmente.
-  setAppShell(/^#\/s\/[^/]+(\/v\/\d+)?$/.test(location.hash));
+  setAppShell(/^#\/s\/[^/]+(\/v\/\d+(\?p=\d+)?)?$/.test(location.hash));
 
-  const volume = /^#\/s\/([^/]+)\/v\/(\d+)$/.exec(location.hash);
+  const volume = /^#\/s\/([^/]+)\/v\/(\d+)(?:\?p=(\d+))?$/.exec(location.hash);
   if (volume) {
-    const dispose = await renderVolume(root, decodeURIComponent(volume[1]!), Number(volume[2]));
+    const targetPage = volume[3] ? Number(volume[3]) : undefined;
+    const dispose = await renderVolume(root, decodeURIComponent(volume[1]!), Number(volume[2]), targetPage);
     if (current !== navigation) dispose();
     else cleanup = dispose;
     return;

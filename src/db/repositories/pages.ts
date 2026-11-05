@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../connection.js';
-import type { Page, PageKind } from '../types.js';
+import type { ArchivedPageSummary, Page, PageKind } from '../types.js';
 
 type PageRow = Omit<Page, 'is_archived' | 'raw_dialogue'> & { is_archived: number | null; raw_dialogue: number };
 
@@ -86,6 +86,18 @@ export class PagesRepository {
         )
         .all(sessionId, from, to) as PageRow[]
     ).map(toPage);
+  }
+
+  /** Metadados leves das páginas arquivadas da sessão (para o índice de páginas, sem o texto da prosa). */
+  listArchivedIndex(sessionId: string): ArchivedPageSummary[] {
+    return this.db
+      .prepare(
+        `SELECT order_index, kind, npc_name
+         FROM narrative_pages
+         WHERE session_id = ? AND is_archived = TRUE
+         ORDER BY order_index ASC`,
+      )
+      .all(sessionId) as ArchivedPageSummary[];
   }
 
   /** Última página ativa da sessão, se houver. */

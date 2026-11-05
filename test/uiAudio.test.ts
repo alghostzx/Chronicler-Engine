@@ -335,7 +335,7 @@ describe('UI — configurações de voz', () => {
     await boot('#/s/<id>');
     await waitFor(() => card(1), 'cartão');
     click(byLabel('Contexto da sessão')!);
-    click(await waitFor(() => Array.from(document.querySelectorAll<HTMLElement>('[role=tab]')).find((t) => t.textContent === 'Voz'), 'aba Voz'));
+    click(await waitFor(() => Array.from(document.querySelectorAll<HTMLElement>('[role=tab]')).find((t) => t.getAttribute('aria-label') === 'Voz'), 'aba Voz'));
     const select = await waitFor(() => byLabel('Narração automática desta sessão') as HTMLSelectElement | null, 'seletor');
     expect(select.options[select.selectedIndex]!.textContent).toBe('Herdar o padrão global (desligada)');
     select.value = 'on';

@@ -1,13 +1,26 @@
-import { api, type Archive, type ModelsInfo, type Session, type SettingsInfo, type TtsSettingsInfo } from '../api';
+import {
+  api,
+  type Archive,
+  type ArchivedPageSummary,
+  type ModelsInfo,
+  type Page,
+  type Session,
+  type SettingsInfo,
+  type TtsSettingsInfo,
+} from '../api';
 import { iconButton } from '../controls';
-import { icon } from '../icons';
+import { icon, type IconName } from '../icons';
 import { formatNumber, h, mount, paragraphs, toast } from '../dom';
 import { modelOptions } from './options';
 import { openVolumeExport } from './volumeExport';
 
 export interface DrawerHooks {
   getSession(): Session;
+  getPages?(): Page[];
   getArchives(): Archive[];
+  getArchivedPages?(): ArchivedPageSummary[];
+  /** Rola o Tomo até o início da página ativa selecionada no índice. */
+  onSelectPage?(pageId: string): void;
   /** Sessão atualizada pelo servidor (após salvar). */
   onSessionSaved(session: Session): void;
   onClose?: () => void;
@@ -15,22 +28,24 @@ export interface DrawerHooks {
 
 const readLabel = (n: number): string => (n === 1 ? 'Ler a página' : `Ler as ${formatNumber(n)} páginas`);
 
-type Tab = 'mundo' | 'regras' | 'modelo' | 'voz' | 'cronica';
+type Tab = 'indice' | 'mundo' | 'regras' | 'modelo' | 'voz' | 'cronica';
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'mundo', label: 'Mundo' },
-  { id: 'regras', label: 'Regras' },
-  { id: 'modelo', label: 'Modelo' },
-  { id: 'voz', label: 'Voz' },
-  { id: 'cronica', label: 'Crônica' },
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: 'indice', label: 'Índice', icon: 'pageIndex' },
+  { id: 'mundo', label: 'Mundo', icon: 'world' },
+  { id: 'regras', label: 'Regras', icon: 'rules' },
+  { id: 'modelo', label: 'Modelo', icon: 'model' },
+  { id: 'voz', label: 'Voz', icon: 'voice' },
+  { id: 'cronica', label: 'Crônica', icon: 'book' },
 ];
 
 /**
- * Gaveta de Contexto (docs/interface.md#o-tome-e-a-doca): edição do mundo, regras do Narrador, modelo/limite e leitura
- * dos volumes arquivados. Salvar dispara `onSessionSaved`, que recalcula o HP (docs/narrador.md#hp-do-narrador).
+ * Gaveta de Contexto (docs/interface.md#o-tome-e-a-doca): índice de páginas, edição do mundo, regras do Narrador,
+ * modelo/limite, voz e leitura dos volumes arquivados. Salvar dispara `onSessionSaved`, que recalcula o HP (docs/narrador.md#hp-do-narrador).
  */
 export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): void } {
-  let tab: Tab = 'mundo';
+  let tab: Tab = 'indice';
+  let showArchivedPages = false;
   let models: ModelsInfo | null = null;
   let defaultRules: string | null = null;
 
@@ -54,31 +69,35 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
   }
 
   function renderTabs() {
-    const tabs: HTMLElement[] = TABS.map((t) =>
-      h(
+    const tabs: HTMLElement[] = TABS.map((t, idx) => {
+      const align = idx === 0 ? 'tip-start ' : idx === TABS.length - 1 && !hooks.onClose ? 'tip-end ' : '';
+      return h(
         'button',
         {
           type: 'button',
           role: 'tab',
           'aria-selected': t.id === tab ? 'true' : 'false',
-          class: `flex-1 px-2 py-2 font-display text-sm transition ${t.id === tab ? 'border-b-2 border-accent text-accent' : 'text-muted hover:text-ink'}`,
+          'aria-label': t.label,
+          'data-tip': t.label,
+          class: `tip ${align}flex flex-1 items-center justify-center px-2 py-2.5 font-display text-sm transition ${t.id === tab ? 'border-b-2 border-accent text-accent' : 'text-muted hover:text-ink'}`,
           onClick: () => {
             tab = t.id;
             renderTabs();
             renderContent();
           },
         },
-        t.label,
-      ),
-    );
+        icon(t.icon, 18),
+      );
+    });
     if (hooks.onClose) {
       tabs.push(
         h(
           'button',
           {
             type: 'button',
-            class: 'px-3 py-2 text-muted hover:text-ink lg:hidden',
+            class: 'tip tip-end px-3 py-2 text-muted hover:text-ink lg:hidden',
             'aria-label': 'Fechar contexto',
+            'data-tip': 'Fechar contexto',
             title: 'Fechar contexto',
             onClick: hooks.onClose,
           },
@@ -87,6 +106,115 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
       );
     }
     mount(tabsBar, ...tabs);
+  }
+
+  function indexDialogueBadge(npcName: string | null): HTMLElement {
+    return h(
+      'span',
+      { class: 'page-badge text-xs', 'data-index-badge': 'dialogue' },
+      icon('dialogue', 12),
+      npcName ? `Diálogo com ${npcName}` : 'Diálogo',
+    );
+  }
+
+  function renderIndexTab() {
+    const session = hooks.getSession();
+    const pages = hooks.getPages?.() ?? [];
+    const archives = hooks.getArchives();
+    const archivedMeta = new Map((hooks.getArchivedPages?.() ?? []).map((p) => [p.order_index, p]));
+
+    const switchInput = h('input', {
+      type: 'checkbox',
+      role: 'switch',
+      class: 'h-4 w-4 cursor-pointer accent-[var(--accent)]',
+      checked: showArchivedPages,
+      'aria-label': 'Mostrar páginas arquivadas em crônicas',
+      onChange: () => {
+        showArchivedPages = switchInput.checked;
+        renderIndexTab();
+      },
+    });
+
+    const toggleRow = h(
+      'label',
+      { class: 'flex cursor-pointer items-center justify-between gap-2 rounded border border-line bg-main px-3 py-2 text-xs text-ink' },
+      h('span', null, 'Mostrar páginas arquivadas em crônicas'),
+      switchInput,
+    );
+
+    const sections: HTMLElement[] = [toggleRow];
+
+    if (showArchivedPages) {
+      if (archives.length === 0) {
+        sections.push(h('p', { class: 'text-xs text-muted' }, 'Nenhuma página arquivada em crônicas ainda.'));
+      } else {
+        for (const a of archives) {
+          const items: HTMLElement[] = [];
+          for (let idx = a.covered_page_start_index; idx <= a.covered_page_end_index; idx++) {
+            const meta = archivedMeta.get(idx);
+            items.push(
+              h(
+                'a',
+                {
+                  href: `#/s/${session.id}/v/${a.volume_number}?p=${idx}`,
+                  class:
+                    'flex w-full items-center justify-between gap-2 rounded border border-line bg-main px-3 py-1.5 text-left font-display text-sm text-ink transition hover:border-accent hover:text-accent',
+                  'data-index-archived-page': String(idx),
+                  'data-index-volume': String(a.volume_number),
+                },
+                h('span', null, `Página ${idx}`),
+                meta?.kind === 'dialogue' ? indexDialogueBadge(meta.npc_name) : null,
+              ),
+            );
+          }
+          sections.push(
+            h(
+              'div',
+              { class: 'space-y-1.5' },
+              h(
+                'div',
+                { class: 'flex items-center gap-1.5 font-display text-xs uppercase tracking-wider text-muted' },
+                icon('book', 14),
+                h('span', null, `Volume ${a.volume_number}`),
+              ),
+              h('div', { class: 'space-y-1' }, ...items),
+            ),
+          );
+        }
+      }
+    }
+
+    if (pages.length === 0) {
+      sections.push(h('p', { class: 'text-sm text-muted' }, 'Nenhuma página no Tomo atual.'));
+    } else {
+      const activeItems = pages.map((p) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class:
+              'flex w-full items-center justify-between gap-2 rounded border border-line bg-main px-3 py-1.5 text-left font-display text-sm text-ink transition hover:border-accent hover:text-accent',
+            'data-index-page': String(p.order_index),
+            'data-index-page-id': p.id,
+            onClick: () => hooks.onSelectPage?.(p.id),
+          },
+          h('span', null, `Página ${p.order_index}`),
+          p.kind === 'dialogue' ? indexDialogueBadge(p.npc_name) : null,
+        ),
+      );
+      sections.push(
+        h(
+          'div',
+          { class: 'space-y-1.5' },
+          showArchivedPages && archives.length > 0
+            ? h('div', { class: 'font-display text-xs uppercase tracking-wider text-muted' }, 'Tomo atual')
+            : null,
+          h('div', { class: 'space-y-1' }, ...activeItems),
+        ),
+      );
+    }
+
+    mount(content, h('div', { class: 'space-y-4' }, ...sections));
   }
 
   function textareaTab(opts: {
@@ -279,7 +407,9 @@ export function createDrawer(hooks: DrawerHooks): { el: HTMLElement; refresh(): 
 
   function renderContent() {
     const session = hooks.getSession();
-    if (tab === 'mundo') {
+    if (tab === 'indice') {
+      renderIndexTab();
+    } else if (tab === 'mundo') {
       textareaTab({
         label: 'Contexto do mundo',
         hint: 'Mundo, personagens e regras do universo. Os volumes compactados da crônica são anexados aqui, sob “Crônica — Volume N”.',

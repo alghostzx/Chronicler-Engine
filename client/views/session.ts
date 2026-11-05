@@ -129,7 +129,18 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   const drawer = createDrawer({
     getSession: session,
+    getPages: () => detail.pages,
     getArchives: () => detail.archives,
+    getArchivedPages: () => detail.archived_pages ?? [],
+    onSelectPage: (pageId) => {
+      const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const isDesktop = typeof matchMedia === 'function' && matchMedia('(min-width: 1024px)').matches;
+      if (drawerOpen && !isDesktop) toggleDrawer();
+      tomeScroll.querySelector<HTMLElement>(`[data-page-id="${pageId}"]`)?.scrollIntoView?.({
+        block: 'start',
+        behavior: reduce ? 'auto' : 'smooth',
+      });
+    },
     onSessionSaved: (s) => {
       detail = { ...detail, session: s };
       titleEl.textContent = s.title;
