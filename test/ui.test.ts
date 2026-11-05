@@ -439,7 +439,26 @@ describe('UI — sessão', () => {
       await waitFor(() => text().includes(msg) && !button('Narrando…'), msg);
     }
     gateway.queue('Sinopse: tudo começou no primeiro capítulo.');
+    const reqsBeforeOpen = gateway.requests.length;
     click(button('Compactar Crônica')!);
+    const pageSelect = await waitFor(
+      () => document.querySelector<HTMLSelectElement>('[role=dialog] select[aria-label="Compactar até a página"]'),
+      'seletor de página da compactação',
+    );
+    // Nenhuma chamada à API acontece ao apenas abrir o modal; opções vão da 1ª até a penúltima página (1 e 2)
+    expect(gateway.requests.length).toBe(reqsBeforeOpen);
+    expect(Array.from(pageSelect.options).map((o) => o.value)).toEqual(['1', '2']);
+    expect(pageSelect.value).toBe('2'); // pré-selecionada em ~75% do peso
+
+    // Trocar a opção atualiza o resumo antes de gerar
+    pageSelect.value = '1';
+    pageSelect.dispatchEvent(new Event('change'));
+    expect(document.querySelector('[role=dialog]')!.textContent).toContain('A Página 1 vira o Volume 1');
+    pageSelect.value = '2';
+    pageSelect.dispatchEvent(new Event('change'));
+    expect(document.querySelector('[role=dialog]')!.textContent).toContain('2 páginas antigas (1 a 2) viram o Volume 1');
+
+    click(await waitFor(() => button('Gerar minuta'), 'botão gerar minuta'));
     const ta = await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'minuta da sinopse');
     expect(ta.value).toContain('Sinopse');
     type(ta, 'Sinopse editada pelo jogador.');
@@ -546,6 +565,7 @@ describe('UI — sessão', () => {
     }
     gateway.queue('Sinopse do primeiro volume.');
     click(button('Compactar Crônica')!);
+    click(await waitFor(() => button('Gerar minuta'), 'gerar minuta'));
     await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'minuta');
     click(await waitFor(() => button(/Consolidar Volume 1/), 'consolidar'));
     await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'compactado');
