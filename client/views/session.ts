@@ -105,7 +105,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       if (disposed) return;
       if (editingId === null) renderTome(false); // reconstruir joga fora o texto digitado numa edição
       const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-      tomeScroll.querySelector(`[data-page-id="${id}"]`)?.scrollIntoView?.({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      tomeScroll.querySelector(`[data-page-id="${id}"]`)?.scrollIntoView?.({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
     },
     onStatus: (pages) => syncAudio(pages),
     onEnd: (info) => {

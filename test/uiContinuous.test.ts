@@ -110,6 +110,10 @@ describe('UI — reprodução contínua', () => {
   });
 
   it('com todas as narrações prontas: não pergunta nada, mostra o banner e encadeia até o fim', async () => {
+    const scrollCalls: unknown[] = [];
+    Element.prototype.scrollIntoView = function (opts) {
+      scrollCalls.push({ el: this, opts });
+    };
     await boot();
     await makeAudio(1, 2, 3);
     await openSession();
@@ -133,6 +137,8 @@ describe('UI — reprodução contínua', () => {
     expect(plays[1]).toContain(pageId(2));
     await waitFor(() => bar().textContent!.includes('Página 2 · 2 de 3'), 'barra na página 2');
     expect(card(2).querySelector('.audio-player')).toBeNull();
+    // Confere que a rolagem automática leva o topo da página ao topo da janela (block: 'start')
+    expect(scrollCalls.some((c: any) => c.el.getAttribute('data-page-id') === pageId(2) && c.opts?.block === 'start')).toBe(true);
 
     ended();
     await waitFor(() => plays.length === 3, 'tocou a página 3');
