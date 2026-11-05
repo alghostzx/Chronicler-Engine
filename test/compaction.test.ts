@@ -83,9 +83,10 @@ describe('COMPACTION_SYSTEM_PROMPT', () => {
     expect(COMPACTION_SYSTEM_PROMPT).not.toContain('um oitavo');
   });
 
-  it('COMPACTION_REFINE_SYSTEM_PROMPT instrui auditoria de omissões e integração factual', () => {
+  it('COMPACTION_REFINE_SYSTEM_PROMPT instrui correção de erros factuais, auditoria de omissões e integração', () => {
     expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('Auditor Editorial');
     expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('sinopse preliminar');
+    expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('ERROS FACTUAIS');
     expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('Identifique e incorpore fatos omitidos');
   });
 });
