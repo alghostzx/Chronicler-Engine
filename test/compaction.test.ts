@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { appendChronicle, splitForCompaction } from '../src/ai/compaction.js';
+import { appendChronicle, COMPACTION_SYSTEM_PROMPT, splitAtPage, splitForCompaction } from '../src/ai/compaction.js';
 import { COMPACTION_IDLE_TIMEOUT_MS } from '../src/ai/gateway.js';
 import { makeApp, withKey, type TestApp } from './helpers.js';
 
@@ -44,6 +44,39 @@ describe('splitForCompaction', () => {
   });
 });
 
+describe('splitAtPage', () => {
+  it('corta exatamente na página limite escolhida (primeira, intermediária ou penúltima)', () => {
+    const pages = [blk(4, 10), blk(5, 100), blk(6, 50), blk(7, 20)];
+    const atFirst = splitAtPage(pages, 4)!;
+    expect(atFirst.past.map((p) => p.order_index)).toEqual([4]);
+    expect(atFirst.keep.map((p) => p.order_index)).toEqual([5, 6, 7]);
+
+    const atMid = splitAtPage(pages, 5)!;
+    expect(atMid.past.map((p) => p.order_index)).toEqual([4, 5]);
+    expect(atMid.keep.map((p) => p.order_index)).toEqual([6, 7]);
+
+    const atPenultimate = splitAtPage(pages, 6)!;
+    expect(atPenultimate.past.map((p) => p.order_index)).toEqual([4, 5, 6]);
+    expect(atPenultimate.keep.map((p) => p.order_index)).toEqual([7]);
+  });
+
+  it('retorna null se escolher a última página, página inexistente ou menos de 2 páginas', () => {
+    const pages = [blk(1, 10), blk(2, 10), blk(3, 10)];
+    expect(splitAtPage(pages, 3)).toBeNull();
+    expect(splitAtPage(pages, 99)).toBeNull();
+    expect(splitAtPage([blk(1, 10)], 1)).toBeNull();
+    expect(splitAtPage([], 1)).toBeNull();
+  });
+});
+
+describe('COMPACTION_SYSTEM_PROMPT', () => {
+  it('orienta concisão guiada pelos fatos sem fração fixa nem teto de palavras conflitante', () => {
+    expect(COMPACTION_SYSTEM_PROMPT).toContain('Regra 2');
+    expect(COMPACTION_SYSTEM_PROMPT).not.toContain('2.500 palavras');
+    expect(COMPACTION_SYSTEM_PROMPT).not.toContain('um oitavo');
+  });
+});
+
 describe('appendChronicle', () => {
   it('usa o cabeçalho "## Crônica — Volume N" e separa volumes', () => {
     const v1 = appendChronicle('Mundo base.\n', 1, '  Resumo um.  ');
@@ -79,7 +112,8 @@ describe('compactação (rotas)', () => {
       }),
     );
 
-  const preview = () => t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/compact/preview` });
+  const preview = (body?: Record<string, unknown>) =>
+    t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/compact/preview`, ...(body ? { payload: body } : {}) });
   const commit = (body: Record<string, unknown>) =>
     t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/compact/commit`, payload: body });
 
@@ -115,6 +149,29 @@ describe('compactação (rotas)', () => {
       expect(t.repos.archives.list(sessionId)).toHaveLength(0);
       expect(t.repos.pages.listActive(sessionId)).toHaveLength(8);
       expect(t.repos.sessions.get(sessionId)!.world_context).toBe('Mundo base.');
+    });
+
+    it('aceita covered_page_end_index explícito e rejeita página limite inválida com 409', async () => {
+      seed(6);
+      t.gateway.queue('Sinopse das 2 primeiras páginas.');
+      const res = await preview({ covered_page_end_index: 2 });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        summary_text: 'Sinopse das 2 primeiras páginas.',
+        covered_page_start_index: 1,
+        covered_page_end_index: 2,
+        pages_to_archive: 2,
+        pages_to_keep: 4,
+        next_volume_number: 1,
+      });
+      const req = t.gateway.requests[0]!;
+      expect(req.userText).toContain('Página1');
+      expect(req.userText).toContain('Página2');
+      expect(req.userText).not.toContain('Página3');
+
+      // Última página ativa (6) ou página inexistente (99) → 409
+      expect((await preview({ covered_page_end_index: 6 })).statusCode).toBe(409);
+      expect((await preview({ covered_page_end_index: 99 })).statusCode).toBe(409);
     });
 
     it('409 com menos de 2 páginas; 409 com diálogo ativo; 404', async () => {

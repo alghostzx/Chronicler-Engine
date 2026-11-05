@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { appendChronicle, buildCompactionRequest, splitForCompaction } from '../ai/compaction.js';
+import { appendChronicle, buildCompactionRequest, splitAtPage, splitForCompaction } from '../ai/compaction.js';
 import { COMPACTION_IDLE_TIMEOUT_MS } from '../ai/gateway.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { Session } from '../db/types.js';
@@ -16,14 +16,39 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
   };
 
   // --- Minuta da sinopse (não grava nada) ------------------------------------------------------
-  app.post<{ Params: { id: string } }>(
+  app.post<{
+    Params: { id: string };
+    Body?: { covered_page_end_index?: number } | null;
+  }>(
     '/api/sessions/:id/compact/preview',
-    { schema: { params: idParams } },
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: ['object', 'null'],
+          additionalProperties: false,
+          properties: {
+            covered_page_end_index: { type: 'integer', minimum: 1 },
+          },
+        },
+      },
+    },
     async (req) => {
       const session = requireCompactable(req.params.id);
-      const split = splitForCompaction(repos.pages.listActive(session.id));
-      if (!split) {
+      const active = repos.pages.listActive(session.id);
+      if (active.length < 2) {
         throw new HttpError(409, 'É preciso ao menos 2 páginas ativas para compactar a crônica.');
+      }
+      const requestedEnd = req.body?.covered_page_end_index;
+      const split =
+        requestedEnd !== undefined
+          ? splitAtPage(active, requestedEnd)
+          : splitForCompaction(active);
+      if (!split) {
+        throw new HttpError(
+          409,
+          'A página limite escolhida é inválida. Escolha uma página ativa que preserve ao menos a última página no Tome.',
+        );
       }
 
       return turns.withClaim(session.id, async () => {
