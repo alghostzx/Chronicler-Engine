@@ -10,8 +10,8 @@ Por que o projeto é do jeito que é. Este documento guarda o **raciocínio** po
 | **Numeração absoluta de páginas** | `Página N` = `order_index`, nunca reaproveitado. Após compactar, o total da crônica não se perde |
 | **Só a prosa vai ao Narrador** | Os prompts passados do jogador nunca entram no contexto: o corpus é feito apenas do texto gerado, sem metadados. Evita que "esboços" antigos contaminem a cena ([Narrador](narrador.md)) |
 | **Páginas consumidas continuam legíveis** | A compactação tira as páginas do contexto da IA, não do banco: você pode relê-las, ouvi-las e exportá-las |
-| **Compactação com revisão humana** | A sinopse é uma *minuta* que o jogador edita antes de consolidar; nada é gravado no preview |
-| **Cisão 75/25 por peso, não por contagem** | Páginas têm tamanhos muito diferentes; o que importa é o peso em tokens |
+| **Compactação com revisão humana** | O autor escolhe até qual página compactar e gera uma *minuta* que pode editar antes de consolidar; nada é gravado no preview |
+| **Sugestão 75/25 por peso + escolha explícita** | Páginas têm tamanhos muito diferentes; o corte sugerido usa o peso em caracteres (~75%), mas o autor decide a página exata onde o volume fecha |
 | **HP por eventos, sem polling** | A contagem de tokens é uma chamada de API: só roda quando algo muda, com cache por hash do conteúdo |
 | **Uma geração por sessão por vez** | Simplicidade e consistência do banco; concorrência devolve `409` |
 | **Gravar só depois do sucesso** | Falha de geração ou desconexão do cliente nunca altera páginas; truncamento + substituição ocorrem numa única transação |
