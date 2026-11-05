@@ -27,6 +27,8 @@ export interface GenerateRequest {
   /** Se informado, força resposta JSON aderente a este JSON Schema. */
   responseJsonSchema?: unknown;
   signal?: AbortSignal;
+  /** Tempo limite de inatividade por fragmento em ms (padrão: `GENERATION_IDLE_TIMEOUT_MS`). */
+  idleTimeoutMs?: number;
 }
 
 /** Falha na geração (bloqueio de segurança, limite de tokens de saída, erro da API...). */
@@ -101,6 +103,8 @@ export class MissingApiKeyError extends Error {
 }
 
 export const GENERATION_IDLE_TIMEOUT_MS = 30_000;
+/** Compactação pode processar centenas de milhares de tokens de entrada antes do 1º fragmento. */
+export const COMPACTION_IDLE_TIMEOUT_MS = 180_000;
 
 export class GeminiGatewayImpl implements GeminiGateway {
   private readonly ai: GoogleGenAI;
@@ -133,6 +137,7 @@ export class GeminiGatewayImpl implements GeminiGateway {
     const onExternalAbort = () => internalController.abort(externalSignal?.reason);
     externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
+    const idleTimeoutMs = req.idleTimeoutMs ?? GENERATION_IDLE_TIMEOUT_MS;
     let timedOut = false;
     let timer: NodeJS.Timeout | undefined;
     const resetTimer = () => {
@@ -140,7 +145,7 @@ export class GeminiGatewayImpl implements GeminiGateway {
       timer = setTimeout(() => {
         timedOut = true;
         internalController.abort(new Error('timeout'));
-      }, GENERATION_IDLE_TIMEOUT_MS);
+      }, idleTimeoutMs);
       timer.unref?.();
     };
 
@@ -186,7 +191,8 @@ export class GeminiGatewayImpl implements GeminiGateway {
       }
     } catch (err) {
       if (timedOut) {
-        throw new GenerationError('Tempo limite de inatividade na geração excedido (30 s sem resposta da API).');
+        const secs = Math.round(idleTimeoutMs / 1000);
+        throw new GenerationError(`Tempo limite de inatividade na geração excedido (${secs} s sem resposta da API).`);
       }
       throw err;
     } finally {

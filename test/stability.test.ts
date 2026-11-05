@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GENERATION_IDLE_TIMEOUT_MS, GenerationError, GeminiGatewayImpl } from '../src/ai/gateway.js';
+import { COMPACTION_IDLE_TIMEOUT_MS, GENERATION_IDLE_TIMEOUT_MS, GenerationError, GeminiGatewayImpl } from '../src/ai/gateway.js';
 import { TurnRunner } from '../src/routes/turnRunner.js';
 import { HttpError } from '../src/context.js';
 
@@ -95,6 +95,54 @@ describe('GeminiGatewayImpl idle timeout', () => {
       const err = await failure;
       expect(err).toBeInstanceOf(GenerationError);
       expect(err.message).toBe('Tempo limite de inatividade na geração excedido (30 s sem resposta da API).');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('respeita idleTimeoutMs customizado (ex.: 180s na compactação)', async () => {
+    vi.useFakeTimers();
+    try {
+      const gateway = new GeminiGatewayImpl('fake-key');
+      const aiMock = (gateway as any).ai;
+
+      aiMock.models = {
+        generateContentStream: vi.fn().mockImplementation(async (opts: { config: { abortSignal: AbortSignal } }) => {
+          return {
+            async *[Symbol.asyncIterator]() {
+              await new Promise((_, reject) => {
+                opts.config.abortSignal.addEventListener('abort', () => reject(opts.config.abortSignal.reason));
+              });
+            },
+          };
+        }),
+      };
+
+      const generator = gateway.streamGenerate({
+        model: 'gemini-3.8-flash',
+        userText: 'corpus longo',
+        idleTimeoutMs: COMPACTION_IDLE_TIMEOUT_MS,
+      });
+
+      let settled = false;
+      const failure = (async () => {
+        for await (const _ of generator) {
+          // não emite
+        }
+      })().catch((err) => {
+        settled = true;
+        return err;
+      });
+
+      // Aos 60s (além dos 30s padrão) ainda não deve ter abortado
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(settled).toBe(false);
+
+      // Ao ultrapassar 180s (COMPACTION_IDLE_TIMEOUT_MS), aborta com a mensagem de 180 s
+      await vi.advanceTimersByTimeAsync(COMPACTION_IDLE_TIMEOUT_MS - 60_000 + 100);
+      const err = await failure;
+      expect(err).toBeInstanceOf(GenerationError);
+      expect(err.message).toBe('Tempo limite de inatividade na geração excedido (180 s sem resposta da API).');
     } finally {
       vi.useRealTimers();
     }

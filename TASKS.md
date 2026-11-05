@@ -114,4 +114,4 @@ npm run check:audio         # voz e reprodução contínua
 npm run check:inicio        # tela inicial e Opções, 320–1920 px
 ```
 
-Estado da suíte ao fim da Fase 26: **392 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
+Estado da suíte ao fim da Fase 26: **393 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).

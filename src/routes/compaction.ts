@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { appendChronicle, buildCompactionRequest, splitForCompaction } from '../ai/compaction.js';
+import { COMPACTION_IDLE_TIMEOUT_MS } from '../ai/gateway.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { Session } from '../db/types.js';
 import { assertNoActiveDialogue, idParams, requireSession } from './common.js';
@@ -32,7 +33,12 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
 
         let summary = '';
         try {
-          for await (const fragment of gateway.streamGenerate({ model, systemInstruction, userText })) {
+          for await (const fragment of gateway.streamGenerate({
+            model,
+            systemInstruction,
+            userText,
+            idleTimeoutMs: COMPACTION_IDLE_TIMEOUT_MS,
+          })) {
             summary += fragment;
           }
         } catch (err) {

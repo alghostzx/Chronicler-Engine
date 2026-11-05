@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { appendChronicle, splitForCompaction } from '../src/ai/compaction.js';
+import { COMPACTION_IDLE_TIMEOUT_MS } from '../src/ai/gateway.js';
 import { makeApp, withKey, type TestApp } from './helpers.js';
 
 const blk = (order_index: number, size: number) => ({ order_index, generated_text: 'x'.repeat(size) });
@@ -108,6 +109,7 @@ describe('compactação (rotas)', () => {
       expect(req.userText).not.toContain('META-');
       expect(req.userText).toContain('Mundo base.');
       expect(req.responseJsonSchema).toBeUndefined();
+      expect(req.idleTimeoutMs).toBe(COMPACTION_IDLE_TIMEOUT_MS);
 
       // Nenhum efeito colateral
       expect(t.repos.archives.list(sessionId)).toHaveLength(0);
