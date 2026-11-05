@@ -1,5 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { appendChronicle, buildCompactionRequest, splitAtPage, splitForCompaction } from '../ai/compaction.js';
+import {
+  appendChronicle,
+  buildCompactionRefineRequest,
+  buildCompactionRequest,
+  splitAtPage,
+  splitForCompaction,
+} from '../ai/compaction.js';
 import { COMPACTION_IDLE_TIMEOUT_MS } from '../ai/gateway.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { Session } from '../db/types.js';
@@ -68,6 +74,83 @@ export function registerCompactionRoutes(app: FastifyInstance, ctx: AppContext):
           }
         } catch (err) {
           req.log.error({ err }, 'Falha ao gerar a sinopse');
+          throw new HttpError(502, friendlyError(err).replace('narrativa', 'sinopse'));
+        }
+        summary = summary.trim();
+        if (summary.length === 0) throw new HttpError(502, 'O modelo não devolveu nenhuma sinopse.');
+
+        return {
+          summary_text: summary,
+          covered_page_start_index: split.past[0]!.order_index,
+          covered_page_end_index: split.past.at(-1)!.order_index,
+          pages_to_archive: split.past.length,
+          pages_to_keep: split.keep.length,
+          next_volume_number: repos.archives.list(session.id).length + 1,
+          model,
+        };
+      });
+    },
+  );
+
+  // --- Refinamento da sinopse (auditoria e enriquecimento contra o original) ------------------
+  app.post<{
+    Params: { id: string };
+    Body: { current_summary: string; covered_page_end_index: number };
+  }>(
+    '/api/sessions/:id/compact/refine',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: 'object',
+          required: ['current_summary', 'covered_page_end_index'],
+          additionalProperties: false,
+          properties: {
+            current_summary: { type: 'string', minLength: 1, maxLength: 200_000 },
+            covered_page_end_index: { type: 'integer', minimum: 1 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const session = requireCompactable(req.params.id);
+      const active = repos.pages.listActive(session.id);
+      if (active.length < 2) {
+        throw new HttpError(409, 'É preciso ao menos 2 páginas ativas para compactar a crônica.');
+      }
+      const currentSummary = req.body.current_summary.trim();
+      if (currentSummary.length === 0) {
+        throw new HttpError(400, 'A sinopse atual não pode ser vazia para refinamento.');
+      }
+      const split = splitAtPage(active, req.body.covered_page_end_index);
+      if (!split) {
+        throw new HttpError(
+          409,
+          'A página limite escolhida é inválida. Escolha uma página ativa que preserve ao menos a última página no Tome.',
+        );
+      }
+
+      return turns.withClaim(session.id, async () => {
+        const gateway = ctx.gatewayProvider();
+        const model = await ctx.models.resolve(session);
+        const { systemInstruction, userText } = buildCompactionRefineRequest({
+          session,
+          past: split.past,
+          currentSummary,
+        });
+
+        let summary = '';
+        try {
+          for await (const fragment of gateway.streamGenerate({
+            model,
+            systemInstruction,
+            userText,
+            idleTimeoutMs: COMPACTION_IDLE_TIMEOUT_MS,
+          })) {
+            summary += fragment;
+          }
+        } catch (err) {
+          req.log.error({ err }, 'Falha ao refinar a sinopse');
           throw new HttpError(502, friendlyError(err).replace('narrativa', 'sinopse'));
         }
         summary = summary.trim();

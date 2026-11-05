@@ -462,6 +462,12 @@ describe('UI — sessão', () => {
     const ta = await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'minuta da sinopse');
     expect(ta.value).toContain('Sinopse');
     type(ta, 'Sinopse editada pelo jogador.');
+
+    // O botão "Revisar e enriquecer" audita a sinopse atual e incorpora detalhes
+    gateway.queue('Sinopse enriquecida e auditada: sem detalhes perdidos.');
+    click(await waitFor(() => button('Revisar e enriquecer'), 'botão revisar e enriquecer'));
+    await waitFor(() => ta.value.includes('Sinopse enriquecida e auditada'), 'sinopse enriquecida');
+
     click(await waitFor(() => button(/Consolidar Volume 1/), 'botão consolidar'));
     await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeiro capítulo.'), 'páginas arquivadas somem do tome');
     expect(text()).toContain('Terceiro capítulo.');
@@ -470,7 +476,7 @@ describe('UI — sessão', () => {
     click(await waitFor(() => button('Crônica'), 'aba Crônica'));
     await waitFor(() => text().includes('Volume 1'), 'volume listado');
     click(document.querySelector('summary')!);
-    expect(text()).toContain('Sinopse editada pelo jogador.');
+    expect(text()).toContain('Sinopse enriquecida e auditada: sem detalhes perdidos.');
 
     // As páginas consumidas continuam legíveis: o Tome aponta para o volume e o leitor é uma página própria.
     expect(document.querySelector('nav[aria-label^="Páginas anteriores"] a')!.getAttribute('href')).toMatch(/\/v\/1$/);

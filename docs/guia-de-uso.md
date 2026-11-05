@@ -47,7 +47,8 @@ Os detalhes (sigilo, verificação de fidelidade, por que prosa e não transcri�
 A barra de **HP** mostra quanto do limite de tokens do contexto ainda está livre (verde, amarelo, vermelho). Quando fica baixa, o botão **Compactar Crônica** pulsa:
 
 1. Você escolhe **até qual página** compactar (a caixa de seleção já vem posicionada na sugestão de ~75% do peso do texto, sempre preservando ao menos a última página) e clica em **Gerar minuta**.
-2. Você **revisa e edita** a minuta da sinopse e consolida.
+2. Você **revisa e edita** a minuta da sinopse. Se desejar que a IA audite se algum detalhe ficou para trás, clique em **Revisar e enriquecer** (pode repetir para novas passadas de auditoria).
+3. Ao terminar a revisão, clique em **Consolidar Volume N**.
 3. As páginas consumidas viram um **volume**: saem do contexto da IA (e do HP), e a sinopse entra no mundo da crônica.
 
 As páginas dos volumes **continuam legíveis**: o painel *Contexto → Crônica* lista cada volume, com a sinopse, o botão **Ler as N páginas** (uma tela própria, somente leitura, com navegação entre volumes) e o ícone para salvar o volume. Elas não podem ser editadas nem usadas como ponto de ramificação, mas podem ser narradas por voz e exportadas. Mais em [Narrador](narrador.md).

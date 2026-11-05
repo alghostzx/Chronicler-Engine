@@ -66,6 +66,7 @@ export async function openCompaction(
     });
 
     const generateBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Gerar minuta');
+    const refineBtn = h('button', { class: 'btn hidden', type: 'button' }, 'Revisar e enriquecer');
     const commitBtn = h('button', { class: 'btn btn-primary hidden', type: 'button' }, `Consolidar Volume ${nextVolumeNumber}`);
 
     const modal = openModal('Compactar Crônica', h('div'), {
@@ -93,9 +94,12 @@ export async function openCompaction(
       if (currentPreview) {
         const matches = currentPreview.covered_page_end_index === endOrder;
         commitBtn.disabled = generating || !matches;
+        refineBtn.disabled = generating || !matches;
+        refineBtn.classList.toggle('hidden', !currentPreview);
         generateBtn.textContent = 'Gerar nova minuta';
         generateBtn.className = matches ? 'btn' : 'btn btn-primary';
       } else {
+        refineBtn.classList.add('hidden');
         generateBtn.textContent = 'Gerar minuta';
         generateBtn.className = 'btn btn-primary';
       }
@@ -108,6 +112,7 @@ export async function openCompaction(
       generating = true;
       select.disabled = true;
       generateBtn.disabled = true;
+      refineBtn.disabled = true;
       commitBtn.disabled = true;
       statusArea.replaceChildren(
         h('p', { class: 'text-sm text-muted cursor-blink' }, 'O Narrador está resumindo os capítulos antigos…'),
@@ -122,6 +127,7 @@ export async function openCompaction(
         ta.value = preview.summary_text;
         commitBtn.textContent = `Consolidar Volume ${preview.next_volume_number}`;
         commitBtn.classList.remove('hidden');
+        refineBtn.classList.remove('hidden');
         statusArea.replaceChildren(
           h(
             'p',
@@ -154,6 +160,60 @@ export async function openCompaction(
       }
     });
 
+    refineBtn.addEventListener('click', async () => {
+      if (generating || !currentPreview) return;
+      if (ta.value.trim() === '') {
+        toast('A sinopse atual não pode estar vazia para refinamento.', 'error');
+        return;
+      }
+      generating = true;
+      select.disabled = true;
+      generateBtn.disabled = true;
+      refineBtn.disabled = true;
+      commitBtn.disabled = true;
+
+      const previousStatus = statusArea.cloneNode(true);
+      statusArea.replaceChildren(
+        h('p', { class: 'text-sm text-muted cursor-blink' }, 'Auditando o texto original e enriquecendo a sinopse…'),
+      );
+
+      const endOrder = Number(select.value);
+      try {
+        const refined = await api<CompactionPreview>('POST', `/api/sessions/${sessionId}/compact/refine`, {
+          current_summary: ta.value,
+          covered_page_end_index: endOrder,
+        });
+        currentPreview = refined;
+        ta.value = refined.summary_text;
+        toast('Sinopse revisada e enriquecida.', 'success');
+        statusArea.replaceChildren(
+          h(
+            'p',
+            { class: 'text-xs text-muted' },
+            'Sinopse refinada com base no texto original. Revise e edite antes de consolidar.',
+          ),
+          ta,
+        );
+        ta.focus();
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : 'Falha ao refinar a sinopse.';
+        toast(message, 'error');
+        statusArea.replaceChildren(
+          h(
+            'p',
+            { class: 'text-xs text-muted' },
+            'Revise e edite a sinopse antes de consolidar — o texto original das páginas arquivadas deixa de ser enviado ao Narrador.',
+          ),
+          ta,
+        );
+      } finally {
+        generating = false;
+        select.disabled = false;
+        generateBtn.disabled = false;
+        updateSummaryInfo();
+      }
+    });
+
     commitBtn.addEventListener('click', async () => {
       if (!currentPreview || generating) return;
       if (ta.value.trim() === '') {
@@ -162,6 +222,7 @@ export async function openCompaction(
       }
       commitBtn.disabled = true;
       generateBtn.disabled = true;
+      refineBtn.disabled = true;
       select.disabled = true;
       try {
         await api('POST', `/api/sessions/${sessionId}/compact/commit`, {
@@ -175,6 +236,7 @@ export async function openCompaction(
       } catch (err) {
         commitBtn.disabled = false;
         generateBtn.disabled = false;
+        refineBtn.disabled = false;
         select.disabled = false;
         toast(err instanceof ApiError ? err.message : 'Falha ao consolidar.', 'error');
       }
@@ -198,6 +260,7 @@ export async function openCompaction(
           { class: 'flex flex-wrap justify-end gap-2' },
           h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'),
           generateBtn,
+          refineBtn,
           commitBtn,
         ),
       ),
