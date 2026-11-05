@@ -289,4 +289,64 @@ describe('UI — reprodução contínua', () => {
     await waitFor(() => !document.querySelector('[data-continuous-bar]'), 'tela trocada');
     expect(text()).not.toContain('Reprodução contínua concluída.');
   });
+
+  it('reprodução contínua dentro de um volume da crônica: "Ouvir volume" e "Reproduzir a partir daqui" geram em lote e encadeiam até o fim do volume', async () => {
+    const scrollCalls: unknown[] = [];
+    Element.prototype.scrollIntoView = function (opts) {
+      scrollCalls.push({ el: this, opts });
+    };
+    await boot();
+    // Arquiva as páginas 1 e 2 no Volume 1; a página 3 fica ativa no Tome
+    repos.archives.create(sessionId, {
+      summary_text: 'Sinopse do Volume 1.',
+      covered_page_start_index: 1,
+      covered_page_end_index: 2,
+    });
+    repos.pages.archiveRange(sessionId, 1, 2);
+
+    const addr = app.server.address();
+    const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+    globalThis.fetch = ((url: string, init?: RequestInit) => realFetch(base + url, init)) as typeof fetch;
+    document.documentElement.className = '';
+    document.body.innerHTML = INDEX.slice(INDEX.indexOf('<body'), INDEX.indexOf('</body>')).replace(/<script[\s\S]*?<\/script>/g, '').replace(/^<body[^>]*>/, '');
+    location.hash = `#/s/${sessionId}/v/1`;
+    await new Promise((r) => setTimeout(r, 30));
+    vi.resetModules();
+    await import('../client/main');
+    const { setAudioPollInterval } = await import('../client/audioUi');
+    setAudioPollInterval(15);
+    await waitFor(() => card(1) && card(2), 'cartões do volume 1');
+
+    // No volume: botão "Ouvir volume" na sinopse + "Reproduzir a partir daqui" habilitado na 1ª e desabilitado na última (2ª)
+    const listenVolumeBtn = byLabel('Ouvir volume em sequência') as HTMLButtonElement;
+    expect(listenVolumeBtn).not.toBeNull();
+    expect(playFrom(1).disabled).toBe(false);
+    expect(playFrom(2).disabled).toBe(true);
+
+    // Clicar em "Ouvir volume" pergunta sobre as páginas sem áudio do volume (1 e 2, sem incluir a 3 do Tome)
+    click(listenVolumeBtn);
+    await waitFor(() => modalButton('Gerar e reproduzir'), 'modal de geração em lote no volume');
+    expect(text()).toContain('Páginas 1 e 2 ainda não têm áudio.');
+    click(modalButton('Gerar e reproduzir')!);
+
+    await waitFor(() => plays.length === 1, 'tocou a página 1 do volume', 6000);
+    expect(plays[0]).toContain(pageId(1));
+    expect(barVisible()).toBe(true);
+    expect(bar().getAttribute('data-mode')).toBe('continuous');
+    expect(bar().textContent).toContain('Página 1 · 1 de 2');
+
+    // A geração em lote agendou apenas as páginas do volume (1 e 2), nunca a página 3 do Tome
+    await waitFor(() => repos.audio.meta(pageId(1)) && repos.audio.meta(pageId(2)), 'áudios do volume gerados');
+    expect(repos.audio.meta(pageId(3))).toBeUndefined();
+
+    ended();
+    await waitFor(() => plays.length === 2, 'tocou a página 2 do volume', 6000);
+    expect(plays[1]).toContain(pageId(2));
+    await waitFor(() => bar().textContent!.includes('Página 2 · 2 de 2'), 'barra na página 2 do volume');
+    expect(scrollCalls.some((c: any) => c.el.getAttribute('data-page-id') === pageId(2) && c.opts?.block === 'start')).toBe(true);
+
+    ended();
+    await waitFor(() => !barVisible(), 'concluiu o volume');
+    expect(text()).toContain('Reprodução contínua concluída.');
+  });
 });

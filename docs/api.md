@@ -60,6 +60,7 @@ Detalhes: [Modo Diálogo](modo-dialogo.md).
 | `POST /api/sessions/:id/compact/refine` | `{ current_summary, covered_page_end_index }`: audita a sinopse atual contra o texto original e retorna versão refinada/enriquecida (não grava nada) |
 | `POST /api/sessions/:id/compact/commit` | `{ summary_text, covered_page_start_index, covered_page_end_index }`: cria o volume e arquiva as páginas numa transação; em seguida descarta os trechos WAV em cache das páginas arquivadas |
 | `GET /api/archives/:id/pages` | `{ archive, pages }`: as páginas de um volume, sob demanda |
+| `POST /api/archives/:id/audio/batch` | `{ from_page_id }`: agenda, em ordem, o áudio das páginas do volume dali até a última do volume que ainda não têm áudio válido nem job; `{ started, pages }` |
 | `GET /api/archives/:id/export` | Markdown de um volume (`?include_summary=false` omite a sinopse) |
 
 ## Narração por voz

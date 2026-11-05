@@ -31,7 +31,7 @@ Na página **Opções**: voz (30 vozes pré-definidas do Gemini, com o traço de
 
 ## Reprodução contínua
 
-O botão **Reproduzir a partir daqui** (em cada página do Tome, menos a última; não existe no leitor de volume) toca em sequência, no mesmo reprodutor, da página clicada (inclusive) até a última página ativa. A lista é **fixada ao iniciar**: páginas novas criadas durante a reprodução não entram.
+O botão **Reproduzir a partir daqui** (em cada página do Tome e do leitor de volume, menos na última página da respectiva lista) — além do atalho **Ouvir volume** no cartão de sinopse de cada volume — toca em sequência, no mesmo reprodutor, da página clicada (inclusive) até a última página do Tome ou daquele volume. A lista é **fixada ao iniciar**: páginas novas criadas durante a reprodução não entram.
 
 **Nunca é automático.** Se alguma página da faixa não tem áudio (ou a geração falhou), o app pergunta antes, listando as páginas ("Páginas 4 a 9 ainda não têm áudio") e avisando do custo em tokens (aviso em destaque acima de 10 páginas):
 

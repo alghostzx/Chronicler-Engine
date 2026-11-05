@@ -51,7 +51,7 @@ O rodapé tem **uma ação por ícone SVG, sempre visíveis** (nunca dependem de
 | *Narrar diálogo* | pena | Só em páginas de diálogo cruas ([Narrar](modo-dialogo.md#narrar-diálogo-reprocessar)) |
 | *Ramificar a partir desta página* | bifurcação | Descarta as posteriores, com confirmação; desabilitado na última página |
 
-Ouvir, Opções do áudio e Reproduzir ficam à esquerda (num grupo `.page-card-actions-start`); as demais, à direita. O menu *Opções do áudio* é o `createActionMenu` de [`client/controls.ts`](../client/controls.ts) (`role=menu`, fecha com Esc/clique fora, setas navegam, abre para cima). O leitor de volume usa o mesmo componente em modo `readonly`: o rodapé tem só *Ouvir* e, com áudio pronto, *Opções do áudio*.
+Ouvir, Opções do áudio e Reproduzir ficam à esquerda (num grupo `.page-card-actions-start`); as demais, à direita. O menu *Opções do áudio* é o `createActionMenu` de [`client/controls.ts`](../client/controls.ts) (`role=menu`, fecha com Esc/clique fora, setas navegam, abre para cima). O leitor de volume usa o mesmo componente em modo `readonly`: o rodapé tem *Ouvir*, *Reproduzir a partir daqui* e, com áudio pronto, *Opções do áudio*.
 
 Estados do cartão: edição no próprio cartão (`.is-editing`), página fantasma, páginas esmaecidas (`.is-dimmed`) quando uma re-geração descartará as posteriores, selo "Diálogo com {NPC}" e selo "Será substituída ao encerrar o novo diálogo". Os tooltips do rodapé ancoram na borda e têm largura máxima de 60 vw (tooltips invisíveis também contam para o `scrollWidth`; sem isso o celular ganhava rolagem horizontal).
 
@@ -64,7 +64,7 @@ Estados do cartão: edição no próprio cartão (`.is-editing`), página fantas
 | `single` (uma página, fora do modo contínuo) | *Tocando a Página N de «crônica»* · Tocando/Pausado | fechar (para o áudio) |
 | `continuous` | ícone de lista com seta + *«crônica»* (sem as palavras "Reproduzindo"/"em modo contínuo": o ícone e o `aria-label` da região dizem isso) · *Página N · i de M · estado* | página anterior, próxima, **Interromper** |
 
-No leitor de volume a mesma barra fica fixa no fim da tela (só `single`). Detalhes de comportamento em [Narração por voz](narracao-por-voz.md#a-barra-do-player).
+No leitor de volume a mesma barra fica fixa no fim da tela (`single` e `continuous`). Detalhes de comportamento em [Narração por voz](narracao-por-voz.md#a-barra-do-player).
 
 ### Leitor de volume
 
