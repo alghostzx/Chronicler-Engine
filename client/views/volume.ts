@@ -8,10 +8,15 @@ import { applyTheme } from '../theme';
 import { openVolumeExport } from './volumeExport';
 
 /**
- * Leitor de volume (rota `#/s/<id>/v/<n>`): as páginas que a compactação consumiu, em somente
- * leitura. Elas já não fazem parte do contexto da IA, mas o jogador pode relê-las e exportá-las.
+ * Leitor de volume (rota `#/s/<id>/v/<n>` ou `#/s/<id>/v/<n>?p=<pageIndex>`): as páginas que a compactação
+ * consumiu, em somente leitura. Elas já não fazem parte do contexto da IA, mas o jogador pode relê-las e exportá-las.
  */
-export async function renderVolume(root: HTMLElement, sessionId: string, volumeNumber: number): Promise<() => void> {
+export async function renderVolume(
+  root: HTMLElement,
+  sessionId: string,
+  volumeNumber: number,
+  targetPageIndex?: number,
+): Promise<() => void> {
   mount(root, h('p', { class: 'p-8 text-center text-muted' }, 'Abrindo o volume…'));
 
   const back = (text = 'Voltar ao Tome') => h('a', { href: `#/s/${sessionId}`, class: 'btn mt-4' }, text);
@@ -78,6 +83,14 @@ export async function renderVolume(root: HTMLElement, sessionId: string, volumeN
       bar.el,
     ),
   );
+
+  if (targetPageIndex !== undefined) {
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    root.querySelector<HTMLElement>(`section.page-card[data-page-index="${targetPageIndex}"]`)?.scrollIntoView?.({
+      block: 'start',
+      behavior: reduce ? 'auto' : 'smooth',
+    });
+  }
 
   return () => {
     bar.dispose();

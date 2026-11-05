@@ -33,6 +33,13 @@ export interface Page {
   updated_at: string;
 }
 
+/** Metadados leves de uma página arquivada para o índice da gaveta (sem trafegar generated_text). */
+export interface ArchivedPageSummary {
+  order_index: number;
+  kind: PageKind;
+  npc_name: string | null;
+}
+
 export interface ChronicleArchive {
   id: string;
   session_id: string;

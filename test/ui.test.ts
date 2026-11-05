@@ -473,7 +473,7 @@ describe('UI — sessão', () => {
     expect(text()).toContain('Terceiro capítulo.');
 
     click(byLabel('Contexto da sessão')!);
-    click(await waitFor(() => button('Crônica'), 'aba Crônica'));
+    click(await waitFor(() => byLabel('Crônica'), 'aba Crônica'));
     await waitFor(() => text().includes('Volume 1'), 'volume listado');
     click(document.querySelector('summary')!);
     expect(text()).toContain('Sinopse enriquecida e auditada: sem detalhes perdidos.');
@@ -616,7 +616,7 @@ describe('UI — sessão', () => {
 
     // Volume pela gaveta, sem a sinopse.
     click(byLabel('Contexto da sessão')!);
-    click(await waitFor(() => button('Crônica'), 'aba Crônica'));
+    click(await waitFor(() => byLabel('Crônica'), 'aba Crônica'));
     click(await waitFor(() => byLabel('Salvar Volume 1 em Markdown'), 'ícone de salvar volume'));
     const box = await waitFor(() => document.querySelector<HTMLInputElement>('#export-summary'), 'checkbox da sinopse');
     expect(box.checked).toBe(true); // sinopse incluída por padrão
@@ -660,6 +660,96 @@ describe('UI — sessão', () => {
     }
     expect(header.querySelector('select')).toBeNull();
     expect(byLabel('Tema visual')!.getAttribute('data-tip')).toBe('Tema visual: Cyberpunk (Neon)');
+
+    // As 6 abas da gaveta também usam só ícones SVG distintos, com aria-label e tooltip, começando por Índice.
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>('aside [role="tab"]'));
+    expect(tabs.map((t) => t.getAttribute('aria-label'))).toEqual(['Índice', 'Mundo', 'Regras', 'Modelo', 'Voz', 'Crônica']);
+    expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
+    for (const t of tabs) {
+      expect(t.textContent).toBe('');
+      expect(t.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1);
+      expect(t.getAttribute('data-tip')).toBe(t.getAttribute('aria-label'));
+      expect(t.classList.contains('tip')).toBe(true);
+    }
+    expect(new Set(tabs.map((t) => t.querySelector('svg')!.innerHTML)).size).toBe(6);
+  });
+
+  it('índice de páginas: pula para o topo da página no Tome, mostra selo de diálogo e alterna páginas arquivadas em volumes', async () => {
+    await openNewSession();
+    // Página 1 (narrativa)
+    gateway.queue(narratorJson('Primeira página da aventura.'));
+    await send('Começar');
+    await waitFor(() => text().includes('Primeira página da aventura.') && !button('Narrando…'), 'página 1');
+
+    // Página 2 (diálogo com Mercador)
+    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', player_name: 'Aldric', dynamic_system_prompt: 'Mercador.' }));
+    await send('Falar com o mercador');
+    await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
+    gateway.queue(npcJson('Boas compras!', false));
+    await send('Olá', 'Falar');
+    await waitFor(() => text().includes('Mercador: Boas compras!'), 'fala');
+    gateway.queue(narratorJson('— Olá.\n\n— Boas compras!'));
+    click(button('Encerrar diálogo')!);
+    await waitFor(() => document.querySelectorAll('section.page-card[data-page-id]').length === 3 && !text().includes('Falando com'), 'página 3 de diálogo');
+
+    // Abre a gaveta (aba Índice já é a padrão)
+    click(byLabel('Contexto da sessão')!);
+    const indexItems = await waitFor(
+      () => {
+        const els = Array.from(document.querySelectorAll<HTMLElement>('aside [data-index-page]'));
+        return els.length === 3 ? els : false;
+      },
+      '3 páginas no índice',
+    );
+    expect(indexItems.map((el) => el.getAttribute('data-index-page'))).toEqual(['1', '2', '3']);
+    expect(indexItems[0]!.querySelector('[data-index-badge="dialogue"]')).toBeNull();
+    expect(indexItems[2]!.querySelector('[data-index-badge="dialogue"]')?.textContent).toBe('Diálogo com Mercador');
+
+    // Clicar numa página do índice rola até o início (block: 'start') do cartão correspondente no Tome
+    const scrolled: Array<{ index: string | null; opts: ScrollIntoViewOptions | boolean | undefined }> = [];
+    Element.prototype.scrollIntoView = function (this: Element, opts?: ScrollIntoViewOptions | boolean) {
+      scrolled.push({ index: this.getAttribute('data-page-index'), opts });
+    };
+
+    click(indexItems[1]!);
+    expect(scrolled).toHaveLength(1);
+    expect(scrolled[0]!.index).toBe('2');
+    expect(scrolled[0]!.opts).toMatchObject({ block: 'start' });
+
+    // Compacta as páginas 1 a 2 no Volume 1 (mantendo a página 3 no Tome)
+    gateway.queue('Sinopse das páginas 1 e 2.');
+    click(button('Compactar Crônica')!);
+    click(await waitFor(() => button('Gerar minuta'), 'gerar minuta'));
+    await waitFor(() => document.querySelector<HTMLTextAreaElement>('[role=dialog] textarea'), 'minuta');
+    click(await waitFor(() => button(/Consolidar Volume 1/), 'consolidar'));
+    await waitFor(() => !document.querySelector('[role=dialog]') && !text().includes('Primeira página da aventura.'), 'compactado');
+
+    // No índice, por padrão mostra apenas a página ativa do Tome (Página 3)
+    click(byLabel('Contexto da sessão')!);
+    await waitFor(() => document.querySelectorAll('aside [data-index-page]').length === 1, '1 página ativa no índice');
+    expect(document.querySelectorAll('aside [data-index-archived-page]')).toHaveLength(0);
+
+    // Liga o switch "Mostrar páginas arquivadas em crônicas"
+    const toggle = byLabel('Mostrar páginas arquivadas em crônicas') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const archivedLinks = await waitFor(
+      () => {
+        const els = Array.from(document.querySelectorAll<HTMLAnchorElement>('aside a[data-index-archived-page]'));
+        return els.length === 2 ? els : false;
+      },
+      '2 páginas arquivadas listadas sob o Volume 1',
+    );
+    expect(archivedLinks.map((a) => a.getAttribute('data-index-archived-page'))).toEqual(['1', '2']);
+    expect(archivedLinks[1]!.getAttribute('href')).toMatch(/\/v\/1\?p=2$/);
+
+    // Clicar numa página arquivada abre o leitor do volume e rola até o topo (block: 'start') daquela página
+    scrolled.length = 0;
+    location.hash = archivedLinks[1]!.getAttribute('href')!;
+    await waitFor(() => text().includes('Primeira página da aventura.'), 'leitor do volume aberto');
+    expect(scrolled.some((s) => s.index === '2' && typeof s.opts === 'object' && s.opts?.block === 'start')).toBe(true);
   });
 
   it('o menu de tema troca o tema, fecha com Esc e com clique fora', async () => {

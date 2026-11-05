@@ -10,7 +10,7 @@ Como a interface é organizada e por quê: rotas, tela inicial, Tome e cartões 
 | `#/continuar`, `#/nova` | Quadros sobrepostos ao menu: lista de crônicas e formulário de nova crônica |
 | `#/opcoes` | Opções: conexão com o Gemini, modelo padrão e narração por voz |
 | `#/s/<id>` | Sessão (Tome, Gaveta, Doca) |
-| `#/s/<id>/v/<n>` | Leitor do volume *n* (páginas consumidas, somente leitura) |
+| `#/s/<id>/v/<n>` | Leitor do volume *n* (páginas consumidas, somente leitura; aceita `?p=<índice>` para rolar direto ao topo de uma página do volume) |
 
 Módulos principais: `api.ts` (tipos, `fetch`, `streamTurn` para POST + SSE), `sse.ts` (*parser* incremental puro), `dom.ts` (helper `h()`, toasts, modais), `theme.ts`, `viewport.ts`, `controls.ts` (botões de ícone, menus), `icons.ts`, `pageCard.ts` e `views/{title,options,session,drawer,compaction,volume,volumeExport,ttsSettings}.ts`.
 
@@ -28,7 +28,7 @@ A rota `#/` é uma **tela de título**: logo em arte ASCII, a legenda "Escreva a
 
 Layout da sessão, em três áreas:
 
-1. **Gaveta de Contexto** (painel lateral retrátil): mundo, regras do Narrador (com *Restaurar padrão*), modelo e limite de tokens, aba **Crônica** (volumes) e aba **Voz** (narração automática da crônica).
+1. **Gaveta de Contexto** (painel lateral retrátil): barra de abas só com ícones SVG e tooltips (**Índice**, **Mundo**, **Regras**, **Modelo**, **Voz** e **Crônica**). A aba **Índice** (primeira opção, aberta por padrão) lista as páginas do Tomo atual (e, opcionalmente via switch *Mostrar páginas arquivadas em crônicas*, as páginas dos volumes anteriores), exibindo o selo *Diálogo com {NPC}* nas páginas de diálogo e permitindo pular direto para o topo de qualquer página (no Tomo ou dentro do leitor do volume). As demais abas editam o mundo, as regras do Narrador (com *Restaurar padrão*), o modelo/limite de tokens, a narração automática da sessão (**Voz**) e os volumes consolidados (**Crônica**).
 2. **Tome** (centro): uma folha por página, sem balões de chat.
 3. **Doca de Ação** (inferior): barra de **HP**, o botão *Compactar Crônica* (pulsa com HP < 20%) e o campo de entrada (`Enviar` ou `Ctrl+Enter`). Com um diálogo ativo, a Doca vira "Falando com: {NPC}" com *Encerrar diálogo* (destacado quando o NPC sinaliza que quer terminar) e *Descartar*. Entre o Tome e a Doca aparece o banner da [reprodução contínua](narracao-por-voz.md#reprodução-contínua).
 

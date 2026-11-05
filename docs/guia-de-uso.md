@@ -55,13 +55,14 @@ As páginas dos volumes **continuam legíveis**: o painel *Contexto → Crônica
 
 ## Contexto e opções da crônica
 
-No painel **Contexto** (gaveta à direita), abas para:
+No painel **Contexto** (gaveta à direita), a barra de abas traz ícones com dicas (tooltips) para:
 
-- **Mundo e personagens**: o texto que o Narrador recebe como contexto fixo (as sinopses dos volumes são anexadas aqui);
-- **Regras do Narrador**: as instruções de sistema, com o botão *Restaurar padrão*;
-- **Modelo e limite**: modelo Gemini da crônica (padrão global ou escolha própria) e o limite de tokens;
-- **Crônica**: os volumes;
-- **Voz**: geração automática de áudio (herdar do padrão global, ligada ou desligada).
+- **Índice** (🗎): lista todas as páginas do Tomo atual (`Página N`, com selo *Diálogo com {NPC}* nas páginas de diálogo) para pular direto ao topo da página desejada; inclui o switch *Mostrar páginas arquivadas em crônicas* para listar também as páginas já resumidas em volumes e abri-las diretamente na posição correspondente do leitor de volume;
+- **Mundo** (🌍︎): o texto de mundo e personagens que o Narrador recebe como contexto fixo (as sinopses dos volumes são anexadas aqui);
+- **Regras** (⚖): as instruções de sistema do Narrador, com o botão *Restaurar padrão*;
+- **Modelo** (❖): modelo Gemini da crônica (padrão global ou escolha própria) e o limite de tokens;
+- **Voz** (🗣︎): geração automática de áudio (herdar do padrão global, ligada ou desligada);
+- **Crônica** (🕮): os volumes compactados e suas sinopses.
 
 ## Temas e modo claro/escuro
 
