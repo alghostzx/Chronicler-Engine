@@ -53,7 +53,7 @@ Tudo abaixo está **implementado e testado** (suíte Vitest; `check:*` em Chromi
 - **HP e compactação:** `countTokens` real com cache por hash; seleção explícita de até qual página compactar (pré-selecionada na sugestão de 75/25 por peso) e minuta de sinopse sob demanda revisável; volumes (`chronicle_archives`); páginas arquivadas legíveis e exportáveis.
 - **Modo Diálogo:** persona isolada e sigilosa; conclusão **narrada** (prosa com falas literais, verificação de fidelidade, até 3 tentativas, *fallback* para transcrição crua); *Narrar diálogo* (reprocessar crua sem tocar nas seguintes); *Refazer* não destrutivo.
 - **Voz:** Gemini TTS pela Interactions API; MP3 48 kbps no SQLite; trechos de 1500 caracteres sintetizados em paralelo por página; geração automática (uma opção só, global/por crônica, para prosa e diálogo); **reprodução contínua** com modal de faltantes, geração em segundo plano; o **player mora numa barra fixa** (a página só mostra o status da geração e o menu *Opções do áudio*).
-- **Interface:** tela inicial (logo Srcery), Opções, Tome em cartões de página, gaveta de contexto, leitor de volume, 4 temas × claro/escuro, app shell no celular, tela cheia, PWA instalável (sem service worker).
+- **Interface:** tela inicial (logo Srcery), Opções, Tome em cartões de página, gaveta de contexto, leitor de volume, 4 temas × claro/escuro, app shell no celular, PWA instalável (sem service worker).
 - **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5→v6→v7).
 
 ## Pendências e riscos abertos
@@ -117,4 +117,4 @@ npm run check:audio         # voz e reprodução contínua
 npm run check:inicio        # tela inicial e Opções, 320–1920 px
 ```
 
-Estado da suíte ao fim da Fase 29: **402 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
+Estado da suíte ao fim da Fase 29: **399 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).

@@ -137,8 +137,6 @@ function measure(kind: Kind): Geometry {
     });
     const title = hdr.querySelector('h1');
     if (title && title.getBoundingClientRect().width < 60) problems.push(`título espremido (${Math.round(title.getBoundingClientRect().width)}px)`);
-    const fs = hdr.querySelector('[aria-label="Tela cheia"], [aria-label="Sair da tela cheia"]');
-    if (!fs) problems.push('botão de tela cheia ausente');
   }
   return { problems, header, dock, scroller, inner };
 }

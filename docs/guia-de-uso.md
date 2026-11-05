@@ -80,4 +80,4 @@ Seus prompts (as instruções que você deu ao Narrador) **nunca** vão no arqui
 
 ## No celular
 
-A interface cabe exatamente na tela (cabeçalho no topo, campo de digitação embaixo e só a área das páginas rola), tem botão **Tela cheia** e pode ser instalada como PWA. Veja [Celular e PWA](celular-pwa.md).
+A interface cabe exatamente na tela (cabeçalho no topo, campo de digitação embaixo e só a área das páginas rola) e pode ser instalada como PWA. Veja [Celular e PWA](celular-pwa.md).

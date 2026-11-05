@@ -19,7 +19,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 - **HP do Narrador e compactação**: barra de contexto em tokens reais e sinopses revisáveis; as páginas antigas saem do contexto da IA, mas continuam legíveis e exportáveis.
 - **Narração por voz** (opcional): um narrador de voz grave lê as páginas em pt-BR, inclusive em **reprodução contínua**; o áudio fica guardado no SQLite.
 - **4 temas × claro/escuro** (8 combinações), fontes empacotadas, sem CDN.
-- **Feito para o celular**: a interface cabe na tela, tem **Tela cheia** e é instalável como PWA.
+- **Feito para o celular**: a interface cabe na tela e é instalável como PWA.
 - **Salvar em Markdown**: a crônica inteira, só o Tome ou só os volumes; seus prompts nunca vão no arquivo.
 
 <p align="center">
@@ -55,7 +55,7 @@ Docker Compose, Podman, atualização, backup e solução de problemas: [Instala
 | [Guia de uso](docs/guia-de-uso.md) | Primeiro uso, Tome, diálogo, HP, volumes, exportação |
 | [Instalação e operação](docs/instalacao-e-operacao.md) | Docker, Podman, segurança, atualização, backup, variáveis, problemas |
 | [Narração por voz](docs/narracao-por-voz.md) | Ouvir, geração automática, reprodução contínua, como o áudio é feito |
-| [Celular e PWA](docs/celular-pwa.md) | Instalar no celular, tela cheia |
+| [Celular e PWA](docs/celular-pwa.md) | Instalar como aplicativo no celular |
 | [Capturas de tela](docs/capturas-de-tela.md) | Galeria completa |
 | [Arquitetura](docs/arquitetura.md) | Visão geral, stack, estrutura do código, ciclo de geração, SSE |
 | [Narrador](docs/narrador.md) | Payload e isolamento, regras, saída estruturada, HP, compactação |

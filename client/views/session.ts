@@ -19,7 +19,7 @@ import { askGenerate } from '../continuousUi';
 import { createPlayerBar } from '../playerBar';
 import { icon } from '../icons';
 import { applyTheme } from '../theme';
-import { createModeControl, createThemeControl, fullscreenButton, iconButton } from '../controls';
+import { createModeControl, createThemeControl, iconButton } from '../controls';
 import { pageCard, pageHeader } from '../pageCard';
 import { openCompaction } from './compaction';
 import { createDrawer } from './drawer';
@@ -229,7 +229,6 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         titleEl,
         themeControl.el,
         createModeControl(),
-        fullscreenButton(),
         exportBtn,
         drawerBtn,
       ),

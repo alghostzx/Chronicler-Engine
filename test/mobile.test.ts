@@ -6,7 +6,6 @@ import { loadConfig } from '../src/config.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
-import { canFullscreen, fullscreenButton } from '../client/controls';
 import { applyTheme, setModePref } from '../client/theme';
 import { mockGateway } from './helpers.js';
 
@@ -154,71 +153,6 @@ describe('client/viewport.ts (altura útil com a janela visual)', () => {
     vv.height = 200;
     fire('resize');
     expect(root.style.getPropertyValue('--app-height')).toBe('');
-  });
-});
-
-describe('botão de tela cheia', () => {
-  let fullscreenElement: Element | null;
-  let request: ReturnType<typeof vi.fn>;
-  let exit: ReturnType<typeof vi.fn>;
-
-  function stubFullscreen(supported: boolean): void {
-    fullscreenElement = null;
-    request = vi.fn(() => Promise.resolve());
-    exit = vi.fn(() => Promise.resolve());
-    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: supported });
-    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
-    document.documentElement.requestFullscreen = request as unknown as typeof document.documentElement.requestFullscreen;
-    document.exitFullscreen = exit as unknown as typeof document.exitFullscreen;
-  }
-
-  beforeEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('não aparece onde a Fullscreen API não existe (ex.: iPhone)', () => {
-    stubFullscreen(false);
-    expect(canFullscreen()).toBe(false);
-    expect(fullscreenButton()).toBeNull();
-  });
-
-  it('é um botão só de ícone, com rótulo e dica em português, e alterna entrar/sair', () => {
-    stubFullscreen(true);
-    const btn = fullscreenButton()!;
-    document.body.appendChild(btn);
-    expect(btn.getAttribute('aria-label')).toBe('Tela cheia');
-    expect(btn.getAttribute('data-tip')).toBeTruthy();
-    expect(btn.querySelectorAll('svg')).toHaveLength(1);
-    expect(btn.textContent?.trim()).toBe('');
-    expect(btn.getAttribute('aria-pressed')).toBe('false');
-    const enterIcon = btn.querySelector('svg')!.innerHTML;
-
-    btn.click();
-    expect(request).toHaveBeenCalledTimes(1);
-
-    fullscreenElement = document.documentElement; // o navegador entrou em tela cheia
-    document.dispatchEvent(new Event('fullscreenchange'));
-    expect(btn.getAttribute('aria-label')).toBe('Sair da tela cheia');
-    expect(btn.getAttribute('aria-pressed')).toBe('true');
-    expect(btn.querySelector('svg')!.innerHTML).not.toBe(enterIcon);
-
-    btn.click();
-    expect(exit).toHaveBeenCalledTimes(1);
-
-    fullscreenElement = null;
-    document.dispatchEvent(new Event('fullscreenchange'));
-    expect(btn.getAttribute('aria-label')).toBe('Tela cheia');
-  });
-
-  it('mostra um aviso se o navegador recusar a tela cheia', async () => {
-    stubFullscreen(true);
-    document.body.innerHTML = '<div id="toasts"></div>';
-    request.mockImplementation(() => Promise.reject(new Error('negado')));
-    const btn = fullscreenButton()!;
-    document.body.appendChild(btn);
-    btn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(document.getElementById('toasts')!.textContent).toContain('tela cheia');
   });
 });
 

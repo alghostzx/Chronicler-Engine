@@ -11,10 +11,6 @@ O Chronicler Engine é um **PWA instalável** (tem manifesto web e ícones): dá
 > [!WARNING]
 > Para abrir o servidor de outro aparelho, ponha **autenticação** na frente (proxy reverso ou VPN): a interface não tem login e o banco guarda a chave da API. Veja [Instalação e operação](instalacao-e-operacao.md#segurança).
 
-## Tela cheia sem instalar
-
-O botão de ícone **Tela cheia** do cabeçalho esconde a barra do navegador (onde o navegador permite; o iPhone não tem essa API, então lá use a instalação).
-
 ## Comportamento no celular
 
 - No Tome e no leitor de volume a interface cabe exatamente na tela: cabeçalho no topo, campo de digitação embaixo e **só a área das páginas rola**, com a barra do navegador ou o teclado abertos.
@@ -25,4 +21,4 @@ O botão de ícone **Tela cheia** do cabeçalho esconde a barra do navegador (on
 
 A [reprodução contínua](narracao-por-voz.md#reprodução-contínua) usa as teclas de mídia e a tela de bloqueio (*próxima/anterior*). Isso **não foi testado em celular real**: navegadores móveis podem suspender o JavaScript com a tela apagada, e a continuidade nesse caso depende do navegador.
 
-Detalhes técnicos (app shell, `100dvh`, `visualViewport`): [Interface](interface.md#celular-app-shell-tela-cheia-e-pwa).
+Detalhes técnicos (app shell, `100dvh`, `visualViewport`): [Interface](interface.md#celular-app-shell-e-pwa).

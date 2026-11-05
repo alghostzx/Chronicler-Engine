@@ -1,5 +1,4 @@
 import { api, ApiError, THEMES, type ModelsInfo, type Session, type SettingsInfo, type ThemeId } from '../api';
-import { fullscreenButton } from '../controls';
 import { h, mount, openModal, toast, confirmModal, type ModalHandle } from '../dom';
 import { applyTitleScreen } from '../theme';
 import { modelOptions } from './options';
@@ -186,7 +185,6 @@ export async function renderTitle(root: HTMLElement, initial: TitleView): Promis
     h(
       'main',
       { class: 'title-screen' },
-      h('div', { class: 'title-tools' }, fullscreenButton()),
       h(
         'header',
         { class: 'title-hero' },

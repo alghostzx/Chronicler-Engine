@@ -76,4 +76,4 @@ Sem rolagem horizontal:
   <img src="screenshots/08-celular-tome.png" alt="Tome com diálogo no celular, tema Medieval claro" width="260">
 </p>
 
-Veja [Celular e PWA](celular-pwa.md) e [Interface](interface.md#celular-app-shell-tela-cheia-e-pwa).
+Veja [Celular e PWA](celular-pwa.md) e [Interface](interface.md#celular-app-shell-e-pwa).

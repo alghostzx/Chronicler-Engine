@@ -22,7 +22,7 @@ A rota `#/` é uma **tela de título**: logo em arte ASCII, a legenda "Escreva a
 - **Cores:** fundo escuro fixo na paleta Srcery (sem alternância claro/escuro: as cores brilhantes do logo ficam lavadas em fundo claro). `applyTitleScreen()` liga `theme-srcery mode-dark` no `<html>` **sem gravar** a preferência do usuário; `applyTheme()` (sessão e volume) remove o escopo, então cada crônica volta ao seu tema e modo.
 - **Quadros com rotas:** *Continuar* (lista de crônicas, com exclusão confirmada; `aria-disabled` com tooltip quando não há crônicas) e *Nova Crônica* abrem via `openModal` sobre o menu, com fundo escurecido e desfocado. Abrir/fechar é guiado pela rota: o clique empilha uma entrada de histórico e o *voltar* do navegador/Android a desfaz; Esc, clique fora ou *Fechar* fecham pelo histórico. A tela de título é reaproveitada entre `#/`, `#/continuar` e `#/nova`. [`openModal`](../client/dom.ts) tem pilha de modais (Esc fecha só o do topo) e fechamento idempotente.
 - **Menu:** botões grandes (≥ 44 px), marcador ▶ no item em foco, setas ↑/↓/Home/End, foco inicial no primeiro item só com ponteiro fino (para não abrir o teclado virtual no toque), `prefers-reduced-motion` desliga o pulso. Enquanto não há chave do Gemini, o menu avisa e o item *Opções* pulsa.
-- **Opções** (`#/opcoes`): *Conexão com o Gemini* (chave e modelo padrão) e o cartão *Narração por voz*, com seta de voltar e Tela cheia.
+- **Opções** (`#/opcoes`): *Conexão com o Gemini* (chave e modelo padrão) e o cartão *Narração por voz*, com seta de voltar.
 
 ## O Tome e a Doca
 
@@ -88,13 +88,12 @@ Quatro temas, cada um com variação **clara e escura** (8 combinações): Medie
 - O cabeçalho da sessão nunca quebra linha: o título é a única parte flexível e trunca com reticências.
 - Grades: `grid-cols-1` (`minmax(0,1fr)`) + `min-w-0` nos filhos, para que uma `<option>` longa nunca empurre o cartão para fora da tela no celular; `.input` tem `min-w-0 max-w-full`.
 
-## Celular: app shell, tela cheia e PWA
+## Celular: app shell e PWA
 
 **Problema (Android/Chrome):** as telas usavam `h-screen` (`100vh` = a maior altura possível, como se a barra do navegador estivesse recolhida), então com a barra visível a Doca ficava fora da tela; e, por padrão, o Chrome Android **não** redimensiona o layout quando o teclado abre: a página rola e o cabeçalho some.
 
 - **App shell** ([`client/viewport.ts`](../client/viewport.ts), `.app-screen` e `html.app-shell` em `styles.css`): nas rotas de sessão e de volume o roteador liga `app-shell` no `<html>` (documento sem rolagem, `overscroll-behavior: none`) e a tela ocupa exatamente a área visível: cabeçalho no topo, Doca embaixo e **só a região das páginas rola** (`#tome-scroll`, `#volume-scroll`). A tela inicial continua com rolagem normal.
 - **Altura útil:** a meta `viewport` é `width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content` (o teclado encolhe o layout) e a altura é `100dvh` (`100vh` onde a unidade não existe). Plano B (iOS/Safari, que só encolhe a *janela visual*): `viewport.ts` copia `visualViewport.height` para `--app-height`, devolve o documento ao topo e não interfere durante zoom por pinça. `env(safe-area-inset-*)` protege entalhes e barras de gesto. Com altura ≤ 520 px (teclado aberto, celular deitado), a linha de HP/Compactar da Doca é ocultada.
-- **Tela cheia:** [`fullscreenButton()`](../client/controls.ts) no cabeçalho da biblioteca, da sessão e do leitor; usa a Fullscreen API e **não aparece** onde ela não existe (iPhone).
 - **PWA mínimo:** [`public/manifest.webmanifest`](../public/manifest.webmanifest) com `display: standalone`, `start_url`/`scope` `/`, `lang pt-BR`, ícones PNG 192/512 e *maskable* 512 em `public/icons/` (gerados de `public/favicon.svg` por `npm run icons`) e metas Android/iOS no `index.html`. **Sem service worker**: o Chromium reporta zero erros de instalabilidade sem ele; não há offline nem cache, nem botão de instalação na UI. Exige HTTPS (ou `localhost`). Guia do usuário: [Celular e PWA](celular-pwa.md).
 
 O favicon ([`public/favicon.svg`](../public/favicon.svg), um tome aberto com uma centelha, mais `favicon.ico` e `apple-touch-icon.png`) é local.

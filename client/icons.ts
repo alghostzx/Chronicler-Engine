@@ -126,20 +126,6 @@ const ICONS = {
     ['path', { d: 'M18.5 9.5a3.5 3.5 0 0 1 0 5' }],
     ['path', { d: 'M21 7a7 7 0 0 1 0 10' }],
   ],
-  /** Entrar em tela cheia: cantos que se afastam. */
-  fullscreen: [
-    ['path', { d: 'M8 3H5a2 2 0 0 0-2 2v3' }],
-    ['path', { d: 'M21 8V5a2 2 0 0 0-2-2h-3' }],
-    ['path', { d: 'M3 16v3a2 2 0 0 0 2 2h3' }],
-    ['path', { d: 'M16 21h3a2 2 0 0 0 2-2v-3' }],
-  ],
-  /** Sair da tela cheia: cantos que se aproximam. */
-  fullscreenExit: [
-    ['path', { d: 'M8 3v3a2 2 0 0 1-2 2H3' }],
-    ['path', { d: 'M21 8h-3a2 2 0 0 1-2-2V3' }],
-    ['path', { d: 'M3 16h3a2 2 0 0 1 2 2v3' }],
-    ['path', { d: 'M16 21v-3a2 2 0 0 1 2-2h3' }],
-  ],
   /** Ouvir a página (narração): alto-falante com ondas. */
   volume: [
     ['path', { d: 'M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z' }],

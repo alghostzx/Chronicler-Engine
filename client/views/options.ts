@@ -2,7 +2,7 @@ import { api, type ModelsInfo, type SettingsInfo } from '../api';
 import { formatNumber, h, mount, toast, confirmModal } from '../dom';
 import { applyTitleScreen } from '../theme';
 import { createTtsSettingsCard } from './ttsSettings';
-import { iconButton, fullscreenButton } from '../controls';
+import { iconButton } from '../controls';
 
 /** Monta um <select> de modelos a partir de /api/models. */
 export function modelOptions(models: ModelsInfo, selected: string | null, includeInherit: boolean): HTMLOptionElement[] {
@@ -162,7 +162,6 @@ export async function renderOptions(root: HTMLElement): Promise<void> {
   }
 
   document.title = 'Opções — Chronicler Engine';
-  const tools = fullscreenButton();
   mount(
     root,
     h(
@@ -176,7 +175,6 @@ export async function renderOptions(root: HTMLElement): Promise<void> {
           { class: 'flex items-center gap-3' },
           iconButton({ icon: 'back', label: 'Voltar ao menu inicial', tip: 'Voltar ao menu inicial', align: 'start', href: '#/' }),
           h('h1', { class: 'min-w-0 flex-1 truncate font-display text-2xl font-bold text-strong' }, 'Opções'),
-          tools,
         ),
         h(
           'section',

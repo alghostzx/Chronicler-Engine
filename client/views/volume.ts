@@ -3,7 +3,7 @@ import { audioPlayer } from '../audioPlayer';
 import { setQuietReadyToasts } from '../audioUi';
 import { ContinuousPlayback, type EndInfo, type StatusPage } from '../continuousPlayback';
 import { askGenerate } from '../continuousUi';
-import { createModeControl, fullscreenButton, iconButton } from '../controls';
+import { createModeControl, iconButton } from '../controls';
 import { h, mount, paragraphs, toast } from '../dom';
 import { icon } from '../icons';
 import { pageCard } from '../pageCard';
@@ -209,7 +209,6 @@ export async function renderVolume(
         iconButton({ icon: 'back', label: 'Voltar ao Tome', tip: 'Voltar ao Tome da crônica', align: 'start', href: `#/s/${sessionId}` }),
         h('h1', { class: 'min-w-0 flex-1 truncate font-display text-lg text-strong' }, `${title} — Volume ${archive.volume_number}`),
         createModeControl(),
-        fullscreenButton(),
         iconButton({ icon: 'download', label: 'Salvar volume em Markdown', tip: `Salvar o Volume ${archive.volume_number} como arquivo Markdown (.md)`, align: 'end', onClick: () => openVolumeExport(archive!) }),
       ),
       volumeScroll,
