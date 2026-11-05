@@ -729,7 +729,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   async function compactChronicle(): Promise<void> {
     if (busy || dlg) return;
-    const ok = await openCompaction(sessionId);
+    const ok = await openCompaction(sessionId, detail.pages, detail.archives.length + 1);
     if (!ok) return;
     try {
       await reloadDetail();

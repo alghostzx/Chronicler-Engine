@@ -56,7 +56,7 @@ Detalhes: [Modo Diálogo](modo-dialogo.md).
 
 | Rota | Descrição |
 | --- | --- |
-| `POST /api/sessions/:id/compact/preview` | Minuta da sinopse (não grava nada) |
+| `POST /api/sessions/:id/compact/preview` | `{ covered_page_end_index? }`: gera a minuta da sinopse até a página escolhida (ou ~75% do peso se omitido; não grava nada) |
 | `POST /api/sessions/:id/compact/commit` | `{ summary_text, covered_page_start_index, covered_page_end_index }`: cria o volume e arquiva as páginas numa transação; em seguida descarta os trechos WAV em cache das páginas arquivadas |
 | `GET /api/archives/:id/pages` | `{ archive, pages }`: as páginas de um volume, sob demanda |
 | `GET /api/archives/:id/export` | Markdown de um volume (`?include_summary=false` omite a sinopse) |

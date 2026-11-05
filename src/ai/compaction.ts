@@ -44,6 +44,23 @@ export function splitForCompaction<T extends WeightedPage>(pages: T[], ratio = P
   return { past: sorted.slice(0, cut), keep: sorted.slice(cut) };
 }
 
+/**
+ * Divide as páginas ativas exatamente após `coveredPageEndIndex` (escolhido pelo autor).
+ * Garante ao menos 1 página em cada lado; retorna `null` se a página não existir entre as ativas
+ * ou se for a última página ativa (que deve permanecer no Tome).
+ */
+export function splitAtPage<T extends WeightedPage>(
+  pages: T[],
+  coveredPageEndIndex: number,
+): CompactionSplit<T> | null {
+  const sorted = [...pages].sort((a, b) => a.order_index - b.order_index);
+  if (sorted.length < 2) return null;
+  const idx = sorted.findIndex((p) => p.order_index === coveredPageEndIndex);
+  if (idx < 0 || idx >= sorted.length - 1) return null;
+  const cut = idx + 1;
+  return { past: sorted.slice(0, cut), keep: sorted.slice(cut) };
+}
+
 export const COMPACTION_SYSTEM_PROMPT = `Você é o Arquivista Editorial de uma história colaborativa literária.
 Sua tarefa é condensar um trecho já narrado numa SINOPSE FACTUAL DENSA, que substituirá o texto original na memória do Narrador.
 
@@ -51,7 +68,7 @@ REGRAS:
 1. Registre apenas fatos presentes no texto — nunca invente, interprete além do texto nem continue a história.
 2. Preserve, com precisão: eventos decisivos e sua ordem; alianças, rivalidades e mudanças de relação entre personagens; itens ganhos, perdidos ou destruídos; mortes, ferimentos e condições permanentes; mudanças de cenário e de data/hora; promessas, segredos, dívidas e objetivos em aberto; nomes próprios exatamente como aparecem.
 3. Escreva em terceira pessoa, no pretérito, com frases objetivas e sem floreios literários. Pode usar parágrafos curtos ou listas de tópicos.
-4. Seja denso, mas sintético: a sinopse deve ter aproximadamente um oitavo do tamanho do texto original, e nunca mais que cerca de 2.500 palavras.
+4. Seja o mais conciso possível sem omitir nenhum fato exigido na Regra 2: elimine descrições atmosféricas, diálogos literais e repetições, mantendo apenas o registro factual completo na menor extensão necessária.
 5. Responda SOMENTE com o texto da sinopse, sem títulos, comentários ou introduções.`;
 
 /** Mensagem do usuário para o Arquivista: contexto do mundo (para grafia dos nomes) + trecho a condensar. */
