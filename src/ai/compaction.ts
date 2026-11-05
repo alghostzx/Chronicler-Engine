@@ -71,6 +71,17 @@ REGRAS:
 4. Seja o mais conciso possível sem omitir nenhum fato exigido na Regra 2: elimine descrições atmosféricas, diálogos literais e repetições, mantendo apenas o registro factual completo na menor extensão necessária.
 5. Responda SOMENTE com o texto da sinopse, sem títulos, comentários ou introduções.`;
 
+export const COMPACTION_REFINE_SYSTEM_PROMPT = `Você é o Auditor Editorial de uma história colaborativa literária.
+Sua tarefa é auditar e aprimorar uma SINOPSE FACTUAL preliminar contra o texto narrado original, garantindo que nenhum fato relevante tenha ficado para trás.
+
+REGRAS:
+1. Registre apenas fatos presentes no texto original — nunca invente, interprete além do texto nem continue a história.
+2. Identifique e incorpore fatos omitidos ou incompletos conforme as prioridades: eventos decisivos e sua ordem cronológica; alianças, rivalidades e relações entre personagens; itens ganhos, perdidos ou destruídos; mortes, ferimentos e condições permanentes; mudanças de cenário e de tempo; promessas, segredos, dívidas e objetivos em aberto; nomes próprios grafados com fidelidade absoluta.
+3. Preserve informações já existentes na sinopse preliminar que estejam corretas, enriquecendo-as com os detalhes que faltavam.
+4. Escreva em terceira pessoa, no pretérito, com frases objetivas, sem floreios literários, em parágrafos coesos ou listas de tópicos.
+5. Seja rigorosamente conciso: elimine redundâncias e rodeios para manter a sinopse densa e limpa.
+6. Responda SOMENTE com o texto final da sinopse integrada e refinada, sem preâmbulos, comentários, notas de revisão ou títulos.`;
+
 /** Mensagem do usuário para o Arquivista: contexto do mundo (para grafia dos nomes) + trecho a condensar. */
 export function buildCompactionRequest(input: {
   session: Pick<Session, 'world_context'>;
@@ -83,6 +94,23 @@ export function buildCompactionRequest(input: {
       `# CONTEXTO DO MUNDO (apenas referência; não resuma esta seção)\n${world}\n\n` +
       `# TRECHO DA HISTÓRIA A SER CONDENSADO\n${buildCorpus(input.past)}\n\n` +
       `Escreva agora a sinopse factual densa do trecho acima.`,
+  };
+}
+
+/** Mensagem para auditar e enriquecer uma sinopse existente contra o trecho original. */
+export function buildCompactionRefineRequest(input: {
+  session: Pick<Session, 'world_context'>;
+  past: WeightedPage[];
+  currentSummary: string;
+}): { systemInstruction: string; userText: string } {
+  const world = input.session.world_context.trim() || '(sem contexto definido)';
+  return {
+    systemInstruction: COMPACTION_REFINE_SYSTEM_PROMPT,
+    userText:
+      `# CONTEXTO DO MUNDO (apenas referência; não resuma esta seção)\n${world}\n\n` +
+      `# TRECHO DA HISTÓRIA ORIGINAL\n${buildCorpus(input.past)}\n\n` +
+      `# SINOPSE ATUAL (para auditar e enriquecer)\n${input.currentSummary.trim()}\n\n` +
+      `Audite o trecho original contra a sinopse atual. Incorpore quaisquer fatos ou detalhes relevantes que ficaram para trás e responda apenas com a sinopse final enriquecida e integrada.`,
   };
 }
 

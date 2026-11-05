@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { appendChronicle, COMPACTION_SYSTEM_PROMPT, splitAtPage, splitForCompaction } from '../src/ai/compaction.js';
+import {
+  appendChronicle,
+  buildCompactionRefineRequest,
+  COMPACTION_REFINE_SYSTEM_PROMPT,
+  COMPACTION_SYSTEM_PROMPT,
+  splitAtPage,
+  splitForCompaction,
+} from '../src/ai/compaction.js';
 import { COMPACTION_IDLE_TIMEOUT_MS } from '../src/ai/gateway.js';
 import { makeApp, withKey, type TestApp } from './helpers.js';
 
@@ -75,6 +82,12 @@ describe('COMPACTION_SYSTEM_PROMPT', () => {
     expect(COMPACTION_SYSTEM_PROMPT).not.toContain('2.500 palavras');
     expect(COMPACTION_SYSTEM_PROMPT).not.toContain('um oitavo');
   });
+
+  it('COMPACTION_REFINE_SYSTEM_PROMPT instrui auditoria de omissões e integração factual', () => {
+    expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('Auditor Editorial');
+    expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('sinopse preliminar');
+    expect(COMPACTION_REFINE_SYSTEM_PROMPT).toContain('Identifique e incorpore fatos omitidos');
+  });
 });
 
 describe('appendChronicle', () => {
@@ -114,6 +127,8 @@ describe('compactação (rotas)', () => {
 
   const preview = (body?: Record<string, unknown>) =>
     t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/compact/preview`, ...(body ? { payload: body } : {}) });
+  const refine = (body: Record<string, unknown>) =>
+    t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/compact/refine`, payload: body });
   const commit = (body: Record<string, unknown>) =>
     t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/compact/commit`, payload: body });
 
@@ -201,6 +216,44 @@ describe('compactação (rotas)', () => {
       const res = await bare.app.inject({ method: 'POST', url: `/api/sessions/${sid}/compact/preview` });
       expect(res.statusCode).toBe(409);
       expect(res.json().code).toBe('missing_api_key');
+    });
+  });
+
+  describe('refine', () => {
+    it('audita o texto original contra a sinopse atual e devolve a versão enriquecida', async () => {
+      seed(6);
+      t.gateway.queue('Sinopse enriquecida após auditoria: inclui detalhes da espada.');
+      const res = await refine({
+        current_summary: 'Sinopse preliminar sem a espada.',
+        covered_page_end_index: 3,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        summary_text: 'Sinopse enriquecida após auditoria: inclui detalhes da espada.',
+        covered_page_start_index: 1,
+        covered_page_end_index: 3,
+        pages_to_archive: 3,
+        pages_to_keep: 3,
+        next_volume_number: 1,
+      });
+
+      const req = t.gateway.requests[0]!;
+      expect(req.systemInstruction).toContain('Auditor Editorial');
+      expect(req.userText).toContain('Página1');
+      expect(req.userText).toContain('Página3');
+      expect(req.userText).not.toContain('Página4');
+      expect(req.userText).toContain('Sinopse preliminar sem a espada.');
+      expect(req.idleTimeoutMs).toBe(COMPACTION_IDLE_TIMEOUT_MS);
+    });
+
+    it('rejeita sinopse vazia (400), página limite inválida (409) e diálogo ativo (409)', async () => {
+      seed(4);
+      expect((await refine({ current_summary: '   ', covered_page_end_index: 2 })).statusCode).toBe(400);
+      expect((await refine({ current_summary: 'ok', covered_page_end_index: 4 })).statusCode).toBe(409);
+      expect((await refine({ current_summary: 'ok', covered_page_end_index: 99 })).statusCode).toBe(409);
+
+      t.repos.dialogues.create(sessionId, 'NPC', 'p');
+      expect((await refine({ current_summary: 'ok', covered_page_end_index: 2 })).statusCode).toBe(409);
     });
   });
 
