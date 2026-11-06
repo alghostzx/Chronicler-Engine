@@ -16,6 +16,8 @@ Galeria completa da interface. As imagens são geradas por script (veja [Verific
 | **Continuar**: lista de crônicas em um quadro sobre o menu | **Nova Crônica**: formulário em um quadro sobre o menu |
 | ![Página de Opções](screenshots/11-opcoes.png) | ![Tome no tema Medieval escuro, com um diálogo em andamento](screenshots/02-tome-medieval.png) |
 | **Opções**: conexão com o Gemini e narração por voz | **Medieval (escuro)** com um diálogo com a NPC Elena em andamento |
+| ![Índice de páginas na gaveta de contexto](screenshots/12-gaveta-indice.png) | |
+| **Índice de páginas**: navegação direta entre as páginas ativas e volumes arquivados na gaveta de contexto | |
 
 ## Diálogos
 
@@ -23,6 +25,8 @@ Galeria completa da interface. As imagens são geradas por script (veja [Verific
 | --- | --- |
 | ![Página de diálogo, com o selo e as falas em destaque](screenshots/paginas/dialogo-medieval-light.png) | ![Refazendo um diálogo: página alvo marcada, seguintes esmaecidas](screenshots/paginas/dialogo-refazendo-desktop.png) |
 | **Página de diálogo**: o Narrador escreve a prosa em volta das falas, que ficam literais (selo, ícone *Refazer diálogo*) | **Refazer diálogo**: nada é apagado até encerrar o novo diálogo |
+| ![Diálogo multi-NPC com barra de participantes](screenshots/13-dialogo-multi-npc.png) | ![Modal de edição e geração do cérebro](screenshots/14-dialogo-cerebro-modal.png) |
+| **Diálogo multi-NPC**: barra de participantes (Elena e Guarda Real), seleção de quem fala e adição de novos NPCs | **Cérebro do personagem**: persona, segredos e objetivos editáveis ou gerados com auxílio da IA |
 | ![Página de diálogo crua, com o ícone Narrar diálogo](screenshots/paginas/dialogo-cru-desktop.png) | |
 | **Transcrição crua** (fallback ou página antiga): a pena *Narrar diálogo* a reescreve em prosa | |
 

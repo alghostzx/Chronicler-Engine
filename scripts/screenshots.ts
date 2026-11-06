@@ -76,6 +76,16 @@ const dlg = await app.inject({
 });
 if (dlg.statusCode !== 200) throw new Error(`Diálogo falhou: ${dlg.body.slice(0, 300)}`);
 
+// Adiciona um segundo personagem (Guarda Real) para demonstrar a nova barra de participantes multi-NPC
+await app.inject({
+  method: 'POST',
+  url: `/api/dialogue/${dialogueId}/participants`,
+  payload: {
+    npc_name: 'Guarda Real',
+    dynamic_system_prompt: 'Você é um guarda real corrupto que vigia a taverna discretamente.',
+  },
+});
+
 const cyber = await createSession(
   'Neon Requiem',
   'cyberpunk',
@@ -173,6 +183,47 @@ await shoot('09-continuar.png', { hash: '#/continuar', mode: 'dark', ready: '[ro
 await shoot('10-nova-cronica.png', { hash: '#/nova', mode: 'dark', ready: '[role="dialog"] input[aria-label="Título da crônica"]' });
 await shoot('11-opcoes.png', { hash: '#/opcoes', mode: 'dark', ready: '#tts-auto' });
 await shoot('08-celular-tome.png', { hash: `#/s/${medieval}`, mode: 'light', mobile: true, ready: 'section[data-page-id]' });
+
+// --- Novas capturas: Índice de páginas na gaveta e Diálogo multi-NPC ---
+await shoot('12-gaveta-indice.png', {
+  hash: `#/s/${medieval}`,
+  mode: 'dark',
+  ready: 'section[data-page-id]',
+  act: async (p) => {
+    await p.click('[aria-label="Contexto da sessão"]');
+    await p.waitForSelector('aside[aria-label="Contexto da sessão"]');
+    await p.waitForSelector('[role="tab"][aria-label="Índice"]');
+    await p.mouse.move(600, 400);
+    await p.waitForTimeout(400);
+  },
+});
+
+await shoot('13-dialogo-multi-npc.png', {
+  hash: `#/s/${medieval}`,
+  mode: 'dark',
+  ready: 'section[data-page-id]',
+  act: async (p) => {
+    await p.waitForSelector('section.card.border-accent');
+    const el = await p.$('section.card.border-accent');
+    if (el) await el.scrollIntoViewIfNeeded();
+    await p.mouse.move(5, 5);
+    await p.waitForTimeout(300);
+  },
+});
+
+await shoot('14-dialogo-cerebro-modal.png', {
+  hash: `#/s/${medieval}`,
+  mode: 'dark',
+  ready: 'section[data-page-id]',
+  act: async (p) => {
+    const el = await p.$('section.card.border-accent');
+    if (el) await el.scrollIntoViewIfNeeded();
+    await p.waitForSelector('[aria-label="Cérebro de Elena"]');
+    await p.click('[aria-label="Cérebro de Elena"]');
+    await p.waitForSelector('[role="dialog"] textarea[aria-label="Cérebro do personagem"]');
+    await p.waitForTimeout(400);
+  },
+});
 
 await browser.close();
 await app.close();

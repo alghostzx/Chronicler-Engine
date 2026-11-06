@@ -193,7 +193,12 @@ function inspect(kind: 'tome' | 'volume'): { problems: string[]; cards: number }
     const expected = card.querySelector('.dialogue-speaker') ? 6 : 5;
     if (kind === 'volume') {
       const names = actions.map((a) => a.getAttribute('aria-label'));
-      if (names.length !== 1 || names[0] !== 'Ouvir esta página') problems.push(`${label}: leitor deve ser somente leitura (apenas “Ouvir”), achou ${JSON.stringify(names)}`);
+      // No volume, as ações permitidas são Ouvir e Reproduzir a partir daqui (somente leitura de edição).
+      const ok =
+        names.length === 2 &&
+        names[0] === 'Ouvir esta página' &&
+        names[1] === 'Reproduzir a partir daqui';
+      if (!ok) problems.push(`${label}: leitor deve ter apenas ações de reprodução (“Ouvir” e “Reproduzir a partir daqui”), achou ${JSON.stringify(names)}`);
     } else if (actions.length !== expected) {
       problems.push(`${label}: esperava ${expected} ações, achou ${actions.length}`);
     }
