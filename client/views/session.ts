@@ -5,6 +5,7 @@ import {
   type Page,
   type Dialogue,
   type DialogueMessage,
+  type DialogueParticipant,
   type SessionDetail,
   type ThemeId,
   type TokenInfo,
@@ -430,23 +431,60 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const d = dlg;
     const redoing = redoTarget();
     const playerLabel = d.dialogue.player_name ?? 'Protagonista';
+    const participants = d.dialogue.participants ?? [];
+    const controlsDisabled = busy || d.waiting;
     return h(
       'section',
       { class: 'card border-accent font-sans text-base', 'aria-label': `${redoing ? 'Refazendo diálogo' : 'Diálogo'} com ${d.dialogue.npc_name}` },
-      h('h3', { class: 'mb-3 font-display text-sm uppercase tracking-wider text-accent' }, `${redoing ? 'Refazendo diálogo' : 'Diálogo'} — ${d.dialogue.npc_name}`),
+      h(
+        'div',
+        { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' },
+        h('h3', { class: 'font-display text-sm uppercase tracking-wider text-accent' }, `${redoing ? 'Refazendo diálogo' : 'Diálogo'} — ${d.dialogue.npc_name}`),
+        h(
+          'div',
+          { class: 'flex flex-wrap items-center gap-1.5', 'aria-label': 'Personagens no diálogo' },
+          ...participants.map((p) =>
+            h(
+              'button',
+              {
+                class: 'btn px-2.5 py-1 text-xs',
+                type: 'button',
+                disabled: controlsDisabled,
+                title: `Ver e editar o cérebro de ${p.npc_name}`,
+                'aria-label': `Cérebro de ${p.npc_name}`,
+                onClick: () => openParticipantModal(p),
+              },
+              `🧠 ${p.npc_name}`,
+            ),
+          ),
+          h(
+            'button',
+            {
+              class: 'btn px-2.5 py-1 text-xs',
+              type: 'button',
+              disabled: controlsDisabled,
+              title: 'Adicionar outro personagem à conversa',
+              'aria-label': 'Adicionar personagem ao diálogo',
+              onClick: () => openAddParticipantModal(),
+            },
+            '+ Personagem',
+          ),
+        ),
+      ),
       redoing ? h('p', { class: 'mb-3 text-xs text-muted' }, `A página ${redoing.order_index} só é substituída quando você encerrar este novo diálogo. Descartar mantém tudo como estava.`) : null,
-      d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} para começar a conversa.`) : null,
+      d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} para começar a conversa (ou passe a vez).`) : null,
       h(
         'div',
         { class: 'space-y-2' },
-        ...d.messages.map((m) =>
-          h(
+        ...d.messages.map((m) => {
+          const speaker = m.sender === 'npc' ? m.speaker_name || d.dialogue.npc_name : playerLabel;
+          return h(
             'p',
             { class: m.sender === 'npc' ? 'text-ink' : 'text-muted italic' },
-            h('strong', { class: m.sender === 'npc' ? 'text-accent' : 'text-strong' }, m.sender === 'npc' ? `${d.dialogue.npc_name}: ` : `${playerLabel}: `),
+            h('strong', { class: m.sender === 'npc' ? 'text-accent' : 'text-strong' }, `${speaker}: `),
             m.content,
-          ),
-        ),
+          );
+        }),
         d.waiting ? h('p', { class: 'cursor-blink text-muted' }, `${d.dialogue.npc_name} está respondendo…`) : null,
       ),
     );
@@ -540,6 +578,19 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       { class: 'btn btn-primary self-stretch px-5', type: 'button', disabled: busy || (inDialogue && dlg!.waiting), onClick: () => void submit() },
       busy ? 'Narrando…' : inDialogue ? 'Falar' : 'Enviar',
     );
+    const passBtn = inDialogue
+      ? h(
+          'button',
+          {
+            class: 'btn self-stretch px-3 text-sm',
+            type: 'button',
+            disabled: busy || dlg!.waiting,
+            title: 'Ficar em silêncio nesta rodada e deixar os personagens conversarem ou reagirem',
+            onClick: () => void passDialogueTurn(),
+          },
+          'Passar a vez',
+        )
+      : null;
 
     const red = tokens?.state === 'red';
     const compact = h(
@@ -586,7 +637,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         { class: 'mx-auto max-w-3xl space-y-2' },
         h('div', { class: 'dock-meta flex flex-wrap items-center gap-x-3 gap-y-2' }, h('div', { class: 'min-w-[16rem] flex-1' }, hpBar()), compact),
         dialogueBar,
-        h('div', { class: 'flex gap-2' }, ta, send),
+        h('div', { class: 'flex gap-2' }, ta, send, passBtn),
       ),
     );
     // Preserva foco e cursor quando a doca é reconstruída (ex.: HP recalculado enquanto o jogador digita).
@@ -751,21 +802,23 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   // --- Diálogo ----------------------------------------------------------------------------------------
-  async function sendDialogueMessage(text: string): Promise<void> {
+  async function runDialogueRound(payload: { message?: string; pass_turn?: boolean }): Promise<void> {
     if (!dlg || dlg.waiting) return;
     const state = dlg;
     state.waiting = true;
     renderTome(true);
     renderDock();
     try {
-      const r = await api<{ player_message: DialogueMessage; npc_message: DialogueMessage; npc_wants_to_end: boolean }>(
-        'POST',
-        `/api/dialogue/${state.dialogue.id}/message`,
-        { message: text },
-      );
-      state.messages = [...state.messages, r.player_message, r.npc_message];
+      const r = await api<{
+        player_message: DialogueMessage | null;
+        npc_message: DialogueMessage | null;
+        npc_messages?: DialogueMessage[];
+        npc_wants_to_end: boolean;
+      }>('POST', `/api/dialogue/${state.dialogue.id}/message`, payload);
+      const npcList = r.npc_messages ?? (r.npc_message ? [r.npc_message] : []);
+      state.messages = [...state.messages, ...(r.player_message ? [r.player_message] : []), ...npcList];
       state.wantsEnd = r.npc_wants_to_end;
-      inputValue = '';
+      if (payload.message !== undefined) inputValue = '';
     } catch (err) {
       toast((err as Error).message, 'error');
     }
@@ -773,6 +826,256 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     if (disposed) return;
     renderTome(true);
     renderDock();
+  }
+
+  async function sendDialogueMessage(text: string): Promise<void> {
+    await runDialogueRound({ message: text });
+  }
+
+  async function passDialogueTurn(): Promise<void> {
+    await runDialogueRound({ pass_turn: true });
+  }
+
+  function openParticipantModal(p: DialogueParticipant): void {
+    if (!dlg) return;
+    const dId = dlg.dialogue.id;
+    const canRemove = (dlg.dialogue.participants?.length ?? 0) > 1;
+    const nameInput = h('input', {
+      class: 'input',
+      type: 'text',
+      value: p.npc_name,
+      'aria-label': 'Nome do personagem',
+    });
+    const hintInput = h('input', {
+      class: 'input flex-1 text-sm',
+      type: 'text',
+      placeholder: 'Opcional: direção autoral para gerar com IA (ex.: está mentindo sobre a chave)…',
+      'aria-label': 'Direção autoral para gerar com IA',
+    });
+    const brainTa = h('textarea', {
+      class: 'input min-h-[10rem] font-reading text-sm leading-6',
+      value: p.dynamic_system_prompt,
+      'aria-label': 'Cérebro do personagem',
+    });
+    const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
+    const saveBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Salvar cérebro');
+    const removeBtn = canRemove
+      ? h('button', { class: 'btn btn-danger mr-auto', type: 'button' }, 'Remover da conversa')
+      : null;
+
+    const modal = openModal(
+      `Cérebro — ${p.npc_name}`,
+      h(
+        'div',
+        { class: 'space-y-3' },
+        h('p', { class: 'text-sm text-muted' }, 'Veja ou altere a persona, segredos, humor e objetivos deste personagem durante o diálogo.'),
+        h(
+          'label',
+          { class: 'block space-y-1 text-xs font-semibold uppercase tracking-wider text-muted' },
+          'Nome do personagem',
+          nameInput,
+        ),
+        h(
+          'div',
+          { class: 'flex flex-wrap items-center gap-2' },
+          hintInput,
+          genBtn,
+        ),
+        h(
+          'label',
+          { class: 'block space-y-1 text-xs font-semibold uppercase tracking-wider text-muted' },
+          'Cérebro (dynamic_system_prompt)',
+          brainTa,
+        ),
+        h(
+          'div',
+          { class: 'flex flex-wrap items-center justify-end gap-2 pt-1' },
+          removeBtn,
+          h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'),
+          saveBtn,
+        ),
+      ),
+    );
+
+    genBtn.addEventListener('click', async () => {
+      const npcName = nameInput.value.trim();
+      if (!npcName) {
+        toast('Informe o nome do personagem antes de gerar o cérebro.', 'error');
+        return;
+      }
+      genBtn.disabled = true;
+      genBtn.textContent = 'Gerando…';
+      try {
+        const res = await api<{ dynamic_system_prompt: string }>(
+          'POST',
+          `/api/dialogue/${dId}/participants/generate-brain`,
+          { npc_name: npcName, ...(hintInput.value.trim() ? { hint: hintInput.value.trim() } : {}) },
+        );
+        brainTa.value = res.dynamic_system_prompt;
+        toast('Cérebro gerado pela IA. Revise e clique em “Salvar cérebro”.', 'info');
+      } catch (err) {
+        toast((err as Error).message, 'error');
+      } finally {
+        genBtn.disabled = false;
+        genBtn.textContent = 'Gerar cérebro com IA';
+      }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const npcName = nameInput.value.trim();
+      const prompt = brainTa.value.trim();
+      if (!npcName || !prompt) {
+        toast('O nome e o cérebro do personagem não podem ficar vazios.', 'error');
+        return;
+      }
+      saveBtn.disabled = true;
+      try {
+        const res = await api<{
+          participant: DialogueParticipant;
+          dialogue: Dialogue;
+          messages: DialogueMessage[];
+        }>('PUT', `/api/dialogue/${dId}/participants/${p.id}`, {
+          npc_name: npcName,
+          dynamic_system_prompt: prompt,
+        });
+        if (dlg && dlg.dialogue.id === dId) {
+          dlg.dialogue = res.dialogue;
+          dlg.messages = res.messages;
+          renderTome(false);
+          renderDock();
+        }
+        modal.close();
+        toast(`Cérebro de ${res.participant.npc_name} atualizado.`, 'success');
+      } catch (err) {
+        saveBtn.disabled = false;
+        toast((err as Error).message, 'error');
+      }
+    });
+
+    removeBtn?.addEventListener('click', async () => {
+      removeBtn.disabled = true;
+      try {
+        const res = await api<{ dialogue: Dialogue }>('DELETE', `/api/dialogue/${dId}/participants/${p.id}`);
+        if (dlg && dlg.dialogue.id === dId) {
+          dlg.dialogue = res.dialogue;
+          renderTome(false);
+          renderDock();
+        }
+        modal.close();
+        toast(`${p.npc_name} saiu da conversa.`, 'info');
+      } catch (err) {
+        removeBtn.disabled = false;
+        toast((err as Error).message, 'error');
+      }
+    });
+  }
+
+  function openAddParticipantModal(): void {
+    if (!dlg) return;
+    const dId = dlg.dialogue.id;
+    const nameInput = h('input', {
+      class: 'input',
+      type: 'text',
+      placeholder: 'Ex.: Guarda Real, Mercador…',
+      'aria-label': 'Nome do novo personagem',
+    });
+    const hintInput = h('input', {
+      class: 'input flex-1 text-sm',
+      type: 'text',
+      placeholder: 'Opcional: quem ele é ou o que quer na cena…',
+      'aria-label': 'Direção autoral para gerar com IA',
+    });
+    const brainTa = h('textarea', {
+      class: 'input min-h-[10rem] font-reading text-sm leading-6',
+      placeholder:
+        'Descreva quem é o personagem, sua personalidade, humor atual, o que sabe sobre a cena e seus objetivos (ou clique em “Gerar cérebro com IA”)…',
+      'aria-label': 'Cérebro do novo personagem',
+    });
+    const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
+    const addBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Adicionar ao diálogo');
+
+    const modal = openModal(
+      'Adicionar personagem ao diálogo',
+      h(
+        'div',
+        { class: 'space-y-3' },
+        h(
+          'p',
+          { class: 'text-sm text-muted' },
+          'Inclua mais um personagem na roda de conversa. Ele entrará na fila sequencial de turnos.',
+        ),
+        h(
+          'label',
+          { class: 'block space-y-1 text-xs font-semibold uppercase tracking-wider text-muted' },
+          'Nome do personagem',
+          nameInput,
+        ),
+        h('div', { class: 'flex flex-wrap items-center gap-2' }, hintInput, genBtn),
+        h(
+          'label',
+          { class: 'block space-y-1 text-xs font-semibold uppercase tracking-wider text-muted' },
+          'Cérebro (dynamic_system_prompt)',
+          brainTa,
+        ),
+        h(
+          'div',
+          { class: 'flex justify-end gap-2 pt-1' },
+          h('button', { class: 'btn', type: 'button', onClick: () => modal.close() }, 'Cancelar'),
+          addBtn,
+        ),
+      ),
+    );
+
+    genBtn.addEventListener('click', async () => {
+      const npcName = nameInput.value.trim();
+      if (!npcName) {
+        toast('Informe o nome do personagem antes de gerar o cérebro.', 'error');
+        return;
+      }
+      genBtn.disabled = true;
+      genBtn.textContent = 'Gerando…';
+      try {
+        const res = await api<{ dynamic_system_prompt: string }>(
+          'POST',
+          `/api/dialogue/${dId}/participants/generate-brain`,
+          { npc_name: npcName, ...(hintInput.value.trim() ? { hint: hintInput.value.trim() } : {}) },
+        );
+        brainTa.value = res.dynamic_system_prompt;
+        toast('Cérebro sugerido pela IA.', 'info');
+      } catch (err) {
+        toast((err as Error).message, 'error');
+      } finally {
+        genBtn.disabled = false;
+        genBtn.textContent = 'Gerar cérebro com IA';
+      }
+    });
+
+    addBtn.addEventListener('click', async () => {
+      const npcName = nameInput.value.trim();
+      const prompt = brainTa.value.trim();
+      if (!npcName || !prompt) {
+        toast('Informe o nome e o cérebro do personagem.', 'error');
+        return;
+      }
+      addBtn.disabled = true;
+      try {
+        const res = await api<{ participant: DialogueParticipant; dialogue: Dialogue }>(
+          'POST',
+          `/api/dialogue/${dId}/participants`,
+          { npc_name: npcName, dynamic_system_prompt: prompt },
+        );
+        if (dlg && dlg.dialogue.id === dId) {
+          dlg.dialogue = res.dialogue;
+          renderTome(false);
+          renderDock();
+        }
+        modal.close();
+        toast(`${res.participant.npc_name} entrou na conversa.`, 'success');
+      } catch (err) {
+        addBtn.disabled = false;
+        toast((err as Error).message, 'error');
+      }
+    });
   }
 
   async function concludeDialogue(): Promise<void> {

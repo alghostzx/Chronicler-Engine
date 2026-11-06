@@ -67,10 +67,21 @@ export interface DialogueSession {
   redo_page_id: string | null;
 }
 
+export interface DialogueParticipant {
+  id: string;
+  dialogue_session_id: string;
+  order_index: number;
+  npc_name: string;
+  dynamic_system_prompt: string;
+  created_at: string;
+}
+
 export interface DialogueMessage {
   id: string;
   dialogue_session_id: string;
   sender: 'player' | 'npc';
   content: string;
+  /** Nome do personagem que falou (preenchido quando `sender = 'npc'`). */
+  speaker_name: string | null;
   created_at: string;
 }

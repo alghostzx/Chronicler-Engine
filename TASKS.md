@@ -6,7 +6,7 @@
 
 ## Resumo do projeto
 
-**Chronicler Engine**: app web local de escrita/RPG narrativo. O jogador escreve instruções; o Gemini é o **Narrador** e responde em prosa, uma **página** por instrução, num *Tome*. Fastify + `better-sqlite3` no servidor; TypeScript puro + Tailwind 3 no cliente (bundle esbuild em `public/assets/`, ignorado pelo git); SQLite como único armazenamento (inclusive áudio). Interface em pt-BR. Repositório público (`github.com/alghostzx/Chronicler-Engine`, MIT), 100% gerado por IA; cada *push* em `main` reconstrói a imagem do GHCR. Schema atual: **v7**. Node ≥ 22.
+**Chronicler Engine**: app web local de escrita/RPG narrativo. O jogador escreve instruções; o Gemini é o **Narrador** e responde em prosa, uma **página** por instrução, num *Tome*. Fastify + `better-sqlite3` no servidor; TypeScript puro + Tailwind 3 no cliente (bundle esbuild em `public/assets/`, ignorado pelo git); SQLite como único armazenamento (inclusive áudio). Interface em pt-BR. Repositório público (`github.com/alghostzx/Chronicler-Engine`, MIT), 100% gerado por IA; cada *push* em `main` reconstrói a imagem do GHCR. Schema atual: **v8**. Node ≥ 22.
 
 ## Mapa de documentação (fonte da verdade)
 
@@ -51,10 +51,10 @@ Tudo abaixo está **implementado e testado** (suíte Vitest; `check:*` em Chromi
 
 - **Núcleo narrativo:** payload isolado (só prosa), saída JSON estruturada com `propertyOrdering`, SSE com parse incremental, edição direta, regeneração com truncamento atômico, ramificar, trava de concorrência por sessão.
 - **HP e compactação:** `countTokens` real com cache por hash; seleção explícita de até qual página compactar (pré-selecionada na sugestão de 75/25 por peso) e minuta de sinopse sob demanda revisável; volumes (`chronicle_archives`); páginas arquivadas legíveis e exportáveis.
-- **Modo Diálogo:** persona isolada e sigilosa; conclusão **narrada** (prosa com falas literais, verificação de fidelidade, até 3 tentativas, *fallback* para transcrição crua); *Narrar diálogo* (reprocessar crua sem tocar nas seguintes); *Refazer* não destrutivo.
+- **Modo Diálogo:** suporte a múltiplos NPCs na mesma roda (`dialogue_participants`) em turnos sequenciais com opção de pular (`pass_turn`) e botão *Passar a vez* para o jogador; visualização e edição autoral em tempo real do "cérebro" (`dynamic_system_prompt`) de cada participante, além de adição/remoção de NPCs e geração de cérebro com IA; conclusão **narrada** (prosa com falas literais, verificação de fidelidade, até 3 tentativas, *fallback* para transcrição crua); *Narrar diálogo* (reprocessar crua sem tocar nas seguintes); *Refazer* não destrutivo.
 - **Voz:** Gemini TTS pela Interactions API; MP3 48 kbps no SQLite; trechos de 1500 caracteres sintetizados em paralelo por página; geração automática (uma opção só, global/por crônica, para prosa e diálogo); **reprodução contínua** com modal de faltantes, geração em segundo plano; o **player mora numa barra fixa** (a página só mostra o status da geração e o menu *Opções do áudio*).
 - **Interface:** tela inicial (logo Srcery), Opções, Tome em cartões de página, gaveta de contexto, leitor de volume, 4 temas × claro/escuro, app shell no celular, PWA instalável (sem service worker).
-- **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5→v6→v7).
+- **Entrega:** imagem multi-stage (Node 22 Alpine), Docker e Podman rootless validados, encerramento gracioso, migrações automáticas com backup (v3→v4→v5→v6→v7→v8).
 
 ## Pendências e riscos abertos
 
@@ -101,6 +101,7 @@ Nenhuma fase está em andamento. O que resta é, em geral, **validação que só
 | 27 | **Seleção de página limite na compactação e refinamento de sinopse**: caixa de seleção (`<select>`) no modal de compactação (pré-selecionada em ~75% do peso) com geração de minuta sob demanda (`covered_page_end_index` em `/compact/preview` + `splitAtPage`); rota `/compact/refine` e botão *Revisar e enriquecer* para auditoria e enriquecimento em múltiplas passadas; remoção do conflito entre `1/8` e `2.500 palavras` no `COMPACTION_SYSTEM_PROMPT` | [Narrador](docs/narrador.md#compactação-livro-de-crônicas) |
 | 28 | **Índice de páginas e abas da gaveta em ícones**: abas da gaveta de contexto representadas por ícones SVG com tooltips e `aria-label` (**Índice**, **Mundo**, **Regras**, **Modelo**, **Voz** e **Crônica**); nova aba **Índice** como primeira opção padrão listando as páginas do Tomo (com selo *Diálogo com {NPC}*) para rolar direto ao início da página (`block: 'start'`), mais switch para incluir páginas arquivadas em volumes (pulando direto para a página dentro do leitor `#/s/<id>/v/<n>?p=<idx>`) | [Interface](docs/interface.md#o-tome-e-a-doca), [Guia de uso](docs/guia-de-uso.md#contexto-e-opções-da-crônica) |
 | 29 | **Reprodução contínua dentro dos volumes da crônica**: botão *Ouvir volume* no cartão de sinopse e *Reproduzir a partir daqui* em cada página do leitor de volume (`#/s/<id>/v/<n>`); rota `POST /api/archives/:id/audio/batch` para geração em lote restrita às páginas do volume; rolagem automática ao topo da página (`block: 'start'`) e barra fixa em modo contínuo no volume | [Narração por voz](docs/narracao-por-voz.md#reprodução-contínua), [API](docs/api.md#compactação-e-volumes) |
+| 30 | **Diálogo multi-NPC e edição autoral do cérebro (schema v8)**: tabela `dialogue_participants` e `speaker_name` em `dialogue_messages`; turnos sequenciais entre múltiplos NPCs com `pass_turn` (garantindo ao menos 1 resposta por rodada) e botão *Passar a vez* para o jogador; visualização/edição do `dynamic_system_prompt` em tempo real, inclusão/remoção de personagens na conversa e geração de cérebro com IA (`generate-brain`) | [Modo Diálogo](docs/modo-dialogo.md), [API](docs/api.md#diálogo) |
 
 As fases de funcionalidades seguiram o ritmo: rascunho aprovado pelo autor → ramo `feature/...` → commits parciais → testes + verificação visual → *merge* `--no-ff` → *push* só com aval (bugfixes e pequenos patches podem ir direto em `main`).
 
@@ -117,4 +118,4 @@ npm run check:audio         # voz e reprodução contínua
 npm run check:inicio        # tela inicial e Opções, 320–1920 px
 ```
 
-Estado da suíte ao fim da Fase 29: **399 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).
+Estado da suíte ao fim da Fase 30: **406 testes** (29 arquivos) passando; `check:audio`, `check:paginas` e `check:mobile` sem problemas na última execução (Fase 22).

@@ -124,13 +124,21 @@ export class PagesRepository {
    */
   replaceGeneration(
     id: string,
-    input: { player_instruction: string | null; generated_text: string; model_identifier?: string | null; raw_dialogue?: boolean },
+    input: {
+      player_instruction: string | null;
+      generated_text: string;
+      model_identifier?: string | null;
+      raw_dialogue?: boolean;
+      npc_name?: string | null;
+    },
   ): Page | undefined {
     this.db
       .prepare(
         `UPDATE narrative_pages
          SET player_instruction = ?, generated_text = ?, model_identifier = ?,
-             raw_dialogue = COALESCE(?, raw_dialogue), updated_at = CURRENT_TIMESTAMP
+             raw_dialogue = COALESCE(?, raw_dialogue),
+             npc_name = COALESCE(?, npc_name),
+             updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
       )
       .run(
@@ -138,6 +146,7 @@ export class PagesRepository {
         input.generated_text,
         input.model_identifier ?? null,
         input.raw_dialogue === undefined ? null : input.raw_dialogue ? 1 : 0,
+        input.npc_name ?? null,
         id,
       );
     return this.get(id);

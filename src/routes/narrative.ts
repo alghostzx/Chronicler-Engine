@@ -229,11 +229,19 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
           pages_to_discard: following.length,
         });
       }
+      const prevParticipants = repos.dialogues.listParticipants(previous.id).map((p) => ({
+        npc_name: p.npc_name,
+        dynamic_system_prompt: p.dynamic_system_prompt,
+      }));
       const dialogue = repos.dialogues.create(session.id, previous.npc_name, previous.dynamic_system_prompt, {
         playerName: previous.player_name,
         redoPageId: page.id,
+        participants: prevParticipants,
       });
-      return reply.code(201).send({ dialogue: publicDialogue(dialogue), messages: [] });
+      return reply.code(201).send({
+        dialogue: publicDialogue(dialogue, repos.dialogues.listParticipants(dialogue.id)),
+        messages: [],
+      });
     },
   );
 

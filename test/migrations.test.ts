@@ -52,7 +52,7 @@ describe('migrações do banco', () => {
     const fresh = openDatabase(':memory:');
     expect(migrated.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
     expect(schemaObjects(migrated)).toEqual(schemaObjects(fresh));
-    for (const table of ['sessions', 'narrative_pages', 'dialogue_sessions', 'dialogue_messages', 'page_audio', 'page_audio_chunks', 'chronicle_archives', 'app_settings']) {
+    for (const table of ['sessions', 'narrative_pages', 'dialogue_sessions', 'dialogue_participants', 'dialogue_messages', 'page_audio', 'page_audio_chunks', 'chronicle_archives', 'app_settings']) {
       expect(columns(migrated, table), table).toEqual(columns(fresh, table));
     }
     // as chaves estrangeiras com cascata das colunas novas também valem no banco migrado
@@ -162,6 +162,46 @@ describe('migrações do banco', () => {
       n: 3,
     });
     expect(fs.existsSync(`${file}.v6.bak`)).toBe(true);
+    db.close();
+  });
+
+  it('v7 → v8: cria dialogue_participants e preenche speaker_name das falas de NPC existentes', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chronicler-mig-'));
+    const file = path.join(dir, 'chronicler.db');
+    const raw = new Database(file);
+    raw.pragma('foreign_keys = ON');
+    raw.exec(SCHEMA_V3_SQL);
+    MIGRATIONS[0]!.up(raw);
+    MIGRATIONS[1]!.up(raw);
+    MIGRATIONS[2]!.up(raw);
+    MIGRATIONS[3]!.up(raw);
+    raw.pragma('user_version = 7');
+    raw.exec(`
+      INSERT INTO sessions (id, title, system_rules, world_context) VALUES ('s1', 'Crônica', 'r', 'w');
+      INSERT INTO dialogue_sessions (id, session_id, npc_name, dynamic_system_prompt, status) VALUES
+        ('d1', 's1', 'Elena', 'Persona da Elena', 'active');
+      INSERT INTO dialogue_messages (id, dialogue_session_id, sender, content) VALUES
+        ('m1', 'd1', 'player', 'Oi'),
+        ('m2', 'd1', 'npc', 'Olá');
+    `);
+    raw.close();
+
+    const db = openDatabase(file);
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
+    expect(db.prepare('SELECT id, dialogue_session_id, order_index, npc_name, dynamic_system_prompt FROM dialogue_participants').all()).toEqual([
+      {
+        id: 'd1-p1',
+        dialogue_session_id: 'd1',
+        order_index: 1,
+        npc_name: 'Elena',
+        dynamic_system_prompt: 'Persona da Elena',
+      },
+    ]);
+    expect(db.prepare('SELECT id, sender, speaker_name FROM dialogue_messages ORDER BY id').all()).toEqual([
+      { id: 'm1', sender: 'player', speaker_name: null },
+      { id: 'm2', sender: 'npc', speaker_name: 'Elena' },
+    ]);
+    expect(fs.existsSync(`${file}.v7.bak`)).toBe(true);
     db.close();
   });
 

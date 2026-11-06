@@ -1,24 +1,29 @@
 # Modo Diálogo
 
-O Modo Diálogo é uma sub-rotina transitória: o Narrador abre uma conversa com um NPC, jogador e NPC trocam falas numa sessão isolada, e ao encerrar **a conversa vira uma página** do Tome. O NPC é uma persona que não conhece o resto da história.
+O Modo Diálogo é uma sub-rotina transitória: o Narrador abre uma conversa com um ou mais NPCs, jogador e personagens trocam falas numa sessão isolada, e ao encerrar **a conversa vira uma página** do Tome. Cada NPC é uma persona que não conhece o resto da história nem o cérebro secreto dos demais presentes.
 
 ## Ativação
 
-Não existe botão para "entrar em modo diálogo". O gatilho vem **só do Narrador**, no `dialogue_trigger` do turno regular (por pedido do jogador, como *"assim que encontro Elena, iniciamos um diálogo direto"*, ou por decisão do próprio Narrador). O gatilho cria um registro em `dialogue_sessions` com status `active`.
+Não existe botão para "entrar em modo diálogo". O gatilho vem **só do Narrador**, no `dialogue_trigger` do turno regular (por pedido do jogador, como *"assim que encontro Elena, iniciamos um diálogo direto"*, ou por decisão do próprio Narrador). O gatilho cria um registro em `dialogue_sessions` com status `active` e os participantes em `dialogue_participants`.
 
 - **No máximo um diálogo ativo por sessão** (índice único parcial no banco). Enquanto houver um, `narrative/next`, `regenerate`, ramificar e compactar respondem `409`.
-- O Narrador escolhe o nome do NPC (`npc_name`) e como o jogador será chamado na cena (`player_name`; sem nome, **"Protagonista"**). `cleanSpeakerName` remove marcadores de Markdown e limita o tamanho.
-- Ao recarregar a página, o cliente retoma a cena por `GET /api/sessions/:id/dialogue/active`; `GET /api/sessions/:id` também traz `active_dialogue` (sem o prompt).
+- O Narrador escolhe o nome do NPC (`npc_name`, ou a lista `participants` quando mais de um personagem participa da cena) e como o jogador será chamado na cena (`player_name`; sem nome, **"Protagonista"**). `cleanSpeakerName` remove marcadores de Markdown e limita o tamanho.
+- Ao recarregar a página, o cliente retoma a cena por `GET /api/sessions/:id/dialogue/active`; `GET /api/sessions/:id` também traz `active_dialogue` com a lista ordenada `participants`.
 
 ## O NPC e o sigilo
 
-O `dynamic_system_prompt`, produzido pelo Narrador, define a persona: identidade e personalidade, contexto imediato, relação com o protagonista, objetivo de curto prazo e regras estritas (primeira pessoa, sem narrar ações do jogador, respostas concisas e reativas). Ele pode conter **segredos** do NPC, então **nunca** é devolvido pela API nem enviado ao Narrador depois do gatilho. Os endpoints expõem só `{ id, session_id, npc_name, player_name, redo_page_id, status, created_at }`.
+O `dynamic_system_prompt`, produzido pelo Narrador (ou ajustado/gerado sob demanda pelo autor), define a persona de cada participante: identidade e personalidade, contexto imediato, relação com o protagonista e com os demais presentes, objetivo de curto prazo e regras estritas (primeira pessoa, sem narrar ações do jogador nem de outros personagens, respostas concisas e reativas).
 
-`POST /api/dialogue/:id/message` `{ message }` → `{ player_message, npc_message, npc_wants_to_end }`:
+- **Isolamento entre modelos:** o `dynamic_system_prompt` de cada NPC **nunca** é enviado ao Narrador depois do gatilho e **nunca** é incluído no `systemInstruction` dos outros NPCs da roda.
+- **Direção autoral pelo jogador:** na interface, cada NPC aparece como um chip `🧠 Nome` no cabeçalho do cartão de diálogo (ao lado de `+ Personagem`). O autor pode abrir o cérebro de qualquer NPC para ver/editar seu nome e `dynamic_system_prompt` em tempo real (`PUT /api/dialogue/:id/participants/:participantId`), adicionar novos personagens à conversa (`POST /api/dialogue/:id/participants`), remover um personagem quando houver mais de um (`DELETE /api/dialogue/:id/participants/:participantId`) ou pedir que a IA sugira o cérebro com base na história e nas falas atuais (`POST /api/dialogue/:id/participants/generate-brain`).
 
-- Chamada ao Gemini com o prompt dinâmico mais as regras fixas de interpretação como `systemInstruction`, e **somente** as falas da cena como histórico multi-turno (`user` = protagonista, `model` = NPC). Nem o corpus nem as meta-instruções do Narrador entram.
-- A resposta é JSON estruturado `{ reply, end_conversation }`. `end_conversation` vira `npc_wants_to_end`, que a UI usa **apenas para destacar o botão** *Encerrar diálogo*: a decisão de encerrar é sempre do autor.
-- As duas falas só são gravadas juntas, depois do sucesso, mantendo o histórico sempre alternado. Uma mensagem por vez por diálogo (`409` caso contrário).
+`POST /api/dialogue/:id/message` `{ message?, pass_turn? }` → `{ player_message, npc_message, npc_messages, npc_wants_to_end }`:
+
+- O jogador pode enviar uma fala (`message`) ou clicar em **Passar a vez** (`pass_turn: true`) para ficar em silêncio naquela rodada e ouvir os NPCs reagirem ou conversarem entre si.
+- O backend percorre os NPCs de `dialogue_participants` em ordem (`order_index`). Cada NPC recebe apenas seu próprio `dynamic_system_prompt` mais as regras fixas de interpretação como `systemInstruction`, e **somente** as falas da cena (incluindo o que os NPCs anteriores da mesma rodada acabaram de dizer) como histórico. Nem o corpus nem as meta-instruções do Narrador entram.
+- A resposta de cada NPC é JSON estruturado `{ pass_turn?, reply, end_conversation }`. Quando há 2 ou mais NPCs na roda, um personagem pode devolver `pass_turn: true` para pular seu turno se não tiver nada a acrescentar — mas o último NPC da fila é obrigado a responder caso todos os anteriores tenham pulado, garantindo ao menos uma resposta por rodada.
+- `end_conversation` vira `npc_wants_to_end`, que a UI usa **apenas para destacar o botão** *Encerrar diálogo*: a decisão de encerrar é sempre do autor.
+- As falas da rodada (do jogador, se falou, e dos NPCs que responderam, cada qual com seu `speaker_name`) só são gravadas juntas numa única transação ao final da rodada. Uma rodada por vez por diálogo (`409` caso contrário).
 
 ## Encerrar: a conversa vira uma página narrada
 
