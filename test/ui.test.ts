@@ -6,7 +6,7 @@ import { loadConfig } from '../src/config.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
-import { FAKE_KEY, mockGateway, narratorJson, npcJson, type MockGateway } from './helpers.js';
+import { brainJson, FAKE_KEY, mockGateway, narratorJson, npcJson, type MockGateway } from './helpers.js';
 
 /**
  * Teste de integração da UI: o bundle real do cliente roda no jsdom contra o servidor Fastify
@@ -290,7 +290,10 @@ describe('UI — sessão', () => {
 
   it('conduz um diálogo com NPC do gatilho até virar uma página de prosa com as falas literais', async () => {
     await openNewSession();
-    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', player_name: 'Aldric', dynamic_system_prompt: 'Você é um mercador astuto.' }));
+    gateway.queue(
+      narratorJson('Um mercador surge.', { activate: true, npc_names: ['Mercador'], player_name: 'Aldric' }),
+      brainJson('Você é um mercador astuto.'),
+    );
     await send('Entro na feira');
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
 
@@ -326,7 +329,10 @@ describe('UI — sessão', () => {
 
   it('se o Narrador não mantém as falas em 3 tentativas, grava a transcrição crua; “Narrar diálogo” reprocessa sem tocar nas seguintes', async () => {
     await openNewSession();
-    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', player_name: 'Aldric', dynamic_system_prompt: 'Você é um mercador astuto.' }));
+    gateway.queue(
+      narratorJson('Um mercador surge.', { activate: true, npc_names: ['Mercador'], player_name: 'Aldric' }),
+      brainJson('Você é um mercador astuto.'),
+    );
     await send('Entro na feira');
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
     gateway.queue(npcJson('Olá, viajante!', false));
@@ -363,7 +369,10 @@ describe('UI — sessão', () => {
 
   it('refaz um diálogo sem perdas até encerrar o novo; descartar mantém tudo; editar não mexe nas seguintes', async () => {
     await openNewSession();
-    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', dynamic_system_prompt: 'Você é um mercador astuto.' }));
+    gateway.queue(
+      narratorJson('Um mercador surge.', { activate: true, npc_names: ['Mercador'] }),
+      brainJson('Você é um mercador astuto.'),
+    );
     await send('Entro na feira');
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
     gateway.queue(npcJson('Olá, viajante!', false));
@@ -420,7 +429,10 @@ describe('UI — sessão', () => {
 
   it('reconecta ao diálogo ativo ao recarregar a página', async () => {
     const id = await openNewSession();
-    gateway.queue(narratorJson('Um guarda surge.', { activate: true, npc_name: 'Guarda', dynamic_system_prompt: 'Você é um guarda.' }));
+    gateway.queue(
+      narratorJson('Um guarda surge.', { activate: true, npc_names: ['Guarda'] }),
+      brainJson('Você é um guarda.'),
+    );
     await send('Avanço');
     await waitFor(() => text().includes('Falando com: Guarda'), 'diálogo');
 
@@ -689,7 +701,10 @@ describe('UI — sessão', () => {
     await waitFor(() => text().includes('Primeira página da aventura.') && !button('Narrando…'), 'página 1');
 
     // Página 2 (diálogo com Mercador)
-    gateway.queue(narratorJson('Um mercador surge.', { activate: true, npc_name: 'Mercador', player_name: 'Aldric', dynamic_system_prompt: 'Mercador.' }));
+    gateway.queue(
+      narratorJson('Um mercador surge.', { activate: true, npc_names: ['Mercador'], player_name: 'Aldric' }),
+      brainJson('Mercador.'),
+    );
     await send('Falar com o mercador');
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
     gateway.queue(npcJson('Boas compras!', false));
@@ -789,10 +804,10 @@ describe('UI — sessão', () => {
     gateway.queue(
       narratorJson('O mercador olha para você.', {
         activate: true,
-        npc_name: 'Mercador',
+        npc_names: ['Mercador'],
         player_name: 'Kira',
-        dynamic_system_prompt: 'Você é um mercador cauteloso.',
       }),
+      brainJson('Você é um mercador cauteloso.'),
     );
     await send('Converso com o mercador');
     await waitFor(() => byLabel('Cérebro de Mercador'), 'chip do Mercador');

@@ -36,6 +36,8 @@ interface DialogueState {
 
 interface Ghost {
   text: string;
+  /** Mensagem de progresso da etapa atual (ex.: escrevendo prosa, gerando cérebros dos NPCs, narrando diálogo). */
+  status: string;
   /** Página sendo regenerada (o fantasma ocupa o seu lugar); undefined = nova página no fim. */
   replaceId?: string;
   /** A página substituída não descarta as seguintes (narrar um diálogo cru): nada é esmaecido. */
@@ -280,6 +282,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   let ghostTextEl: HTMLElement | null = null;
+  let ghostStatusEl: HTMLElement | null = null;
 
   /** Número da próxima página (absoluto): considera também as páginas já consumidas pelos volumes. */
   function nextPageIndex(): number {
@@ -291,7 +294,23 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   function ghostArticle(): HTMLElement {
     const replaced = ghost?.replaceId ? detail.pages.find((x) => x.id === ghost!.replaceId) : undefined;
     ghostTextEl = h('div', { class: 'cursor-blink whitespace-pre-wrap leading-8', 'aria-live': 'polite' }, ghost?.text ?? '');
-    return h('section', { class: 'page-card is-ghost', 'aria-label': 'Página sendo escrita' }, pageHeader(replaced?.order_index ?? nextPageIndex()), h('div', { class: 'page-card-body' }, ghostTextEl));
+    ghostStatusEl = h('span', null, ghost?.status ?? 'Escrevendo a página…');
+    return h(
+      'section',
+      { class: 'page-card is-ghost', 'aria-label': 'Página sendo escrita' },
+      pageHeader(replaced?.order_index ?? nextPageIndex()),
+      h('div', { class: 'page-card-body' }, ghostTextEl),
+      h(
+        'footer',
+        {
+          class: 'page-card-actions justify-start gap-2 text-xs text-accent',
+          'data-ghost-status': 'true',
+          'aria-live': 'polite',
+        },
+        icon('loader', 14),
+        ghostStatusEl,
+      ),
+    );
   }
 
   /** Copia o estado de áudio do servidor para as páginas da tela (sem reconstruir o Tome). */
@@ -485,7 +504,20 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
             m.content,
           );
         }),
-        d.waiting ? h('p', { class: 'cursor-blink text-muted' }, `${d.dialogue.npc_name} está respondendo…`) : null,
+        d.waiting
+          ? h(
+              'p',
+              {
+                class: 'flex items-center gap-2 text-sm text-accent',
+                'data-dialogue-status': 'waiting',
+                'aria-live': 'polite',
+              },
+              icon('loader', 14),
+              participants.length > 1
+                ? `${d.dialogue.npc_name} está respondendo (${participants.map((p) => p.npc_name).join(' → ')})…`
+                : `${d.dialogue.npc_name} está respondendo…`,
+            )
+          : null,
       ),
     );
   }
@@ -526,7 +558,10 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     if (ghost && !ghost.replaceId) items.push(ghostArticle());
     items.push(dialogueCard());
     mount(tomePage, ...items);
-    if (!ghost) ghostTextEl = null;
+    if (!ghost) {
+      ghostTextEl = null;
+      ghostStatusEl = null;
+    }
     if (follow) scrollToEnd();
   }
 
@@ -655,8 +690,15 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   async function runTurn(url: string, body: unknown, replaceId?: string, keepLater = false): Promise<boolean> {
     if (busy) return false;
     controller = new AbortController();
-    ghost = { text: '', replaceId, keepLater };
+    const isDialogueNarration = url.endsWith('/conclude') || url.endsWith('/narrate-dialogue');
+    ghost = {
+      text: '',
+      status: isDialogueNarration ? 'Transformando as falas do diálogo em prosa literária…' : 'Escrevendo a página…',
+      replaceId,
+      keepLater,
+    };
     ghostTextEl = null;
+    ghostStatusEl = null;
     setBusy(true);
     renderTome(true);
 
@@ -674,10 +716,19 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
             if (ghostTextEl) ghostTextEl.textContent = ghost.text;
             if (follow) scrollToEnd();
           },
+          onStatus: (st) => {
+            if (!ghost) return;
+            ghost.status = st.message;
+            if (ghostStatusEl) ghostStatusEl.textContent = st.message;
+          },
           onRetry: (attempt, of) => {
             // O Narrador alterou alguma fala: a prosa anterior foi descartada e ele escreve de novo.
-            if (ghost) ghost.text = '';
+            if (ghost) {
+              ghost.text = '';
+              ghost.status = `Reescrevendo a página para preservar as falas (tentativa ${attempt} de ${of})…`;
+            }
             if (ghostTextEl) ghostTextEl.textContent = '';
+            if (ghostStatusEl && ghost) ghostStatusEl.textContent = ghost.status;
             toast(`O Narrador alterou uma fala; reescrevendo a página (tentativa ${attempt} de ${of})…`, 'info');
           },
           onPage: (_page, _discarded, narration) => {
@@ -858,6 +909,12 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       'aria-label': 'Cérebro do personagem',
     });
     const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
+    const genStatus = h(
+      'p',
+      { class: 'hidden items-center gap-2 text-xs text-accent', 'data-brain-loading': 'true', 'aria-live': 'polite' },
+      icon('loader', 14),
+      h('span', null, 'Analisando a história e gerando os 6 pilares do cérebro…'),
+    );
     const saveBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Salvar cérebro');
     const removeBtn = canRemove
       ? h('button', { class: 'btn btn-danger mr-auto', type: 'button' }, 'Remover da conversa')
@@ -881,6 +938,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           hintInput,
           genBtn,
         ),
+        genStatus,
         h(
           'label',
           { class: 'block space-y-1 text-xs font-semibold uppercase tracking-wider text-muted' },
@@ -905,6 +963,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       }
       genBtn.disabled = true;
       genBtn.textContent = 'Gerando…';
+      genStatus.classList.remove('hidden');
+      genStatus.classList.add('flex');
       try {
         const res = await api<{ dynamic_system_prompt: string }>(
           'POST',
@@ -918,6 +978,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       } finally {
         genBtn.disabled = false;
         genBtn.textContent = 'Gerar cérebro com IA';
+        genStatus.classList.add('hidden');
+        genStatus.classList.remove('flex');
       }
     });
 
@@ -992,6 +1054,12 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       'aria-label': 'Cérebro do novo personagem',
     });
     const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
+    const genStatus = h(
+      'p',
+      { class: 'hidden items-center gap-2 text-xs text-accent', 'data-brain-loading': 'true', 'aria-live': 'polite' },
+      icon('loader', 14),
+      h('span', null, 'Analisando a história e gerando os 6 pilares do cérebro…'),
+    );
     const addBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Adicionar ao diálogo');
 
     const modal = openModal(
@@ -1011,6 +1079,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           nameInput,
         ),
         h('div', { class: 'flex flex-wrap items-center gap-2' }, hintInput, genBtn),
+        genStatus,
         h(
           'label',
           { class: 'block space-y-1 text-xs font-semibold uppercase tracking-wider text-muted' },
@@ -1034,6 +1103,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       }
       genBtn.disabled = true;
       genBtn.textContent = 'Gerando…';
+      genStatus.classList.remove('hidden');
+      genStatus.classList.add('flex');
       try {
         const res = await api<{ dynamic_system_prompt: string }>(
           'POST',
@@ -1047,6 +1118,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       } finally {
         genBtn.disabled = false;
         genBtn.textContent = 'Gerar cérebro com IA';
+        genStatus.classList.add('hidden');
+        genStatus.classList.remove('flex');
       }
     });
 

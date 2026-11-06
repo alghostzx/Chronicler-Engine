@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { makeApp, mockGateway, narratorJson, npcJson, parseSse, withKey, type TestApp } from './helpers.js';
+import { brainJson, makeApp, mockGateway, narratorJson, npcJson, parseSse, withKey, type TestApp } from './helpers.js';
 
 let t: TestApp;
 let sessionId: string;
@@ -230,7 +230,7 @@ describe('POST /dialogue/:id/conclude (o Narrador escreve o diálogo como págin
 
   it('o gatilho de diálogo na resposta do Narrador é ignorado nesta página', async () => {
     await converse();
-    t.gateway.queue(narratorJson(PROSE, { activate: true, npc_name: 'Intruso', dynamic_system_prompt: 'x' }));
+    t.gateway.queue(narratorJson(PROSE, { activate: true, npc_names: ['Intruso'] }));
     const res = await conclude();
     expect(parseSse(res.body).map((e) => e.event)).not.toContain('dialogue_trigger');
     expect(t.repos.dialogues.getActive(sessionId)).toBeUndefined();
@@ -519,10 +519,10 @@ describe('player_name no gatilho do Narrador', () => {
     t.gateway.queue(
       narratorJson('Alguém se aproxima.', {
         activate: true,
-        npc_name: 'Encapuzado',
+        npc_names: ['Encapuzado'],
         player_name: '**Kira**:\n',
-        dynamic_system_prompt: 'Você é um estranho.',
       }),
+      brainJson('Você é um estranho.'),
     );
     const res = await t.app.inject({ method: 'POST', url: `/api/sessions/${sessionId}/narrative/next`, payload: { player_instruction: 'Avanço.' } });
     expect(parseSse(res.body).map((e) => e.event)).toContain('dialogue_trigger');
@@ -739,34 +739,47 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
     expect(delOk.json().dialogue.participants).toHaveLength(1);
   });
 
-  it('o gatilho do Narrador aceita participants com múltiplos NPCs', async () => {
+  it('o gatilho do Narrador aceita npc_names com múltiplos NPCs e gera o cérebro (6 pilares) de cada um em chamadas separadas', async () => {
     t.repos.dialogues.delete(dialogueId);
     t.gateway.queue(
-      JSON.stringify({
-        narrative_text: 'Os dois se aproximam da mesa.',
-        dialogue_trigger: {
-          activate: true,
-          npc_name: 'Elena',
-          player_name: 'Kira',
-          dynamic_system_prompt: 'Persona 1',
-          participants: [
-            { npc_name: 'Elena', dynamic_system_prompt: 'Persona 1' },
-            { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2' },
-          ],
-        },
+      narratorJson('Os dois se aproximam da mesa.', {
+        activate: true,
+        player_name: 'Kira',
+        npc_names: ['Elena', 'Marcus'],
       }),
+      brainJson('Persona 1 gerada para Elena'),
+      brainJson('Persona 2 gerada para Marcus'),
     );
     const res = await t.app.inject({
       method: 'POST',
       url: `/api/sessions/${sessionId}/narrative/next`,
       payload: { player_instruction: 'Sento à mesa.' },
     });
-    expect(parseSse(res.body).map((e) => e.event)).toContain('dialogue_trigger');
+    const events = parseSse(res.body);
+    expect(events.map((e) => e.event)).toContain('dialogue_trigger');
+    const statusEvents = events.filter((e) => e.event === 'status').map((e) => e.data);
+    expect(statusEvents).toMatchObject([
+      { phase: 'generating_brain', npc_name: 'Elena', index: 1, total: 2 },
+      { phase: 'generating_brain', npc_name: 'Marcus', index: 2, total: 2 },
+    ]);
+
+    // 1 chamada ao Narrador + 2 chamadas separadas ao buildNpcBrainRequest
+    expect(t.gateway.requests).toHaveLength(3);
+    for (const req of [t.gateway.requests[1]!, t.gateway.requests[2]!]) {
+      expect(req.userText).toContain('Os dois se aproximam da mesa.');
+      expect(req.userText).toContain('1. Identidade e Voz:');
+      expect(req.userText).toContain('2. Postura e Emoção Atual:');
+      expect(req.userText).toContain('3. Objetivo Imediato:');
+      expect(req.userText).toContain('4. Segredos e Linhas Vermelhas:');
+      expect(req.userText).toContain('5. Conhecimento e Opinião sobre os Presentes:');
+      expect(req.userText).toContain('6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente');
+    }
+
     const active = t.repos.dialogues.getActive(sessionId)!;
     expect(active.npc_name).toBe('Elena e Marcus');
     expect(t.repos.dialogues.listParticipants(active.id)).toMatchObject([
-      { npc_name: 'Elena', dynamic_system_prompt: 'Persona 1', order_index: 1 },
-      { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2', order_index: 2 },
+      { npc_name: 'Elena', dynamic_system_prompt: 'Persona 1 gerada para Elena', order_index: 1 },
+      { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2 gerada para Marcus', order_index: 2 },
     ]);
   });
 });

@@ -217,9 +217,19 @@ export async function api<T>(method: string, url: string, body?: unknown): Promi
 // ---------------------------------------------------------------------------------------------
 // Eventos SSE emitidos por turnos narrativos (turnRunner.ts)
 // ---------------------------------------------------------------------------------------------
+export interface TurnStatus {
+  phase: string;
+  message: string;
+  npc_name?: string;
+  index?: number;
+  total?: number;
+  attempt?: number;
+}
+
 export interface TurnHandlers {
   onStart?(model: string): void;
   onChunk?(text: string): void;
+  onStatus?(status: TurnStatus): void;
   /** `narration`: só em páginas de diálogo — `fallback` = ficou a transcrição crua (o Narrador falhou). */
   onPage?(page: Page, discarded: number, narration?: 'narrated' | 'fallback'): void;
   /** O Narrador está refazendo a página de diálogo (falas alteradas); `attempt` é a nova tentativa. */
@@ -267,6 +277,16 @@ export async function streamTurn(
         break;
       case 'chunk':
         handlers.onChunk?.(String(d.text ?? ''));
+        break;
+      case 'status':
+        handlers.onStatus?.({
+          phase: String(d.phase ?? ''),
+          message: String(d.message ?? ''),
+          ...(typeof d.npc_name === 'string' ? { npc_name: d.npc_name } : {}),
+          ...(typeof d.index === 'number' ? { index: d.index } : {}),
+          ...(typeof d.total === 'number' ? { total: d.total } : {}),
+          ...(typeof d.attempt === 'number' ? { attempt: d.attempt } : {}),
+        });
         break;
       case 'page':
         handlers.onPage?.(

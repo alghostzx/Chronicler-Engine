@@ -12,7 +12,7 @@ import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
 import { findChrome } from './chrome.js';
-import { FAKE_KEY, SAMPLE_MODELS, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
+import { brainJson, FAKE_KEY, SAMPLE_MODELS, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
 
 const OUT = 'docs/screenshots';
 fs.mkdirSync(OUT, { recursive: true });
@@ -38,9 +38,11 @@ async function createSession(title: string, theme: string, world: string, limit:
   return r.json().session.id as string;
 }
 async function turn(id: string, instruction: string, text: string, trigger?: { npc: string; prompt: string }): Promise<void> {
-  gateway.queue(
-    narratorJson(text, trigger ? { activate: true, npc_name: trigger.npc, dynamic_system_prompt: trigger.prompt } : { activate: false }),
-  );
+  if (trigger) {
+    gateway.queue(narratorJson(text, { activate: true, npc_names: [trigger.npc] }), brainJson(trigger.prompt));
+  } else {
+    gateway.queue(narratorJson(text, { activate: false }));
+  }
   const r = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: instruction } });
   if (!r.body.includes('event: page')) throw new Error(`Turno falhou: ${r.body.slice(0, 300)}`);
 }

@@ -1,8 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { NarratorRequestParts } from '../ai/contextBuilder.js';
-import { GenerationError, type GeminiGateway } from '../ai/gateway.js';
+import { buildNpcBrainRequest, NpcResponseError, parseNpcBrainResponse } from '../ai/dialogue.js';
+import { GenerationError } from '../ai/gateway.js';
 import { streamNarratorTurn } from '../ai/narrator.js';
-import { NarratorResponseError, type NarratorResult } from '../ai/narratorSchema.js';
+import { NarratorResponseError, type DialogueParticipantBrief, type NarratorResult } from '../ai/narratorSchema.js';
 import { buildDialoguePageRequest, checkDialogueFidelity, MAX_NARRATION_ATTEMPTS } from '../ai/dialogueProse.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { DialogueSession, Page, Session } from '../db/types.js';
@@ -18,7 +19,9 @@ export interface PersistOutcome {
 }
 
 export function friendlyError(err: unknown): string {
-  if (err instanceof GenerationError || err instanceof NarratorResponseError) return err.message;
+  if (err instanceof GenerationError || err instanceof NarratorResponseError || err instanceof NpcResponseError) {
+    return err.message;
+  }
   const message = err instanceof Error ? err.message : String(err);
   return `Falha ao gerar a narrativa: ${message.slice(0, 300)}`;
 }
@@ -72,6 +75,7 @@ export class TurnRunner {
    * Eventos:
    *  - `start`  {model}
    *  - `chunk`  {text}              (parse incremental de narrative_text)
+   *  - `status` {phase, message, ...} (progresso da geração dos cérebros de NPC quando há dialogue_trigger)
    *  - `page`  {page, discarded}  (no fechamento do payload, após persistir)
    *  - `dialogue_trigger` {dialogue_id, npc_name}   (somente se o Narrador ativou diálogo)
    *  - `error`  {message}
@@ -84,6 +88,7 @@ export class TurnRunner {
     opts: {
       session: Session;
       request: NarratorRequestParts;
+      precedingPages?: Pick<Page, 'generated_text' | 'order_index'>[];
       persist: (result: NarratorResult, model: string) => PersistOutcome;
     },
   ): Promise<void> {
@@ -103,6 +108,52 @@ export class TurnRunner {
         else result = ev.result;
       }
       if (sse.signal.aborted || !result) return;
+
+      // Se o Narrador sinalizou que haverá um diálogo, gera o cérebro (6 pilares) de cada NPC em chamada separada.
+      const trigger = result.dialogue_trigger;
+      if (trigger.activate && trigger.npc_names && trigger.npc_names.length > 0) {
+        const basePages = opts.precedingPages ?? this.ctx.repos.pages.listActive(session.id);
+        const nextOrder = basePages.reduce((m, p) => Math.max(m, p.order_index), 0) + 1;
+        const pagesWithCurrent = [...basePages, { order_index: nextOrder, generated_text: result.narrative_text }];
+        const npcNames = trigger.npc_names;
+        const generatedParticipants: DialogueParticipantBrief[] = [];
+
+        for (let i = 0; i < npcNames.length; i++) {
+          const npcName = npcNames[i]!;
+          sse.send('status', {
+            phase: 'generating_brain',
+            npc_name: npcName,
+            index: i + 1,
+            total: npcNames.length,
+            message:
+              npcNames.length > 1
+                ? `Preparando diálogo: gerando o cérebro de ${npcName} (${i + 1} de ${npcNames.length})…`
+                : `Preparando diálogo: gerando o cérebro de ${npcName}…`,
+          });
+          const brainReq = buildNpcBrainRequest({
+            model,
+            session,
+            precedingPages: pagesWithCurrent,
+            dialogue: {
+              npc_name: trigger.npc_name ?? npcName,
+              player_name: trigger.player_name ?? null,
+            },
+            participants: npcNames.map((n) => ({ npc_name: n })),
+            messages: [],
+            npcName,
+          });
+          let rawBrain = '';
+          for await (const fragment of gateway.streamGenerate({ ...brainReq, signal: sse.signal })) {
+            rawBrain += fragment;
+          }
+          if (sse.signal.aborted) return;
+          const prompt = parseNpcBrainResponse(rawBrain);
+          generatedParticipants.push({ npc_name: npcName, dynamic_system_prompt: prompt });
+        }
+
+        trigger.participants = generatedParticipants;
+        trigger.dynamic_system_prompt = generatedParticipants[0]!.dynamic_system_prompt;
+      }
 
       const outcome = opts.persist(result, model);
       // Geração automática de voz (se ligada) em segundo plano: não segura o turno nem o SSE.
@@ -159,6 +210,15 @@ export class TurnRunner {
       let missing: string[] = [];
       for (let attempt = 1; attempt <= MAX_NARRATION_ATTEMPTS && !approved; attempt++) {
         if (attempt > 1) sse.send('retry', { attempt, of: MAX_NARRATION_ATTEMPTS });
+        sse.send('status', {
+          phase: 'narrating_dialogue',
+          attempt,
+          total: MAX_NARRATION_ATTEMPTS,
+          message:
+            attempt === 1
+              ? 'Transformando as falas do diálogo em prosa literária…'
+              : `Reescrevendo a página para preservar as falas (tentativa ${attempt} de ${MAX_NARRATION_ATTEMPTS})…`,
+        });
         const request = buildDialoguePageRequest({
           session,
           precedingPages: opts.precedingPages,

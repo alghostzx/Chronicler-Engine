@@ -34,7 +34,7 @@ export const NPC_BRAIN_SCHEMA = {
     dynamic_system_prompt: {
       type: 'string',
       description:
-        'Briefing completo de interpretação do NPC em português: quem é, personalidade, tom de voz, humor na cena atual, relação com o protagonista e com os outros presentes, objetivos imediatos e segredos.',
+        'Briefing completo de interpretação do NPC em português (em segunda pessoa: "Você é..."), estruturado obrigatoriamente nos 6 pilares: 1) Identidade e Voz, 2) Postura e Emoção Atual, 3) Objetivo Imediato, 4) Segredos e Linhas Vermelhas, 5) Conhecimento e Opinião sobre os Presentes, 6) Conhecimento e Opinião sobre Assuntos Recentes do Local/Ambiente.',
     },
   },
   required: ['dynamic_system_prompt'],
@@ -193,13 +193,22 @@ export function parseNpcReply(raw: string, opts?: { allowPassTurn?: boolean }): 
   };
 }
 
-/** Monta a requisição ao Gemini para gerar ou sugerir o "cérebro" (`dynamic_system_prompt`) de um NPC na cena. */
+const BRAIN_PILLARS_INSTRUCTION = `Estruture obrigatoriamente o "dynamic_system_prompt" em segunda pessoa ("Você é...") cobrindo de forma densa, específica e coerente com o que faz sentido este personagem saber na história os 6 pilares abaixo:
+
+1. Identidade e Voz: tiques verbais, vocabulário, cadência, como reage sob pressão.
+2. Postura e Emoção Atual: o que está sentindo fisicamente e emocionalmente neste instante da cena.
+3. Objetivo Imediato: o que ele quer extrair ou forçar nesta conversa específica.
+4. Segredos e Linhas Vermelhas: o que ele jamais admitirá ou o que esconde a qualquer custo.
+5. Conhecimento e Opinião sobre os Presentes: o que sabe (e o que não tem como saber) e o que pensa do protagonista e dos outros personagens na roda.
+6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente onde ele está inserido: o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.`;
+
+/** Monta a requisição ao Gemini para gerar o "cérebro" (`dynamic_system_prompt`) de um NPC na cena. */
 export function buildNpcBrainRequest(input: {
   model: string;
   session: Pick<Session, 'system_rules' | 'world_context'>;
   precedingPages: Pick<Page, 'generated_text' | 'order_index'>[];
-  dialogue: Pick<DialogueSession, 'npc_name' | 'player_name'>;
-  participants: Pick<DialogueParticipant, 'npc_name' | 'dynamic_system_prompt'>[];
+  dialogue: Pick<DialogueSession, 'npc_name'> & Partial<Pick<DialogueSession, 'player_name'>>;
+  participants: Pick<DialogueParticipant, 'npc_name'>[];
   messages: (Pick<DialogueMessage, 'sender' | 'content'> & Partial<Pick<DialogueMessage, 'speaker_name'>>)[];
   npcName: string;
   hint?: string;
@@ -209,23 +218,22 @@ export function buildNpcBrainRequest(input: {
   const others = input.participants.map((p) => p.npc_name).filter((n) => n !== input.npcName);
   const transcript =
     input.messages.length > 0
-      ? `\n\n# FALAS DA CENA ATÉ AGORA\n${formatDialoguePage(input.dialogue, input.messages)}`
+      ? `\n\n# FALAS DA CENA ATÉ AGORA\n${formatDialoguePage({ npc_name: input.dialogue.npc_name, player_name: input.dialogue.player_name ?? null }, input.messages)}`
       : '';
   const hintBlock =
     input.hint && input.hint.trim().length > 0
-      ? `\nDireção autoral / dica para o personagem: ${input.hint.trim()}`
+      ? `\nDireção autoral / dica para o personagem: ${input.hint.trim()}\n`
       : '';
   return {
     model: input.model,
     systemInstruction:
-      'Você é um assistente narrativo que redige o briefing de interpretação ("cérebro" / dynamic_system_prompt) de um personagem (NPC) para o Modo Diálogo.',
+      'Você é um diretor de dramaturgia e RPG que redige o briefing psicológico e operacional ("cérebro" / dynamic_system_prompt) de um personagem (NPC) para o Modo Diálogo, respeitando estritamente o que o personagem sabe e viveu na história.',
     history: [],
     userText:
       `${prefix}${transcript}\n\n# TAREFA\n` +
-      `Escreva em português o "dynamic_system_prompt" (instruções de interpretação em segunda pessoa: "Você é...") para o personagem "${input.npcName}", que participa de uma conversa direta com "${playerLabel}"${
-        others.length > 0 ? ` (junto com: ${others.join(', ')})` : ''
-      }.${hintBlock}\n` +
-      `Inclua: quem o personagem é, sua personalidade e modo de falar, seu estado emocional na cena atual, o que sabe sobre o protagonista e os eventos recentes, seus objetivos imediatos na conversa e o que oculta ou defende.`,
+      `Escreva em português o "dynamic_system_prompt" para o personagem "${input.npcName}", que participa de uma conversa direta com "${playerLabel}"${
+        others.length > 0 ? ` (junto na roda com: ${others.join(', ')})` : ''
+      }.\n${hintBlock}\n${BRAIN_PILLARS_INSTRUCTION}`,
     responseJsonSchema: NPC_BRAIN_SCHEMA,
   };
 }

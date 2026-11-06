@@ -83,9 +83,22 @@ export function mockGateway(opts: MockGatewayOptions = {}): MockGateway {
 /** JSON de resposta do Narrador. */
 export function narratorJson(
   text: string,
-  trigger: { activate: boolean; npc_name?: string; player_name?: string; dynamic_system_prompt?: string } = { activate: false },
+  trigger: { activate: boolean; npc_names?: string[]; npc_name?: string; player_name?: string } = { activate: false },
 ): string {
-  return JSON.stringify({ narrative_text: text, dialogue_trigger: trigger });
+  const normalized =
+    trigger.activate && !trigger.npc_names && trigger.npc_name
+      ? {
+          activate: true,
+          npc_names: [trigger.npc_name],
+          ...(trigger.player_name ? { player_name: trigger.player_name } : {}),
+        }
+      : trigger;
+  return JSON.stringify({ narrative_text: text, dialogue_trigger: normalized });
+}
+
+/** JSON de resposta da geração de cérebro do NPC (`buildNpcBrainRequest`). */
+export function brainJson(dynamicSystemPrompt: string): string {
+  return JSON.stringify({ dynamic_system_prompt: dynamicSystemPrompt });
 }
 
 /** JSON de resposta do NPC no Modo Diálogo. */

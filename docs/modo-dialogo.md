@@ -4,15 +4,23 @@ O Modo Diálogo é uma sub-rotina transitória: o Narrador abre uma conversa com
 
 ## Ativação
 
-Não existe botão para "entrar em modo diálogo". O gatilho vem **só do Narrador**, no `dialogue_trigger` do turno regular (por pedido do jogador, como *"assim que encontro Elena, iniciamos um diálogo direto"*, ou por decisão do próprio Narrador). O gatilho cria um registro em `dialogue_sessions` com status `active` e os participantes em `dialogue_participants`.
+Não existe botão para "entrar em modo diálogo". O gatilho vem **só do Narrador**, no `dialogue_trigger` do turno regular (por pedido do jogador, como *"assim que encontro Elena, iniciamos um diálogo direto"*, ou por decisão do próprio Narrador).
 
+- O Narrador **não** redige o briefing dos personagens: ele apenas sinaliza `activate: true`, `player_name` (como o jogador será chamado na cena; sem nome, **"Protagonista"**) e `npc_names` (a lista dos personagens que participarão da conversa, em ordem de turno).
+- Em seguida, ainda dentro do mesmo turno SSE, o servidor emite eventos `status` (`phase: "generating_brain"`, exibindo o progresso no cartão fantasma para a interface não parecer congelada) e faz **uma chamada separada por personagem** via `buildNpcBrainRequest` ([`src/ai/dialogue.ts`](../src/ai/dialogue.ts)), passando o contexto do mundo e toda a história — **incluindo a página narrativa que acabou de ser escrita**.
 - **No máximo um diálogo ativo por sessão** (índice único parcial no banco). Enquanto houver um, `narrative/next`, `regenerate`, ramificar e compactar respondem `409`.
-- O Narrador escolhe o nome do NPC (`npc_name`, ou a lista `participants` quando mais de um personagem participa da cena) e como o jogador será chamado na cena (`player_name`; sem nome, **"Protagonista"**). `cleanSpeakerName` remove marcadores de Markdown e limita o tamanho.
 - Ao recarregar a página, o cliente retoma a cena por `GET /api/sessions/:id/dialogue/active`; `GET /api/sessions/:id` também traz `active_dialogue` com a lista ordenada `participants`.
 
 ## O NPC e o sigilo
 
-O `dynamic_system_prompt`, produzido pelo Narrador (ou ajustado/gerado sob demanda pelo autor), define a persona de cada participante: identidade e personalidade, contexto imediato, relação com o protagonista e com os demais presentes, objetivo de curto prazo e regras estritas (primeira pessoa, sem narrar ações do jogador nem de outros personagens, respostas concisas e reativas).
+O `dynamic_system_prompt`, gerado por `buildNpcBrainRequest` para cada personagem (ou ajustado/regenerado sob demanda pelo autor), é estruturado obrigatoriamente em **6 pilares**:
+
+1. **Identidade e Voz:** tiques verbais, vocabulário, cadência, como reage sob pressão.
+2. **Postura e Emoção Atual:** o que está sentindo fisicamente e emocionalmente neste instante da cena.
+3. **Objetivo Imediato:** o que ele quer extrair ou forçar nesta conversa específica.
+4. **Segredos e Linhas Vermelhas:** o que ele jamais admitirá ou o que esconde a qualquer custo.
+5. **Conhecimento e Opinião sobre os Presentes:** o que sabe (e o que não tem como saber) e o que pensa do protagonista e dos outros personagens na roda.
+6. **Conhecimento e Opinião sobre assuntos recentes do local/ambiente:** o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.
 
 - **Isolamento entre modelos:** o `dynamic_system_prompt` de cada NPC **nunca** é enviado ao Narrador depois do gatilho e **nunca** é incluído no `systemInstruction` dos outros NPCs da roda.
 - **Direção autoral pelo jogador:** na interface, cada NPC aparece como um chip `🧠 Nome` no cabeçalho do cartão de diálogo (ao lado de `+ Personagem`). O autor pode abrir o cérebro de qualquer NPC para ver/editar seu nome e `dynamic_system_prompt` em tempo real (`PUT /api/dialogue/:id/participants/:participantId`), adicionar novos personagens à conversa (`POST /api/dialogue/:id/participants`), remover um personagem quando houver mais de um (`DELETE /api/dialogue/:id/participants/:participantId`) ou pedir que a IA sugira o cérebro com base na história e nas falas atuais (`POST /api/dialogue/:id/participants/generate-brain`).

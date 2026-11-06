@@ -30,11 +30,13 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       await turns.withClaim(session.id, async () => {
         const instruction = req.body.player_instruction;
 
+        const precedingPages = repos.pages.listActive(session.id);
         await turns.run(req, reply, {
           session,
+          precedingPages,
           request: buildNarratorRequest({
             session,
-            precedingPages: repos.pages.listActive(session.id),
+            precedingPages,
             playerInstruction: instruction,
           }),
           persist: (result, model) =>
@@ -120,13 +122,15 @@ export function registerNarrativeRoutes(app: FastifyInstance, ctx: AppContext): 
       }
       await turns.withClaim(session.id, async () => {
         const instruction = req.body.player_instruction;
+        const precedingPages = active.filter((b) => b.order_index < page.order_index);
 
         await turns.run(req, reply, {
           session,
+          precedingPages,
           // O corpus de regeneração contém apenas as páginas ativas ANTERIORES a K.
           request: buildNarratorRequest({
             session,
-            precedingPages: active.filter((b) => b.order_index < page.order_index),
+            precedingPages,
             playerInstruction: instruction,
           }),
           // Só chega aqui depois de a IA responder com sucesso: o DELETE e o UPDATE ocorrem

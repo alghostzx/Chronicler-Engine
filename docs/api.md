@@ -34,7 +34,7 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 
 | Rota | Descrição |
 | --- | --- |
-| `POST /api/sessions/:id/narrative/next` | `{ player_instruction }`: gera a próxima página por SSE (`start`, `chunk`, `page`, `dialogue_trigger`, `error`, `done`) |
+| `POST /api/sessions/:id/narrative/next` | `{ player_instruction }`: gera a próxima página por SSE (`start`, `chunk`, `status`, `page`, `dialogue_trigger`, `error`, `done`) |
 | `PUT /api/narrative/pages/:id` | `{ generated_text }`: edição direta (máximo 20.000 caracteres); preserva as seguintes; descarta o MP3 da página (preservando trechos em cache para sintetizar só as mudanças) |
 | `POST /api/narrative/pages/:id/regenerate` | `{ player_instruction, confirm_truncate? }` (SSE): refaz a página; `409 truncation_required` com `pages_to_discard` se houver seguintes e faltar a confirmação |
 | `POST /api/narrative/pages/:id/branch` | `{ confirm_truncate? }`: descarta as seguintes (sem gerar); `{ discarded, last_page_id }` |
@@ -49,7 +49,7 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 | `PUT /api/dialogue/:id/participants/:participantId` | `{ npc_name?, dynamic_system_prompt? }` → `{ participant, dialogue, messages }`: altera o nome e/ou o cérebro (`dynamic_system_prompt`) de um NPC durante o diálogo |
 | `DELETE /api/dialogue/:id/participants/:participantId` | `{ dialogue }`: remove o NPC da conversa (`409` se restar apenas 1 participante) |
 | `POST /api/dialogue/:id/participants/generate-brain` | `{ npc_name, hint? }` → `{ dynamic_system_prompt }`: pede à IA para sugerir o cérebro do personagem com base na história e nas falas da cena |
-| `POST /api/dialogue/:id/conclude` | SSE: o Narrador escreve a página em prosa (até 3 tentativas; *fallback* cru); eventos `start`, `chunk`, `retry`, `page { page, discarded, narration }`, `error`, `done` |
+| `POST /api/dialogue/:id/conclude` | SSE: o Narrador escreve a página em prosa (até 3 tentativas; *fallback* cru); eventos `start`, `chunk`, `status`, `retry`, `page { page, discarded, narration }`, `error`, `done` |
 | `POST /api/dialogue/:id/cancel` | Descarta o diálogo e as mensagens, sem narrar |
 | `POST /api/narrative/pages/:id/narrate-dialogue` | SSE: reprocessa uma página de diálogo **crua** em prosa; não toca nas seguintes |
 | `POST /api/narrative/pages/:id/redo-dialogue` | `{ confirm_truncate? }` → `201 { dialogue, messages: [] }`: abre um novo diálogo com os mesmos participantes e personas; a página só muda ao encerrar |

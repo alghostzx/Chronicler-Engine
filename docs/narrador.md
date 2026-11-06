@@ -31,7 +31,7 @@ As regras padrão ([`src/prompts/narrator.ts`](../src/prompts/narrator.ts)) fica
 
 1. **Não avançar a história além do esboço do jogador.** Narrar a ação e parar quando ela terminar.
 2. Manter o tom e o estilo do Contexto do Mundo, em parágrafos curtos, sem paredes de texto.
-3. **Modo Diálogo:** se a cena chegar a um confronto interpessoal intenso, ou se o jogador pedir um diálogo direto, preencher o `dialogue_trigger` com o briefing do NPC.
+3. **Modo Diálogo:** se a cena chegar a um confronto interpessoal intenso, ou se o jogador pedir um diálogo direto, preencher o `dialogue_trigger` apenas indicando `activate: true`, `player_name` e a lista `npc_names` (o briefing de cada personagem é gerado em chamadas separadas após a cena).
 4. **Responder exclusivamente no JSON estruturado.**
 
 ### Saída estruturada
@@ -43,17 +43,13 @@ A chamada usa `responseMimeType: application/json` + `responseJsonSchema` ([`src
   "narrative_text": "A expansão literária em prosa do turno atual.",
   "dialogue_trigger": {
     "activate": true,
-    "npc_name": "…",
     "player_name": "…",
-    "dynamic_system_prompt": "Prompt completo de interpretação do NPC…",
-    "participants": [
-      { "npc_name": "…", "dynamic_system_prompt": "…" }
-    ]
+    "npc_names": ["Elena Vance", "Guarda Real"]
   }
 }
 ```
 
-`dialogue_trigger` com `activate: true` mas sem `npc_name`/`dynamic_system_prompt` (nem `participants` válidos) é tratado como inativo.
+`dialogue_trigger` com `activate: true` mas sem nenhum nome válido em `npc_names` é tratado como inativo. Quando ativo, logo após o término de `narrative_text` o servidor faz uma chamada separada por personagem (`buildNpcBrainRequest`) para gerar o `dynamic_system_prompt` de 6 pilares levando em conta toda a história (inclusive a página recém-escrita).
 
 ## Páginas
 
