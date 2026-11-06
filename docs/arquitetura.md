@@ -68,6 +68,7 @@ Usados por `narrative/next`, `regenerate`, `dialogue/:id/conclude` e `narrate-di
 | --- | --- | --- |
 | `start` | `{ model }` | Início da geração |
 | `chunk` | `{ text }` | Trecho novo de `narrative_text` |
+| `status` | `{ phase, message, ... }` | Progresso das etapas intermediárias (ex.: gerando o cérebro de cada NPC do diálogo ou transformando falas em prosa) |
 | `retry` | `{ attempt, of }` | (diálogo) a tentativa foi rejeitada pela verificação de fidelidade; limpe o texto parcial |
 | `page` | `{ page, discarded }` (+ `narration` no diálogo) | Página gravada, depois de persistir |
 | `dialogue_trigger` | `{ dialogue_id, npc_name }` | Só no fechamento, depois de persistir; o cliente carrega o diálogo ativo e seus participantes em seguida |

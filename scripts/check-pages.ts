@@ -12,7 +12,7 @@ import { loadConfig } from '../src/config.js';
 import { openDatabase } from '../src/db/connection.js';
 import { createRepositories } from '../src/db/index.js';
 import { buildApp } from '../src/server.js';
-import { FAKE_KEY, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
+import { brainJson, FAKE_KEY, mockGateway, narratorJson, npcJson } from '../test/helpers.js';
 import { findChrome } from './chrome.js';
 
 const OUT = 'docs/screenshots/paginas';
@@ -73,7 +73,10 @@ async function newSession(title: string, withVolume: boolean): Promise<string> {
 async function newDialogueSession(): Promise<string> {
   const r = await app.inject({ method: 'POST', url: '/api/sessions', payload: { title: 'O Corvo Cego', active_theme: 'medieval', world_context: 'Reino de Valdoria.', token_limit: 100_000 } });
   const id = r.json().session.id as string;
-  gateway.queue(narratorJson(STORY[0][1], { activate: true, npc_name: 'Elena', player_name: 'Aldric', dynamic_system_prompt: 'Você é Elena, taverneira de Varn.' }));
+  gateway.queue(
+    narratorJson(STORY[0][1], { activate: true, npc_names: ['Elena'], player_name: 'Aldric' }),
+    brainJson('Você é Elena, taverneira de Varn.'),
+  );
   const t = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: STORY[0][0] } });
   const dialogueId = /"dialogue_id":"([^"]+)"/.exec(t.body)?.[1];
   if (!dialogueId) throw new Error(`Diálogo não iniciou: ${t.body.slice(0, 300)}`);

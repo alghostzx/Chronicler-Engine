@@ -12,33 +12,16 @@ export const NARRATOR_RESPONSE_SCHEMA = {
       type: 'object',
       properties: {
         activate: { type: 'boolean' },
-        npc_name: { type: 'string' },
         player_name: {
           type: 'string',
           description:
-            'Como o protagonista (o jogador) é chamado nesta conversa: o nome próprio do personagem, ou um título/apelido curto se ainda não tiver nome (ex.: "Kira", "o forasteiro"). Aparece como rótulo das falas do jogador.',
+            'Como o protagonista (o jogador) é chamado nesta conversa: o nome próprio do personagem, ou um título/apelido curto se ainda não tiver nome (ex.: "Kira", "O Forasteiro"). Aparece como rótulo das falas do jogador.',
         },
-        dynamic_system_prompt: {
-          type: 'string',
-          description:
-            'Prompt completo de interpretação do NPC com persona, segredos, humor, relação com o jogador e objetivo de conversa.',
-        },
-        participants: {
+        npc_names: {
           type: 'array',
           description:
-            'Se mais de um NPC participar da conversa na cena, liste todos os personagens participantes em ordem de turno com seu npc_name e dynamic_system_prompt individual.',
-          items: {
-            type: 'object',
-            properties: {
-              npc_name: { type: 'string' },
-              dynamic_system_prompt: {
-                type: 'string',
-                description:
-                  'Prompt completo de interpretação deste NPC com persona, segredos, humor, relação com o jogador e com os demais presentes.',
-              },
-            },
-            required: ['npc_name', 'dynamic_system_prompt'],
-          },
+            'Lista dos nomes dos personagens (NPCs) que participarão da conversa direta com o jogador, em ordem de turno (ex.: ["Elena Vance"] ou ["Elena Vance", "Guarda Real"]).',
+          items: { type: 'string' },
         },
       },
       required: ['activate'],
@@ -57,16 +40,18 @@ export interface DialogueParticipantBrief {
 export interface DialogueTrigger {
   activate: boolean;
   npc_name?: string;
+  /** Nomes individuais dos NPCs que participarão da conversa, em ordem de turno. */
+  npc_names?: string[];
   /** Nome do protagonista na conversa (opcional: sem ele, o rótulo é "Protagonista"). */
   player_name?: string;
   dynamic_system_prompt?: string;
-  /** Lista de NPCs participantes quando informada pelo Narrador. */
+  /** Lista de NPCs participantes com seus cérebros gerados. */
   participants?: DialogueParticipantBrief[];
 }
 
 export interface NarratorResult {
   narrative_text: string;
-  /** Sempre normalizado: `activate: true` só se `npc_name` e `dynamic_system_prompt` vierem preenchidos. */
+  /** Sempre normalizado: `activate: true` só se ao menos um nome de NPC (`npc_names`) vier preenchido. */
   dialogue_trigger: DialogueTrigger;
 }
 
@@ -95,24 +80,19 @@ export function parseNarratorResult(raw: string): NarratorResult {
   }
 
   const trigger = obj.dialogue_trigger as Record<string, unknown> | undefined;
-  const parsedParticipants: DialogueParticipantBrief[] = [];
-  if (Array.isArray(trigger?.participants)) {
-    for (const item of trigger.participants) {
-      if (!item || typeof item !== 'object') continue;
-      const rec = item as Record<string, unknown>;
-      const pName = cleanSpeakerName(rec.npc_name);
-      const pPrompt = typeof rec.dynamic_system_prompt === 'string' ? rec.dynamic_system_prompt.trim() : '';
-      if (pName && pPrompt.length > 0) {
-        parsedParticipants.push({ npc_name: pName, dynamic_system_prompt: pPrompt });
-      }
+  const npcNames: string[] = [];
+  if (Array.isArray(trigger?.npc_names)) {
+    for (const item of trigger.npc_names) {
+      const cleaned = cleanSpeakerName(item);
+      if (cleaned && !npcNames.includes(cleaned)) npcNames.push(cleaned);
     }
   }
-  const singleName = typeof trigger?.npc_name === 'string' ? trigger.npc_name.trim() : '';
-  const singlePrompt = typeof trigger?.dynamic_system_prompt === 'string' ? trigger.dynamic_system_prompt.trim() : '';
-  const hasParticipants = parsedParticipants.length > 0;
-  const name = hasParticipants ? formatParticipantsNames(parsedParticipants.map((p) => p.npc_name)) : singleName;
-  const prompt = hasParticipants ? parsedParticipants[0]!.dynamic_system_prompt : singlePrompt;
-  const activate = trigger?.activate === true && name.length > 0 && prompt.length > 0;
+  if (npcNames.length === 0 && typeof trigger?.npc_name === 'string') {
+    const single = cleanSpeakerName(trigger.npc_name);
+    if (single) npcNames.push(single);
+  }
+  const activate = trigger?.activate === true && npcNames.length > 0;
+  const name = formatParticipantsNames(npcNames);
   const playerName = cleanSpeakerName(trigger?.player_name);
 
   return {
@@ -121,9 +101,8 @@ export function parseNarratorResult(raw: string): NarratorResult {
       ? {
           activate: true,
           npc_name: name,
+          npc_names: npcNames,
           ...(playerName ? { player_name: playerName } : {}),
-          dynamic_system_prompt: prompt,
-          ...(hasParticipants ? { participants: parsedParticipants } : {}),
         }
       : { activate: false },
   };
