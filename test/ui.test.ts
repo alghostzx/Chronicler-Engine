@@ -801,6 +801,17 @@ describe('UI — sessão', () => {
 
   it('diálogo multi-NPC na UI: edita o cérebro, adiciona personagem com IA e usa o botão Passar a vez', async () => {
     await openNewSession();
+    let releaseBrain!: () => void;
+    const brainGate = new Promise<void>((r) => {
+      releaseBrain = r;
+    });
+    const origStream = gateway.streamGenerate.bind(gateway);
+    let callIdx = 0;
+    gateway.streamGenerate = async function* (req) {
+      callIdx++;
+      if (callIdx === 2) await brainGate;
+      yield* origStream(req);
+    };
     gateway.queue(
       narratorJson('O mercador olha para você.', {
         activate: true,
@@ -810,6 +821,13 @@ describe('UI — sessão', () => {
       brainJson('Você é um mercador cauteloso.'),
     );
     await send('Converso com o mercador');
+    await waitFor(() => document.querySelector('[data-dialogue-loading="true"]'), 'card de preparação do diálogo');
+    expect(document.querySelector('.cursor-blink')).toBeNull();
+    expect(text()).toContain('Preparando Diálogo — Mercador');
+    expect(button('Preparando diálogo…')).toBeTruthy();
+    releaseBrain();
+    gateway.streamGenerate = origStream;
+
     await waitFor(() => byLabel('Cérebro de Mercador'), 'chip do Mercador');
     expect(byLabel('Personagem no diálogo')).toBeTruthy();
     expect(button('Passar a vez')!.title).toContain('deixar Mercador falar ou reagir');

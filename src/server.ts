@@ -94,7 +94,14 @@ export async function buildApp(config: AppConfig, opts: BuildAppOptions = {}): P
   registerTokenRoutes(app, ctx);
 
   if (fs.existsSync(config.publicDir)) {
-    await app.register(fastifyStatic, { root: config.publicDir });
+    await app.register(fastifyStatic, {
+      root: config.publicDir,
+      setHeaders(reply, filePath) {
+        if (/\.(html|js|css|webmanifest)$/i.test(filePath)) {
+          reply.header('Cache-Control', 'no-cache');
+        }
+      },
+    });
   }
 
   return app;

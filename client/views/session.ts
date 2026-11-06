@@ -38,6 +38,14 @@ interface Ghost {
   text: string;
   /** Mensagem de progresso da etapa atual (ex.: escrevendo prosa, gerando cérebros dos NPCs, narrando diálogo). */
   status: string;
+  /** Quando `true`, o texto do Narrador já terminou de ser escrito e o backend está preparando os cérebros do Modo Diálogo. */
+  preparingDialogue?: boolean;
+  /** Nomes dos personagens do diálogo em preparação, em ordem de turno. */
+  dialogueNpcs?: string[];
+  /** Índice (1-based) do personagem cujo cérebro está sendo gerado agora. */
+  brainIndex?: number;
+  /** Total de personagens cujos cérebros serão gerados. */
+  brainTotal?: number;
   /** Página sendo regenerada (o fantasma ocupa o seu lugar); undefined = nova página no fim. */
   replaceId?: string;
   /** A página substituída não descarta as seguintes (narrar um diálogo cru): nada é esmaecido. */
@@ -293,11 +301,14 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   function ghostArticle(): HTMLElement {
     const replaced = ghost?.replaceId ? detail.pages.find((x) => x.id === ghost!.replaceId) : undefined;
-    ghostTextEl = h('div', { class: 'cursor-blink whitespace-pre-wrap leading-8', 'aria-live': 'polite' }, ghost?.text ?? '');
+    const preparing = !!ghost?.preparingDialogue;
+    ghostTextEl = preparing
+      ? h('div', { class: 'prose-tome', 'aria-live': 'polite' }, ...paragraphs(ghost?.text ?? '').map((p) => h('p', null, p)))
+      : h('div', { class: 'cursor-blink whitespace-pre-wrap leading-8', 'aria-live': 'polite' }, ghost?.text ?? '');
     ghostStatusEl = h('span', null, ghost?.status ?? 'Escrevendo a página…');
     return h(
       'section',
-      { class: 'page-card is-ghost', 'aria-label': 'Página sendo escrita' },
+      { class: 'page-card is-ghost', 'aria-label': preparing ? 'Página concluída, preparando diálogo' : 'Página sendo escrita' },
       pageHeader(replaced?.order_index ?? nextPageIndex()),
       h('div', { class: 'page-card-body' }, ghostTextEl),
       h(
@@ -446,6 +457,66 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   function dialogueCard(): HTMLElement | null {
+    if (ghost?.preparingDialogue) {
+      const npcs = ghost.dialogueNpcs ?? [];
+      const currentIdx = (ghost.brainIndex ?? 1) - 1;
+      const headerNames = npcs.length > 0 ? npcs.join(', ') : '';
+      return h(
+        'section',
+        {
+          class: 'card border-accent font-sans text-base',
+          'data-dialogue-loading': 'true',
+          'aria-live': 'polite',
+          'aria-label': 'Preparando Modo Diálogo',
+        },
+        h(
+          'div',
+          { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' },
+          h(
+            'h3',
+            { class: 'font-display text-sm uppercase tracking-wider text-accent' },
+            headerNames ? `Preparando Diálogo — ${headerNames}` : 'Preparando Diálogo',
+          ),
+          npcs.length > 0
+            ? h(
+                'div',
+                { class: 'flex flex-wrap items-center gap-1.5' },
+                ...npcs.map((name, idx) => {
+                  const done = idx < currentIdx;
+                  const active = idx === currentIdx;
+                  return h(
+                    'span',
+                    {
+                      class: `inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs ${
+                        active
+                          ? 'border-accent text-accent font-semibold'
+                          : done
+                            ? 'border-line text-ink'
+                            : 'border-line text-muted opacity-60'
+                      }`,
+                    },
+                    active ? icon('loader', 12) : done ? '✓' : '🧠',
+                    name,
+                  );
+                }),
+              )
+            : null,
+        ),
+        h(
+          'div',
+          { class: 'flex items-center gap-2.5 text-sm text-accent' },
+          icon('loader', 16),
+          h('span', null, ghost.status),
+        ),
+        h(
+          'p',
+          { class: 'mt-1.5 text-xs text-muted' },
+          npcs.length > 1
+            ? 'Construindo os 6 pilares psicológicos de cada personagem com base na cena recém-escrita…'
+            : 'Construindo os 6 pilares psicológicos do personagem com base na cena recém-escrita…',
+        ),
+      );
+    }
     if (!dlg || ghost) return null; // enquanto o Narrador escreve a página, o fantasma ocupa o lugar da conversa
     const d = dlg;
     const redoing = redoTarget();
@@ -592,6 +663,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const selStart = dockTa?.selectionStart ?? 0;
     const selEnd = dockTa?.selectionEnd ?? 0;
     const inDialogue = !!dlg;
+    const preparingDialogue = !!ghost?.preparingDialogue;
     const multi = !!dlg && ((dlg.dialogue.participants?.length ?? 0) > 1 || dlg.dialogue.npc_name.includes(' e '));
     const ta = h('textarea', {
       class: 'input min-h-[3.5rem] flex-1 resize-y font-reading',
@@ -599,7 +671,11 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       value: inputValue,
       disabled: busy || (inDialogue && dlg!.waiting),
       'aria-label': inDialogue ? 'Sua fala' : 'Instrução para o Narrador',
-      placeholder: inDialogue ? `Fale com ${dlg!.dialogue.npc_name}…` : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
+      placeholder: preparingDialogue
+        ? 'Aguarde: preparando os cérebros dos personagens para o diálogo…'
+        : inDialogue
+          ? `Fale com ${dlg!.dialogue.npc_name}…`
+          : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
     });
     ta.addEventListener('input', () => {
       inputValue = ta.value;
@@ -613,7 +689,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const send = h(
       'button',
       { class: 'btn btn-primary self-stretch px-5', type: 'button', disabled: busy || (inDialogue && dlg!.waiting), onClick: () => void submit() },
-      busy ? 'Narrando…' : inDialogue ? 'Falar' : 'Enviar',
+      preparingDialogue ? 'Preparando diálogo…' : busy ? 'Narrando…' : inDialogue ? 'Falar' : 'Enviar',
     );
     const passBtn = inDialogue
       ? h(
@@ -646,8 +722,15 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
     const redoing = redoTarget();
     const dlgLocked = busy || !!dlg?.waiting;
-    const dialogueBar = dlg
+    const dialogueBar = preparingDialogue
       ? h(
+          'div',
+          { class: 'mb-2 flex items-center gap-2 text-xs text-accent', 'aria-live': 'polite' },
+          icon('loader', 14),
+          h('span', { class: 'font-display uppercase tracking-wider' }, ghost!.status),
+        )
+      : dlg
+        ? h(
           'div',
           { class: 'mb-2 flex flex-wrap items-center gap-2' },
           h('span', { class: 'font-display text-sm text-accent' }, `${redoing ? 'Refazendo diálogo — ' : ''}Falando com: ${dlg.dialogue.npc_name}`),
@@ -725,6 +808,16 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           onStatus: (st) => {
             if (!ghost) return;
             ghost.status = st.message;
+            if (st.phase === 'generating_brain') {
+              ghost.preparingDialogue = true;
+              if (st.npc_names && st.npc_names.length > 0) ghost.dialogueNpcs = st.npc_names;
+              else if (st.npc_name && !ghost.dialogueNpcs) ghost.dialogueNpcs = [st.npc_name];
+              if (st.index !== undefined) ghost.brainIndex = st.index;
+              if (st.total !== undefined) ghost.brainTotal = st.total;
+              renderTome(true);
+              renderDock();
+              return;
+            }
             if (ghostStatusEl) ghostStatusEl.textContent = st.message;
           },
           onRetry: (attempt, of) => {

@@ -123,6 +123,7 @@ export class TurnRunner {
           sse.send('status', {
             phase: 'generating_brain',
             npc_name: npcName,
+            npc_names: npcNames,
             index: i + 1,
             total: npcNames.length,
             message:
@@ -145,6 +146,7 @@ export class TurnRunner {
           let rawBrain = '';
           for await (const fragment of gateway.streamGenerate({ ...brainReq, signal: sse.signal })) {
             rawBrain += fragment;
+            sse.ping();
           }
           if (sse.signal.aborted) return;
           const prompt = parseNpcBrainResponse(rawBrain);

@@ -221,6 +221,7 @@ export interface TurnStatus {
   phase: string;
   message: string;
   npc_name?: string;
+  npc_names?: string[];
   index?: number;
   total?: number;
   attempt?: number;
@@ -283,6 +284,9 @@ export async function streamTurn(
           phase: String(d.phase ?? ''),
           message: String(d.message ?? ''),
           ...(typeof d.npc_name === 'string' ? { npc_name: d.npc_name } : {}),
+          ...(Array.isArray(d.npc_names)
+            ? { npc_names: d.npc_names.filter((x): x is string => typeof x === 'string') }
+            : {}),
           ...(typeof d.index === 'number' ? { index: d.index } : {}),
           ...(typeof d.total === 'number' ? { total: d.total } : {}),
           ...(typeof d.attempt === 'number' ? { attempt: d.attempt } : {}),
