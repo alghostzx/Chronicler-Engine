@@ -102,9 +102,9 @@ export class MissingApiKeyError extends Error {
   }
 }
 
-export const GENERATION_IDLE_TIMEOUT_MS = 30_000;
+export const GENERATION_IDLE_TIMEOUT_MS = 180_000;
 /** Compactação pode processar centenas de milhares de tokens de entrada antes do 1º fragmento. */
-export const COMPACTION_IDLE_TIMEOUT_MS = 180_000;
+export const COMPACTION_IDLE_TIMEOUT_MS = 300_000;
 
 export class GeminiGatewayImpl implements GeminiGateway {
   private readonly ai: GoogleGenAI;
@@ -265,7 +265,7 @@ export class GeminiGatewayImpl implements GeminiGateway {
 }
 
 /** Tempo máximo de uma única chamada de síntese (trechos de ~1,5 mil caracteres levam ~10–40 s). */
-const SYNTHESIS_TIMEOUT_MS = 180_000;
+const SYNTHESIS_TIMEOUT_MS = 300_000;
 
 /** Traduz erros do SDK/rede para mensagens em pt-BR e decide se vale tentar de novo. */
 export function toSynthesisError(err: unknown): SynthesisError {

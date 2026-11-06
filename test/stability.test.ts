@@ -89,18 +89,18 @@ describe('GeminiGatewayImpl idle timeout', () => {
 
       const failure = consumePromise.catch((err) => err);
 
-      // Avança o tempo além do limite de 30s
+      // Avança o tempo além do limite de 180s
       await vi.advanceTimersByTimeAsync(GENERATION_IDLE_TIMEOUT_MS + 100);
 
       const err = await failure;
       expect(err).toBeInstanceOf(GenerationError);
-      expect(err.message).toBe('Tempo limite de inatividade na geração excedido (30 s sem resposta da API).');
+      expect(err.message).toBe('Tempo limite de inatividade na geração excedido (180 s sem resposta da API).');
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('respeita idleTimeoutMs customizado (ex.: 180s na compactação)', async () => {
+  it('respeita idleTimeoutMs customizado (ex.: 300s na compactação)', async () => {
     vi.useFakeTimers();
     try {
       const gateway = new GeminiGatewayImpl('fake-key');
@@ -134,15 +134,15 @@ describe('GeminiGatewayImpl idle timeout', () => {
         return err;
       });
 
-      // Aos 60s (além dos 30s padrão) ainda não deve ter abortado
-      await vi.advanceTimersByTimeAsync(60_000);
+      // Aos 200s (além dos 180s padrão) ainda não deve ter abortado
+      await vi.advanceTimersByTimeAsync(200_000);
       expect(settled).toBe(false);
 
-      // Ao ultrapassar 180s (COMPACTION_IDLE_TIMEOUT_MS), aborta com a mensagem de 180 s
-      await vi.advanceTimersByTimeAsync(COMPACTION_IDLE_TIMEOUT_MS - 60_000 + 100);
+      // Ao ultrapassar 300s (COMPACTION_IDLE_TIMEOUT_MS), aborta com a mensagem de 300 s
+      await vi.advanceTimersByTimeAsync(COMPACTION_IDLE_TIMEOUT_MS - 200_000 + 100);
       const err = await failure;
       expect(err).toBeInstanceOf(GenerationError);
-      expect(err.message).toBe('Tempo limite de inatividade na geração excedido (180 s sem resposta da API).');
+      expect(err.message).toBe('Tempo limite de inatividade na geração excedido (300 s sem resposta da API).');
     } finally {
       vi.useRealTimers();
     }
