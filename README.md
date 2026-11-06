@@ -15,7 +15,7 @@ Plataforma de escrita e RPG narrativo colaborativo: você conduz a história e o
 ## Recursos
 
 - **Tome em páginas**: editar, re-gerar, ramificar e ler cada página isoladamente, com streaming em tempo real.
-- **Modo Diálogo**: o Narrador abre uma conversa com um NPC de persona isolada; a conversa vira uma página em prosa, com as falas literais.
+- **Modo Diálogo**: o Narrador abre uma conversa com um ou mais NPCs de persona isolada (com cérebro inspecionável/editável em tempo real); a conversa vira uma página em prosa, com as falas literais.
 - **HP do Narrador e compactação**: barra de contexto em tokens reais e sinopses revisáveis; as páginas antigas saem do contexto da IA, mas continuam legíveis e exportáveis.
 - **Narração por voz** (opcional): um narrador de voz grave lê as páginas em pt-BR, inclusive em **reprodução contínua**; o áudio fica guardado no SQLite.
 - **4 temas × claro/escuro** (8 combinações), fontes empacotadas, sem CDN.

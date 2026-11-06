@@ -70,7 +70,7 @@ Usados por `narrative/next`, `regenerate`, `dialogue/:id/conclude` e `narrate-di
 | `chunk` | `{ text }` | Trecho novo de `narrative_text` |
 | `retry` | `{ attempt, of }` | (diálogo) a tentativa foi rejeitada pela verificação de fidelidade; limpe o texto parcial |
 | `page` | `{ page, discarded }` (+ `narration` no diálogo) | Página gravada, depois de persistir |
-| `dialogue_trigger` | `{ dialogue_id, npc_name }` | Só no fechamento, depois de persistir; o `dynamic_system_prompt` nunca vai ao cliente |
+| `dialogue_trigger` | `{ dialogue_id, npc_name }` | Só no fechamento, depois de persistir; o cliente carrega o diálogo ativo e seus participantes em seguida |
 | `error` | `{ message }` | Falha durante o stream |
 | `done` | — | Fim |
 

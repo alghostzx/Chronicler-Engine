@@ -45,12 +45,15 @@ A chamada usa `responseMimeType: application/json` + `responseJsonSchema` ([`src
     "activate": true,
     "npc_name": "…",
     "player_name": "…",
-    "dynamic_system_prompt": "Prompt completo de interpretação do NPC…"
+    "dynamic_system_prompt": "Prompt completo de interpretação do NPC…",
+    "participants": [
+      { "npc_name": "…", "dynamic_system_prompt": "…" }
+    ]
   }
 }
 ```
 
-`dialogue_trigger` com `activate: true` mas sem `npc_name` ou `dynamic_system_prompt` é tratado como inativo.
+`dialogue_trigger` com `activate: true` mas sem `npc_name`/`dynamic_system_prompt` (nem `participants` válidos) é tratado como inativo.
 
 ## Páginas
 
