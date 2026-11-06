@@ -811,6 +811,8 @@ describe('UI — sessão', () => {
     );
     await send('Converso com o mercador');
     await waitFor(() => byLabel('Cérebro de Mercador'), 'chip do Mercador');
+    expect(byLabel('Personagem no diálogo')).toBeTruthy();
+    expect(button('Passar a vez')!.title).toContain('deixar Mercador falar ou reagir');
 
     // Abre o cérebro do Mercador e edita
     click(byLabel('Cérebro de Mercador')!);
@@ -831,13 +833,16 @@ describe('UI — sessão', () => {
     click(button('Adicionar ao diálogo')!);
     await waitFor(() => byLabel('Cérebro de Guarda') && !document.querySelector('[role=dialog]'), 'Guarda adicionado');
     expect(text()).toContain('Mercador e Guarda');
+    expect(byLabel('Personagens no diálogo')).toBeTruthy();
+    expect(button('Passar a vez')!.title).toContain('deixar os personagens conversarem ou reagirem');
 
-    // Usa o botão "Passar a vez" para ouvir os dois NPCs conversarem na rodada
-    gateway.queue(npcJson('Guarda, diga a ela que sou honesto!', false), npcJson('Calma, Mercador.', false));
+    // Usa o botão "Passar a vez" para ouvir os dois NPCs conversarem na rodada (e um sinaliza fim)
+    gateway.queue(npcJson('Guarda, diga a ela que sou honesto!', false), npcJson('Calma, Mercador.', true));
     click(button('Passar a vez')!);
     await waitFor(
       () => text().includes('Mercador: Guarda, diga a ela que sou honesto!') && text().includes('Guarda: Calma, Mercador.'),
       'falas dos dois NPCs exibidas',
     );
+    expect(text()).toContain('Mercador e Guarda desejam encerrar a conversa.');
   });
 });

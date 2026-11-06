@@ -451,6 +451,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const redoing = redoTarget();
     const playerLabel = d.dialogue.player_name ?? 'Protagonista';
     const participants = d.dialogue.participants ?? [];
+    const multi = participants.length > 1 || d.dialogue.npc_name.includes(' e ');
     const controlsDisabled = busy || d.waiting;
     return h(
       'section',
@@ -461,7 +462,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         h('h3', { class: 'font-display text-sm uppercase tracking-wider text-accent' }, `${redoing ? 'Refazendo diálogo' : 'Diálogo'} — ${d.dialogue.npc_name}`),
         h(
           'div',
-          { class: 'flex flex-wrap items-center gap-1.5', 'aria-label': 'Personagens no diálogo' },
+          { class: 'flex flex-wrap items-center gap-1.5', 'aria-label': multi ? 'Personagens no diálogo' : 'Personagem no diálogo' },
           ...participants.map((p) =>
             h(
               'button',
@@ -513,8 +514,8 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
                 'aria-live': 'polite',
               },
               icon('loader', 14),
-              participants.length > 1
-                ? `${d.dialogue.npc_name} está respondendo (${participants.map((p) => p.npc_name).join(' → ')})…`
+              multi
+                ? `${d.dialogue.npc_name} estão respondendo (${participants.map((p) => p.npc_name).join(' → ')})…`
                 : `${d.dialogue.npc_name} está respondendo…`,
             )
           : null,
@@ -591,6 +592,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const selStart = dockTa?.selectionStart ?? 0;
     const selEnd = dockTa?.selectionEnd ?? 0;
     const inDialogue = !!dlg;
+    const multi = !!dlg && ((dlg.dialogue.participants?.length ?? 0) > 1 || dlg.dialogue.npc_name.includes(' e '));
     const ta = h('textarea', {
       class: 'input min-h-[3.5rem] flex-1 resize-y font-reading',
       rows: '2',
@@ -620,7 +622,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
             class: 'btn self-stretch px-3 text-sm',
             type: 'button',
             disabled: busy || dlg!.waiting,
-            title: 'Ficar em silêncio nesta rodada e deixar os personagens conversarem ou reagirem',
+            title: multi
+              ? 'Ficar em silêncio nesta rodada e deixar os personagens conversarem ou reagirem'
+              : `Ficar em silêncio nesta rodada e deixar ${dlg!.dialogue.npc_name} falar ou reagir`,
             onClick: () => void passDialogueTurn(),
           },
           'Passar a vez',
@@ -647,7 +651,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           'div',
           { class: 'mb-2 flex flex-wrap items-center gap-2' },
           h('span', { class: 'font-display text-sm text-accent' }, `${redoing ? 'Refazendo diálogo — ' : ''}Falando com: ${dlg.dialogue.npc_name}`),
-          dlg.wantsEnd ? h('span', { class: 'text-xs text-hp-warn' }, `${dlg.dialogue.npc_name} deseja encerrar a conversa.`) : null,
+          dlg.wantsEnd
+            ? h('span', { class: 'text-xs text-hp-warn' }, `${dlg.dialogue.npc_name} ${multi ? 'desejam' : 'deseja'} encerrar a conversa.`)
+            : null,
           h(
             'button',
             {
@@ -1044,7 +1050,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const hintInput = h('input', {
       class: 'input flex-1 text-sm',
       type: 'text',
-      placeholder: 'Opcional: quem ele é ou o que quer na cena…',
+      placeholder: 'Opcional: quem é este personagem ou o que quer na cena…',
       'aria-label': 'Direção autoral para gerar com IA',
     });
     const brainTa = h('textarea', {
@@ -1070,7 +1076,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         h(
           'p',
           { class: 'text-sm text-muted' },
-          'Inclua mais um personagem na roda de conversa. Ele entrará na fila sequencial de turnos.',
+          'Inclua mais um personagem na roda de conversa para participar da fila sequencial de turnos.',
         ),
         h(
           'label',

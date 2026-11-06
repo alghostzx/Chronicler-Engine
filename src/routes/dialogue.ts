@@ -184,9 +184,15 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
         } catch (err) {
           if (err instanceof HttpError) throw err;
           req.log.error({ err }, 'Falha na resposta do NPC');
-          throw new HttpError(502, friendlyError(err).replace('narrativa', 'resposta do NPC'));
+          throw new HttpError(
+            502,
+            friendlyError(err).replace(
+              'narrativa',
+              effectiveParticipants.length > 1 ? 'resposta dos personagens' : 'resposta do NPC',
+            ),
+          );
         }
-      }, 'Aguarde a resposta anterior do NPC.');
+      }, repos.dialogues.listParticipants(dialogue.id).length > 1 ? 'Aguarde a resposta anterior dos personagens.' : 'Aguarde a resposta anterior do NPC.');
     },
   );
 
@@ -382,7 +388,13 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
         throw new HttpError(409, 'Nenhuma fala foi trocada. Cancele o diálogo em vez de encerrá-lo.');
       }
       if (turns.isBusy(`d:${dialogue.id}`)) {
-        throw new HttpError(409, 'Aguarde a resposta do NPC antes de encerrar o diálogo.');
+        const multi = repos.dialogues.listParticipants(dialogue.id).length > 1;
+        throw new HttpError(
+          409,
+          multi
+            ? 'Aguarde a resposta dos personagens antes de encerrar o diálogo.'
+            : 'Aguarde a resposta do NPC antes de encerrar o diálogo.',
+        );
       }
       if (turns.isBusy(session.id)) {
         throw new HttpError(409, 'Há uma operação em andamento nesta sessão.');
