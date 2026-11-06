@@ -39,6 +39,13 @@ const playFrom = (n: number) => byLabel('Reproduzir a partir daqui', card(n)) as
 const pageId = (n: number) => repos.pages.listAll(sessionId)[n - 1]!.id;
 const ended = () => audioEl!.dispatchEvent(new Event('ended'));
 
+const windowListeners: Array<[string, EventListenerOrEventListenerObject]> = [];
+const addWindowListener = window.addEventListener.bind(window) as typeof window.addEventListener;
+window.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+  if (type === 'hashchange' || type === 'keydown') windowListeners.push([type, listener]);
+  addWindowListener(type, listener, options);
+}) as typeof window.addEventListener;
+
 async function makeAudio(...pages: number[]): Promise<void> {
   for (const n of pages) {
     const id = pageId(n);
@@ -60,6 +67,7 @@ async function boot(): Promise<void> {
 }
 
 async function openSession(): Promise<void> {
+  for (const [type, listener] of windowListeners.splice(0)) window.removeEventListener(type, listener);
   const addr = app.server.address();
   const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
   globalThis.fetch = ((url: string, init?: RequestInit) => realFetch(base + url, init)) as typeof fetch;
@@ -183,20 +191,22 @@ describe('UI — reprodução contínua', () => {
     expect(plays[1]).toBe(plays[0]);
   });
 
-  it('a barra também aparece para uma página tocada fora do modo contínuo, sem Interromper', async () => {
+  it('a barra também aparece para uma página tocada fora do modo contínuo e fecha sozinha ao terminar o áudio', async () => {
     await boot();
     await makeAudio(1);
     await openSession();
     expect(barVisible()).toBe(false);
-    click(byLabel('Ouvir esta página', card(1))!);
+    const listen = byLabel('Ouvir esta página', card(1))!;
+    click(listen);
     await waitFor(() => barVisible(), 'barra');
     expect(bar().getAttribute('data-mode')).toBe('single');
     expect(bar().textContent).toContain('Tocando a Página 1 de «Crônica do Teste»');
     const stop = byLabel('Interromper a reprodução contínua', bar())!;
     expect(stop.classList.contains('hidden')).toBe(true);
     expect((byLabel('Próxima página', bar()) as HTMLElement).classList.contains('hidden')).toBe(true);
-    click(byLabel('Fechar o player', bar())!);
-    await waitFor(() => !barVisible(), 'barra fechada');
+    ended();
+    await waitFor(() => !barVisible(), 'barra fecha sozinha ao terminar a faixa');
+    expect(listen.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('começando da página 2: a 1 fica de fora', async () => {

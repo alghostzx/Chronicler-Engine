@@ -55,6 +55,10 @@ class AudioPlayer {
       this.el.addEventListener(ev, () => this.emit());
     }
     this.el.addEventListener('ended', () => {
+      if (this.endedListeners.size === 0) {
+        this.stop();
+        return;
+      }
       this.el.currentTime = 0;
       this.emit();
       for (const fn of [...this.endedListeners]) fn();

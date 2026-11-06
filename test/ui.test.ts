@@ -351,7 +351,7 @@ describe('UI — sessão', () => {
 
     gateway.queue(narratorJson('A feira seguiu seu curso.'));
     await send('Sigo caminho');
-    await waitFor(() => text().includes('A feira seguiu seu curso.'), 'página seguinte');
+    await waitFor(() => text().includes('A feira seguiu seu curso.') && !document.querySelector('.is-ghost'), 'página seguinte');
 
     // Narrar o diálogo cru: a página vira prosa; a seguinte continua lá, sem esmaecer.
     click(card().querySelector<HTMLElement>('[aria-label="Narrar diálogo"]')!);

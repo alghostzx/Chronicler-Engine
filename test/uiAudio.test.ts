@@ -33,7 +33,15 @@ const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubble
 const text = () => document.body.textContent ?? '';
 const modalButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')).find((b) => b.textContent === label);
 
+const windowListeners: Array<[string, EventListenerOrEventListenerObject]> = [];
+const addWindowListener = window.addEventListener.bind(window) as typeof window.addEventListener;
+window.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+  if (type === 'hashchange' || type === 'keydown') windowListeners.push([type, listener]);
+  addWindowListener(type, listener, options);
+}) as typeof window.addEventListener;
+
 async function boot(hash: string, audio: { maxRequestsPerMinute?: number; rateWindowMs?: number; rateMarginMs?: number } = {}): Promise<void> {
+  for (const [type, listener] of windowListeners.splice(0)) window.removeEventListener(type, listener);
   gateway = mockGateway();
   repos = createRepositories(openDatabase(':memory:'));
   repos.settings.set('gemini_api_key', FAKE_KEY);
