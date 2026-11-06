@@ -783,4 +783,46 @@ describe('UI — sessão', () => {
     expect(ta.value).toBe('Faço algo');
     expect(document.querySelectorAll('section[data-page-id]').length).toBe(0);
   });
+
+  it('diálogo multi-NPC na UI: edita o cérebro, adiciona personagem com IA e usa o botão Passar a vez', async () => {
+    await openNewSession();
+    gateway.queue(
+      narratorJson('O mercador olha para você.', {
+        activate: true,
+        npc_name: 'Mercador',
+        player_name: 'Kira',
+        dynamic_system_prompt: 'Você é um mercador cauteloso.',
+      }),
+    );
+    await send('Converso com o mercador');
+    await waitFor(() => byLabel('Cérebro de Mercador'), 'chip do Mercador');
+
+    // Abre o cérebro do Mercador e edita
+    click(byLabel('Cérebro de Mercador')!);
+    const brainTa = await waitFor(() => byLabel('Cérebro do personagem') as HTMLTextAreaElement | null, 'textarea do cérebro');
+    expect(brainTa.value).toBe('Você é um mercador cauteloso.');
+    type(brainTa, 'Você é um mercador muito amigo de Kira.');
+    click(button('Salvar cérebro')!);
+    await waitFor(() => !document.querySelector('[role=dialog]'), 'modal de edição fechado');
+
+    // Adiciona um segundo personagem gerando o cérebro com IA
+    click(byLabel('Adicionar personagem ao diálogo')!);
+    const newName = await waitFor(() => byLabel('Nome do novo personagem') as HTMLInputElement | null, 'input nome novo NPC');
+    type(newName, 'Guarda');
+    gateway.queue(JSON.stringify({ dynamic_system_prompt: 'Você é o guarda atento da praça.' }));
+    click(button('Gerar cérebro com IA')!);
+    const newBrain = byLabel('Cérebro do novo personagem') as HTMLTextAreaElement;
+    await waitFor(() => newBrain.value === 'Você é o guarda atento da praça.', 'cérebro gerado pela IA');
+    click(button('Adicionar ao diálogo')!);
+    await waitFor(() => byLabel('Cérebro de Guarda') && !document.querySelector('[role=dialog]'), 'Guarda adicionado');
+    expect(text()).toContain('Mercador e Guarda');
+
+    // Usa o botão "Passar a vez" para ouvir os dois NPCs conversarem na rodada
+    gateway.queue(npcJson('Guarda, diga a ela que sou honesto!', false), npcJson('Calma, Mercador.', false));
+    click(button('Passar a vez')!);
+    await waitFor(
+      () => text().includes('Mercador: Guarda, diga a ela que sou honesto!') && text().includes('Guarda: Calma, Mercador.'),
+      'falas dos dois NPCs exibidas',
+    );
+  });
 });

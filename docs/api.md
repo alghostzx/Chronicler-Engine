@@ -24,7 +24,7 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 | --- | --- |
 | `GET /api/sessions` | `{ sessions }`: as crônicas salvas |
 | `POST /api/sessions` | Cria (`201 { session }`). `title` obrigatório; `system_rules`, `world_context`, `active_theme`, `token_limit` (1.000–10.000.000), `model`, `tts_auto` opcionais |
-| `GET /api/sessions/:id` | `{ session, pages, archives, active_dialogue }`: páginas ativas já com `audio` (só metadados) e o diálogo ativo **sem** o prompt |
+| `GET /api/sessions/:id` | `{ session, pages, archives, archived_pages, active_dialogue }`: páginas ativas já com `audio` (só metadados) e o diálogo ativo (com `participants` e seus cérebros) |
 | `PUT /api/sessions/:id/context` | Atualiza os mesmos campos de `POST` (ao menos um) |
 | `DELETE /api/sessions/:id` | Exclui (cascata) e cancela os jobs de áudio |
 | `GET /api/sessions/:id/export` | Markdown da crônica: `?scope=all\|active\|archived` e `?include_context=true` ([Narrador](narrador.md#exportação-em-markdown)) |
@@ -43,12 +43,16 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 
 | Rota | Descrição |
 | --- | --- |
-| `GET /api/sessions/:id/dialogue/active` | `{ dialogue, messages }` (reconexão após recarregar) |
-| `POST /api/dialogue/:id/message` | `{ message }` → `{ player_message, npc_message, npc_wants_to_end }` |
+| `GET /api/sessions/:id/dialogue/active` | `{ dialogue, messages }` (reconexão após recarregar; `dialogue.participants` traz os NPCs em ordem de turno com seu `dynamic_system_prompt`) |
+| `POST /api/dialogue/:id/message` | `{ message?, pass_turn? }` → `{ player_message, npc_message, npc_messages, npc_wants_to_end }`: envia fala do jogador ou passa a vez (`pass_turn: true`) e executa a rodada sequencial dos NPCs |
+| `POST /api/dialogue/:id/participants` | `{ npc_name, dynamic_system_prompt }` → `201 { participant, dialogue }`: adiciona mais um NPC à roda de conversa |
+| `PUT /api/dialogue/:id/participants/:participantId` | `{ npc_name?, dynamic_system_prompt? }` → `{ participant, dialogue, messages }`: altera o nome e/ou o cérebro (`dynamic_system_prompt`) de um NPC durante o diálogo |
+| `DELETE /api/dialogue/:id/participants/:participantId` | `{ dialogue }`: remove o NPC da conversa (`409` se restar apenas 1 participante) |
+| `POST /api/dialogue/:id/participants/generate-brain` | `{ npc_name, hint? }` → `{ dynamic_system_prompt }`: pede à IA para sugerir o cérebro do personagem com base na história e nas falas da cena |
 | `POST /api/dialogue/:id/conclude` | SSE: o Narrador escreve a página em prosa (até 3 tentativas; *fallback* cru); eventos `start`, `chunk`, `retry`, `page { page, discarded, narration }`, `error`, `done` |
 | `POST /api/dialogue/:id/cancel` | Descarta o diálogo e as mensagens, sem narrar |
 | `POST /api/narrative/pages/:id/narrate-dialogue` | SSE: reprocessa uma página de diálogo **crua** em prosa; não toca nas seguintes |
-| `POST /api/narrative/pages/:id/redo-dialogue` | `{ confirm_truncate? }` → `201 { dialogue, messages: [] }`: abre um novo diálogo com a mesma persona; a página só muda ao encerrar |
+| `POST /api/narrative/pages/:id/redo-dialogue` | `{ confirm_truncate? }` → `201 { dialogue, messages: [] }`: abre um novo diálogo com os mesmos participantes e personas; a página só muda ao encerrar |
 
 Detalhes: [Modo Diálogo](modo-dialogo.md).
 

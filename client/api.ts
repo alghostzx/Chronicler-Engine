@@ -80,6 +80,15 @@ export interface ArchivedPageSummary {
   npc_name: string | null;
 }
 
+export interface DialogueParticipant {
+  id: string;
+  dialogue_session_id: string;
+  order_index: number;
+  npc_name: string;
+  dynamic_system_prompt: string;
+  created_at: string;
+}
+
 export interface Dialogue {
   id: string;
   session_id: string;
@@ -90,6 +99,8 @@ export interface Dialogue {
   redo_page_id: string | null;
   status: 'active' | 'concluded';
   created_at: string;
+  /** Personagens (NPCs) participantes na roda de conversa, em ordem de turno. */
+  participants?: DialogueParticipant[];
 }
 
 export interface DialogueMessage {
@@ -97,6 +108,7 @@ export interface DialogueMessage {
   dialogue_session_id: string;
   sender: 'player' | 'npc';
   content: string;
+  speaker_name?: string | null;
   created_at: string;
 }
 

@@ -343,9 +343,14 @@ describe('POST /narrative/pages/:id/redo-dialogue (refazer, não destrutivo)', (
     const res = await redo();
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.dialogue).toMatchObject({ npc_name: 'Elena Vance', player_name: 'Kira', status: 'active', redo_page_id: pageId });
+    expect(body.dialogue).toMatchObject({
+      npc_name: 'Elena Vance',
+      player_name: 'Kira',
+      status: 'active',
+      redo_page_id: pageId,
+      participants: [{ npc_name: 'Elena Vance', dynamic_system_prompt: NPC_PROMPT }],
+    });
     expect(body.messages).toEqual([]);
-    expect(res.body).not.toContain('SEGREDO-DO-NPC');
 
     const active = t.repos.dialogues.getActive(sessionId)!;
     expect(active.dynamic_system_prompt).toBe(NPC_PROMPT); // a persona é a mesma
@@ -526,18 +531,24 @@ describe('player_name no gatilho do Narrador', () => {
 });
 
 describe('cancelamento e reconexão', () => {
-  it('GET /sessions/:id/dialogue/active devolve o diálogo e as falas, sem o prompt secreto', async () => {
+  it('GET /sessions/:id/dialogue/active devolve o diálogo, os participantes (com cérebro) e as falas', async () => {
     t.repos.dialogues.addMessage(dialogueId, 'player', 'oi');
     t.repos.dialogues.addMessage(dialogueId, 'npc', 'olá');
     const res = await t.app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/dialogue/active` });
     const body = res.json();
-    expect(body.dialogue).toMatchObject({ id: dialogueId, npc_name: 'Elena Vance', status: 'active' });
+    expect(body.dialogue).toMatchObject({
+      id: dialogueId,
+      npc_name: 'Elena Vance',
+      status: 'active',
+      participants: [{ npc_name: 'Elena Vance', dynamic_system_prompt: NPC_PROMPT }],
+    });
     expect(body.messages.map((m: { content: string }) => m.content)).toEqual(['oi', 'olá']);
-    expect(res.body).not.toContain('SEGREDO-DO-NPC');
 
     const detail = await t.app.inject({ method: 'GET', url: `/api/sessions/${sessionId}` });
     expect(detail.json().active_dialogue.id).toBe(dialogueId);
-    expect(detail.body).not.toContain('SEGREDO-DO-NPC');
+    expect(detail.json().active_dialogue.participants).toMatchObject([
+      { npc_name: 'Elena Vance', dynamic_system_prompt: NPC_PROMPT },
+    ]);
   });
 
   it('sem diálogo ativo devolve null; sessão inexistente 404', async () => {
@@ -595,5 +606,167 @@ describe('erros de API no diálogo', () => {
     });
     expect(res.statusCode).toBe(502);
     expect(failing.repos.dialogues.listMessages(did)).toHaveLength(0);
+  });
+});
+
+describe('diálogo multi-NPC e edição do cérebro', () => {
+  it('executa rodada sequencial entre múltiplos NPCs, isolando o cérebro de cada um e passando o histórico da rodada', async () => {
+    t.repos.dialogues.delete(dialogueId);
+    const multi = t.repos.dialogues.create(sessionId, 'Elena Vance', 'SEGREDO-ELENA', {
+      playerName: 'Kira',
+      participants: [
+        { npc_name: 'Elena Vance', dynamic_system_prompt: 'SEGREDO-ELENA' },
+        { npc_name: 'Guarda Real', dynamic_system_prompt: 'SEGREDO-GUARDA' },
+      ],
+    });
+    expect(multi.npc_name).toBe('Elena Vance e Guarda Real');
+
+    t.gateway.queue(npcJson('Eu não confio nela.'), npcJson('Alto lá, vocês dois!'));
+    const res = await say('Precisamos conversar.', multi.id);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.player_message).toMatchObject({ sender: 'player', content: 'Precisamos conversar.' });
+    expect(body.npc_messages).toHaveLength(2);
+    expect(body.npc_messages[0]).toMatchObject({ sender: 'npc', speaker_name: 'Elena Vance', content: 'Eu não confio nela.' });
+    expect(body.npc_messages[1]).toMatchObject({ sender: 'npc', speaker_name: 'Guarda Real', content: 'Alto lá, vocês dois!' });
+
+    // O primeiro NPC vê seu próprio segredo mas não o do segundo; o segundo vê a fala que o primeiro acabou de dar
+    const reqElena = t.gateway.requests[0]!;
+    const reqGuarda = t.gateway.requests[1]!;
+    expect(reqElena.systemInstruction).toContain('SEGREDO-ELENA');
+    expect(reqElena.systemInstruction).not.toContain('SEGREDO-GUARDA');
+    expect(reqGuarda.systemInstruction).toContain('SEGREDO-GUARDA');
+    expect(reqGuarda.systemInstruction).not.toContain('SEGREDO-ELENA');
+    expect(reqGuarda.userText).toContain('Kira: Precisamos conversar.');
+    expect(reqGuarda.userText).toContain('Elena Vance: Eu não confio nela.');
+  });
+
+  it('permite que um NPC pule seu turno (pass_turn: true), mas garante que ao menos um NPC responda na rodada', async () => {
+    t.repos.dialogues.delete(dialogueId);
+    const multi = t.repos.dialogues.create(sessionId, 'Elena', 'P1', {
+      playerName: 'Kira',
+      participants: [
+        { npc_name: 'Elena', dynamic_system_prompt: 'P1' },
+        { npc_name: 'Guarda', dynamic_system_prompt: 'P2' },
+      ],
+    });
+
+    // Elena pula a vez; Guarda (último quando ninguém falou ainda) é obrigado a responder
+    t.gateway.queue(JSON.stringify({ pass_turn: true, reply: '', end_conversation: false }), npcJson('Fale comigo, forasteira.'));
+    const res = await say('Guarda, abra o portão.', multi.id);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.npc_messages).toHaveLength(1);
+    expect(body.npc_messages[0]).toMatchObject({ speaker_name: 'Guarda', content: 'Fale comigo, forasteira.' });
+    // O segundo pedido não permitia pass_turn pois Elena já havia pulado
+    expect(t.gateway.requests[1]!.systemInstruction).toContain('Nesta rodada você deve responder');
+  });
+
+  it('permite que o jogador passe a vez (pass_turn: true) para ouvir os NPCs conversarem entre si', async () => {
+    t.repos.dialogues.delete(dialogueId);
+    const multi = t.repos.dialogues.create(sessionId, 'Elena', 'P1', {
+      playerName: 'Kira',
+      participants: [
+        { npc_name: 'Elena', dynamic_system_prompt: 'P1' },
+        { npc_name: 'Guarda', dynamic_system_prompt: 'P2' },
+      ],
+    });
+    t.gateway.queue(npcJson('Você viu aquilo, Guarda?'), npcJson('Vi sim, Elena.'));
+    const res = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${multi.id}/message`,
+      payload: { pass_turn: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.player_message).toBeNull();
+    expect(body.npc_messages.map((m: { speaker_name: string; content: string }) => `${m.speaker_name}: ${m.content}`)).toEqual([
+      'Elena: Você viu aquilo, Guarda?',
+      'Guarda: Vi sim, Elena.',
+    ]);
+  });
+
+  it('adiciona, edita o cérebro/nome, gera cérebro com IA e remove participantes durante o diálogo', async () => {
+    const activeRes = await t.app.inject({ method: 'GET', url: `/api/sessions/${sessionId}/dialogue/active` });
+    const p1 = activeRes.json().dialogue.participants[0]!;
+
+    // Não permite remover quando só há 1 participante
+    const delFail = await t.app.inject({
+      method: 'DELETE',
+      url: `/api/dialogue/${dialogueId}/participants/${p1.id}`,
+    });
+    expect(delFail.statusCode).toBe(409);
+
+    // Gera cérebro com IA para um novo NPC
+    t.gateway.queue(JSON.stringify({ dynamic_system_prompt: 'Você é o Taberneiro rabugento.' }));
+    const genRes = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${dialogueId}/participants/generate-brain`,
+      payload: { npc_name: 'Taberneiro', hint: 'Desconfiado' },
+    });
+    expect(genRes.statusCode).toBe(200);
+    expect(genRes.json()).toEqual({ dynamic_system_prompt: 'Você é o Taberneiro rabugento.' });
+
+    // Adiciona o segundo participante
+    const addRes = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${dialogueId}/participants`,
+      payload: { npc_name: 'Taberneiro', dynamic_system_prompt: 'Você é o Taberneiro rabugento.' },
+    });
+    expect(addRes.statusCode).toBe(201);
+    const p2 = addRes.json().participant;
+    expect(addRes.json().dialogue.npc_name).toBe('Elena Vance e Taberneiro');
+
+    // Edita o cérebro e o nome do primeiro participante (e atualiza falas anteriores dele)
+    t.repos.dialogues.addMessage(dialogueId, 'npc', 'Fala antiga.', 'Elena Vance');
+    const editRes = await t.app.inject({
+      method: 'PUT',
+      url: `/api/dialogue/${dialogueId}/participants/${p1.id}`,
+      payload: { npc_name: 'Lady Elena', dynamic_system_prompt: 'NOVO-CEREBRO-ELENA' },
+    });
+    expect(editRes.statusCode).toBe(200);
+    expect(editRes.json().participant).toMatchObject({ npc_name: 'Lady Elena', dynamic_system_prompt: 'NOVO-CEREBRO-ELENA' });
+    expect(editRes.json().dialogue.npc_name).toBe('Lady Elena e Taberneiro');
+    expect(editRes.json().messages[0].speaker_name).toBe('Lady Elena');
+
+    // Remove o segundo participante
+    const delOk = await t.app.inject({
+      method: 'DELETE',
+      url: `/api/dialogue/${dialogueId}/participants/${p2.id}`,
+    });
+    expect(delOk.statusCode).toBe(200);
+    expect(delOk.json().dialogue.npc_name).toBe('Lady Elena');
+    expect(delOk.json().dialogue.participants).toHaveLength(1);
+  });
+
+  it('o gatilho do Narrador aceita participants com múltiplos NPCs', async () => {
+    t.repos.dialogues.delete(dialogueId);
+    t.gateway.queue(
+      JSON.stringify({
+        narrative_text: 'Os dois se aproximam da mesa.',
+        dialogue_trigger: {
+          activate: true,
+          npc_name: 'Elena',
+          player_name: 'Kira',
+          dynamic_system_prompt: 'Persona 1',
+          participants: [
+            { npc_name: 'Elena', dynamic_system_prompt: 'Persona 1' },
+            { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2' },
+          ],
+        },
+      }),
+    );
+    const res = await t.app.inject({
+      method: 'POST',
+      url: `/api/sessions/${sessionId}/narrative/next`,
+      payload: { player_instruction: 'Sento à mesa.' },
+    });
+    expect(parseSse(res.body).map((e) => e.event)).toContain('dialogue_trigger');
+    const active = t.repos.dialogues.getActive(sessionId)!;
+    expect(active.npc_name).toBe('Elena e Marcus');
+    expect(t.repos.dialogues.listParticipants(active.id)).toMatchObject([
+      { npc_name: 'Elena', dynamic_system_prompt: 'Persona 1', order_index: 1 },
+      { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2', order_index: 2 },
+    ]);
   });
 });

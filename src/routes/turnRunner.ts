@@ -61,7 +61,10 @@ export class TurnRunner {
   maybeCreateDialogue(sessionId: string, result: NarratorResult): DialogueSession | undefined {
     const t = result.dialogue_trigger;
     if (!t.activate) return undefined;
-    return this.ctx.repos.dialogues.create(sessionId, t.npc_name!, t.dynamic_system_prompt!, { playerName: t.player_name });
+    return this.ctx.repos.dialogues.create(sessionId, t.npc_name!, t.dynamic_system_prompt!, {
+      playerName: t.player_name,
+      participants: t.participants,
+    });
   }
 
   /**

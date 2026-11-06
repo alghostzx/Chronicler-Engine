@@ -65,7 +65,7 @@ Regras que não podem regredir. Cada uma tem testes que falham se ela for quebra
 | 3 | Regenerar uma página passada trunca via `DELETE … WHERE order_index > ?`, só depois da resposta da IA, numa transação, e só com `confirm_truncate` | [`test/narrative.test.ts`](../test/narrative.test.ts), [`test/ui.test.ts`](../test/ui.test.ts) |
 | 4 | O HP vem da contagem **real** de tokens (`ai.models.countTokens`), nos limiares exatos de verde/amarelo/vermelho | [`test/tokens.test.ts`](../test/tokens.test.ts) |
 | 5 | A sub-sessão de diálogo **não altera as páginas** até o `/conclude` gravar a página narrada (falas literais verificadas); "refazer" só substitui a página antiga ao encerrar | [`test/dialogue.test.ts`](../test/dialogue.test.ts), [`test/dialogueProse.test.ts`](../test/dialogueProse.test.ts) |
-| 6 | O `dynamic_system_prompt` do NPC nunca sai pela API | [`test/dialogue.test.ts`](../test/dialogue.test.ts) |
+| 6 | Cada NPC só recebe seu próprio `dynamic_system_prompt` e as falas da cena; o `dynamic_system_prompt` nunca vai ao Narrador nem aos outros NPCs (mas é exposto e editável pelo autor em `dialogue.participants`) | [`test/dialogue.test.ts`](../test/dialogue.test.ts) |
 | 7 | Páginas arquivadas ficam **fora** do contexto da IA, do HP e da compactação, mas **dentro** do que o jogador lê e exporta | [`test/archives.test.ts`](../test/archives.test.ts) |
 | 8 | Prompts do jogador **nunca** são exportados | [`test/export.test.ts`](../test/export.test.ts) |
 | 9 | Contraste WCAG nos 8 temas (texto ≥ 4,5:1; ícones e acento ≥ 3:1) | [`test/pageThemes.test.ts`](../test/pageThemes.test.ts), `npm run check:paginas` |

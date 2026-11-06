@@ -64,7 +64,7 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: AppContext): vo
       pages: ctx.audio.decorate(repos.pages.listActive(session.id)),
       archives: repos.archives.list(session.id),
       archived_pages: repos.pages.listArchivedIndex(session.id),
-      active_dialogue: active ? publicDialogue(active) : null,
+      active_dialogue: active ? publicDialogue(active, repos.dialogues.listParticipants(active.id)) : null,
     };
   });
 

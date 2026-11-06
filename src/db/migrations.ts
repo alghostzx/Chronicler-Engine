@@ -89,4 +89,28 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 8,
+    description: 'diálogo multi-NPC (dialogue_participants) e speaker_name em dialogue_messages',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dialogue_participants (
+            id TEXT PRIMARY KEY,
+            dialogue_session_id TEXT NOT NULL,
+            order_index INTEGER NOT NULL,
+            npc_name TEXT NOT NULL,
+            dynamic_system_prompt TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dialogue_session_id) REFERENCES dialogue_sessions(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_dialogue_participants ON dialogue_participants(dialogue_session_id, order_index);
+        ALTER TABLE dialogue_messages ADD COLUMN speaker_name TEXT;
+        INSERT INTO dialogue_participants (id, dialogue_session_id, order_index, npc_name, dynamic_system_prompt, created_at)
+          SELECT id || '-p1', id, 1, npc_name, dynamic_system_prompt, created_at FROM dialogue_sessions;
+        UPDATE dialogue_messages
+          SET speaker_name = (SELECT npc_name FROM dialogue_sessions WHERE dialogue_sessions.id = dialogue_messages.dialogue_session_id)
+          WHERE sender = 'npc';
+      `);
+    },
+  },
 ];

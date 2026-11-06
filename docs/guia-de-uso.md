@@ -31,9 +31,11 @@ Editar o texto de uma página apaga o áudio dela (o áudio guardado deixa de co
 
 ## Modo Diálogo
 
-O Narrador pode abrir uma conversa com um NPC. O NPC é uma persona isolada, que **não conhece o resto da história** (nem os segredos que o Narrador não lhe contou); o Narrador escolhe o nome dele e como você será chamado na cena.
+O Narrador pode abrir uma conversa direta com um ou mais NPCs. Cada NPC é uma persona isolada, que **não conhece o resto da história** (nem os segredos dos outros NPCs); o Narrador escolhe o nome de cada participante e como você será chamado na cena.
 
-- Você conversa pela Doca, que passa a mostrar "Falando com: NPC". Recarregar a página retoma a cena.
+- Você conversa pela Doca, que passa a mostrar "Falando com: …". Ao lado de **Falar**, o botão **Passar a vez** permite que você fique em silêncio numa rodada para apenas ouvir os personagens reagirem ou conversarem entre si. Recarregar a página retoma a cena.
+- No cabeçalho do cartão de diálogo, cada participante aparece como um botão **🧠 Nome** ao lado de **+ Personagem**: clique em um personagem para **ver ou alterar o "cérebro"** (`dynamic_system_prompt`) e conduzir a conversa autoralmente (ou removê-lo da roda), ou clique em **+ Personagem** para incluir mais alguém na conversa (escrevendo o cérebro manualmente ou usando **Gerar cérebro com IA**).
+- Em diálogos com mais de um NPC, os turnos seguem a ordem da fila após a sua fala (e um NPC pode pular sua vez se não tiver nada relevante a acrescentar, garantindo-se sempre ao menos uma resposta por rodada).
 - Quem encerra é você: **Encerrar diálogo** ou **Descartar**. O NPC apenas *sinaliza* que quer terminar, destacando o botão.
 - Ao encerrar, a conversa **vira uma página** (selo *Diálogo com …*): o Narrador escreve a prosa em volta das falas, que ficam **literais**, em discurso direto e sem rótulos de falante. Se ele alterar alguma fala, tenta de novo (até 3 vezes); no pior caso a conversa é salva como transcrição crua (`**Nome:** fala`), com um aviso.
 - **Narrar diálogo** (pena) transforma uma página crua (do fallback ou de versões antigas) em prosa, **sem mexer nas páginas seguintes**, porque as falas, e portanto a história, não mudam.

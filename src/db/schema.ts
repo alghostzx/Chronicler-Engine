@@ -33,7 +33,7 @@
  * descreve o schema de um banco NOVO; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE`
  * da migração (um teste confere que os dois caminhos geram o mesmo schema).
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -97,12 +97,25 @@ CREATE TABLE IF NOT EXISTS dialogue_sessions (
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dialogue_participants (
+    id TEXT PRIMARY KEY,
+    dialogue_session_id TEXT NOT NULL,
+    order_index INTEGER NOT NULL,
+    npc_name TEXT NOT NULL,
+    dynamic_system_prompt TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (dialogue_session_id) REFERENCES dialogue_sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_dialogue_participants ON dialogue_participants(dialogue_session_id, order_index);
+
 CREATE TABLE IF NOT EXISTS dialogue_messages (
     id TEXT PRIMARY KEY,
     dialogue_session_id TEXT NOT NULL,
     sender TEXT CHECK(sender IN ('player', 'npc')) NOT NULL,
     content TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    speaker_name TEXT,
     FOREIGN KEY (dialogue_session_id) REFERENCES dialogue_sessions(id) ON DELETE CASCADE
 );
 
