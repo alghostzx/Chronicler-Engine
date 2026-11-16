@@ -773,6 +773,8 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
       expect(req.userText).toContain('4. Segredos e Linhas Vermelhas:');
       expect(req.userText).toContain('5. Conhecimento e Opinião sobre os Presentes:');
       expect(req.userText).toContain('6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente');
+      expect(req.userText).toContain('ISOLAMENTO EPISTÊMICO');
+      expect(req.userText).not.toContain('o que não tem como saber');
     }
 
     const active = t.repos.dialogues.getActive(sessionId)!;

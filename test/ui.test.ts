@@ -244,7 +244,10 @@ describe('UI — sessão', () => {
 
     gateway.queue(narratorJson('O silêncio voltou.'));
     await send('Espero');
-    await waitFor(() => text().includes('O silêncio voltou.'), 'segunda página');
+    await waitFor(
+      () => text().includes('O silêncio voltou.') && document.querySelectorAll('section[data-page-id]').length === 2,
+      'segunda página',
+    );
     expect(document.querySelectorAll('section[data-page-id]').length).toBe(2);
 
     // Cada página é um cartão separado, numerado de forma absoluta, com 5 ações (ouvir, reproduzir a partir daqui, editar texto, editar prompt, ramificar) só em ícone sempre visíveis.

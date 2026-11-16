@@ -199,8 +199,10 @@ const BRAIN_PILLARS_INSTRUCTION = `Estruture obrigatoriamente o "dynamic_system_
 2. Postura e Emoção Atual: o que está sentindo fisicamente e emocionalmente neste instante da cena.
 3. Objetivo Imediato: o que ele quer extrair ou forçar nesta conversa específica.
 4. Segredos e Linhas Vermelhas: o que ele jamais admitirá ou o que esconde a qualquer custo.
-5. Conhecimento e Opinião sobre os Presentes: o que sabe (e o que não tem como saber) e o que pensa do protagonista e dos outros personagens na roda.
-6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente onde ele está inserido: o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.`;
+5. Conhecimento e Opinião sobre os Presentes: o que efetivamente sabe (ou acredita) e o que pensa do protagonista e dos outros personagens na roda.
+6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente onde ele está inserido: o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.
+
+REGRA DE OURO SOBRE CONHECIMENTO (ISOLAMENTO EPISTÊMICO): O modelo que interpretará o NPC receberá APENAS este cérebro e as falas da conversa atual (ele não tem acesso ao restante da história). Portanto, JAMAIS escreva fatos ou segredos da trama que este personagem desconhece (nunca escreva frases como "Você não sabe que X aconteceu"). Tudo o que o personagem não presenciou ou não tem como saber deve ser simplesmente OMITIDO. Se ele tiver uma suposição ou crença falsa sobre algo, escreva apenas o que ele acredita ser verdade, sem mencionar a verdade oculta.`;
 
 /** Monta a requisição ao Gemini para gerar o "cérebro" (`dynamic_system_prompt`) de um NPC na cena. */
 export function buildNpcBrainRequest(input: {

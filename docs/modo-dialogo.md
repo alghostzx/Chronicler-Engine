@@ -19,7 +19,7 @@ O `dynamic_system_prompt`, gerado por `buildNpcBrainRequest` para cada personage
 2. **Postura e Emoção Atual:** o que está sentindo fisicamente e emocionalmente neste instante da cena.
 3. **Objetivo Imediato:** o que ele quer extrair ou forçar nesta conversa específica.
 4. **Segredos e Linhas Vermelhas:** o que ele jamais admitirá ou o que esconde a qualquer custo.
-5. **Conhecimento e Opinião sobre os Presentes:** o que sabe (e o que não tem como saber) e o que pensa do protagonista e dos outros personagens na roda.
+5. **Conhecimento e Opinião sobre os Presentes:** o que efetivamente sabe (ou acredita) e o que pensa do protagonista e dos outros personagens na roda (omitindo tudo o que o personagem desconhece, sem nunca listar fatos da trama aos quais ele não teve acesso).
 6. **Conhecimento e Opinião sobre assuntos recentes do local/ambiente:** o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.
 
 - **Isolamento entre modelos:** o `dynamic_system_prompt` de cada NPC **nunca** é enviado ao Narrador depois do gatilho e **nunca** é incluído no `systemInstruction` dos outros NPCs da roda.
