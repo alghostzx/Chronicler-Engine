@@ -838,6 +838,10 @@ describe('UI — sessão', () => {
     // Abre o cérebro do Mercador e edita
     click(byLabel('Cérebro de Mercador')!);
     const brainTa = await waitFor(() => byLabel('Cérebro do personagem') as HTMLTextAreaElement | null, 'textarea do cérebro');
+    const hintTa = byLabel('Direção autoral para gerar com IA') as HTMLTextAreaElement | null;
+    expect(hintTa?.tagName).toBe('TEXTAREA');
+    expect(hintTa?.style.maxHeight).toBe('50vh');
+    expect(brainTa.style.maxHeight).toBe('50vh');
     expect(brainTa.value).toBe('Você é um mercador cauteloso.');
     type(brainTa, 'Você é um mercador muito amigo de Kira.');
     click(button('Salvar cérebro')!);
@@ -865,5 +869,32 @@ describe('UI — sessão', () => {
       'falas dos dois NPCs exibidas',
     );
     expect(text()).toContain('Mercador e Guarda desejam encerrar a conversa.');
+  });
+
+  it('autoGrow: caixas de digitação (Nova Crônica e Doca) expandem até 50% da altura da tela e depois ligam barra de rolagem', async () => {
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true, writable: true });
+    await openNewChronicleFrame();
+    const worldTa = byLabel('Contexto do mundo') as HTMLTextAreaElement;
+    expect(worldTa.style.maxHeight).toBe('50vh');
+
+    // Simula conteúdo de 240px (< 400px = 50% de 800px): cresce sem rolagem
+    Object.defineProperty(worldTa, 'scrollHeight', { value: 240, configurable: true });
+    type(worldTa, 'Linha 1\nLinha 2\nLinha 3');
+    expect(worldTa.style.height).toBe('240px');
+    expect(worldTa.style.overflowY).toBe('hidden');
+
+    // Simula conteúdo de 620px (> 400px): trava em 400px e ativa rolagem vertical
+    Object.defineProperty(worldTa, 'scrollHeight', { value: 620, configurable: true });
+    type(worldTa, 'Muitas linhas...');
+    expect(worldTa.style.height).toBe('400px');
+    expect(worldTa.style.overflowY).toBe('auto');
+
+    await openNewSession();
+    const dockTa = byLabel('Instrução para o Narrador') as HTMLTextAreaElement;
+    expect(dockTa.style.maxHeight).toBe('50vh');
+    Object.defineProperty(dockTa, 'scrollHeight', { value: 500, configurable: true });
+    type(dockTa, 'Instrução longa...');
+    expect(dockTa.style.height).toBe('400px');
+    expect(dockTa.style.overflowY).toBe('auto');
   });
 });

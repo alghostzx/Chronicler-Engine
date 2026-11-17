@@ -12,7 +12,7 @@ import {
   type Session,
 } from '../api';
 import { downloadStoryMarkdown, type ExportScope } from '../download';
-import { confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, toast } from '../dom';
+import { autoGrow, confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, syncAutoGrow, toast } from '../dom';
 import { audioPlayer } from '../audioPlayer';
 import { setQuietReadyToasts } from '../audioUi';
 import { ContinuousPlayback, type EndInfo, type StatusPage } from '../continuousPlayback';
@@ -404,7 +404,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   function editArticle(b: Page): HTMLElement {
-    const ta = h('textarea', { class: 'input min-h-[12rem] font-reading text-base leading-7', 'aria-label': 'Editar página', value: b.generated_text });
+    const ta = autoGrow(h('textarea', { class: 'input min-h-[12rem] font-reading text-base leading-7', 'aria-label': 'Editar página', value: b.generated_text }));
     const saveBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Salvar edição');
     saveBtn.addEventListener('click', async () => {
       if (ta.value.trim() === '') {
@@ -665,18 +665,20 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const inDialogue = !!dlg;
     const preparingDialogue = !!ghost?.preparingDialogue;
     const multi = !!dlg && ((dlg.dialogue.participants?.length ?? 0) > 1 || dlg.dialogue.npc_name.includes(' e '));
-    const ta = h('textarea', {
-      class: 'input min-h-[3.5rem] flex-1 resize-y font-reading',
-      rows: '2',
-      value: inputValue,
-      disabled: busy || (inDialogue && dlg!.waiting),
-      'aria-label': inDialogue ? 'Sua fala' : 'Instrução para o Narrador',
-      placeholder: preparingDialogue
-        ? 'Aguarde: preparando os cérebros dos personagens para o diálogo…'
-        : inDialogue
-          ? `Fale com ${dlg!.dialogue.npc_name}…`
-          : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
-    });
+    const ta = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[3.5rem] flex-1 resize-y font-reading',
+        rows: '2',
+        value: inputValue,
+        disabled: busy || (inDialogue && dlg!.waiting),
+        'aria-label': inDialogue ? 'Sua fala' : 'Instrução para o Narrador',
+        placeholder: preparingDialogue
+          ? 'Aguarde: preparando os cérebros dos personagens para o diálogo…'
+          : inDialogue
+            ? `Fale com ${dlg!.dialogue.npc_name}…`
+            : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
+      }),
+    );
     ta.addEventListener('input', () => {
       inputValue = ta.value;
     });
@@ -688,14 +690,14 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     });
     const send = h(
       'button',
-      { class: 'btn btn-primary self-stretch px-5', type: 'button', disabled: busy || (inDialogue && dlg!.waiting), onClick: () => void submit() },
+      { class: 'btn btn-primary min-h-[3.5rem] self-end px-5', type: 'button', disabled: busy || (inDialogue && dlg!.waiting), onClick: () => void submit() },
       preparingDialogue ? 'Preparando diálogo…' : busy ? 'Narrando…' : inDialogue ? 'Falar' : 'Enviar',
     );
     const passBtn = inDialogue
       ? h(
           'button',
           {
-            class: 'btn self-stretch px-3 text-sm',
+            class: 'btn min-h-[3.5rem] self-end px-3 text-sm',
             type: 'button',
             disabled: busy || dlg!.waiting,
             title: multi
@@ -881,12 +883,14 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   function openRegenerate(b: Page): void {
     const later = detail.pages.filter((x) => x.order_index > b.order_index).length;
-    const ta = h('textarea', {
-      class: 'input min-h-[8rem]',
-      'aria-label': 'Instrução do jogador',
-      value: b.player_instruction ?? '',
-      placeholder: 'Descreva o que deve acontecer neste trecho…',
-    });
+    const ta = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[8rem]',
+        'aria-label': 'Instrução do jogador',
+        value: b.player_instruction ?? '',
+        placeholder: 'Descreva o que deve acontecer neste trecho…',
+      }),
+    );
     const go = h('button', { class: `btn btn-primary ${later > 0 ? 'btn-danger' : ''}`, type: 'button' }, later > 0 ? `Re-gerar e descartar ${countPages(later)}` : 'Re-gerar');
     const modal = openModal(
       'Prompt de Origem',
@@ -996,17 +1000,21 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       value: p.npc_name,
       'aria-label': 'Nome do personagem',
     });
-    const hintInput = h('input', {
-      class: 'input flex-1 text-sm',
-      type: 'text',
-      placeholder: 'Opcional: direção autoral para gerar com IA (ex.: está mentindo sobre a chave)…',
-      'aria-label': 'Direção autoral para gerar com IA',
-    });
-    const brainTa = h('textarea', {
-      class: 'input min-h-[10rem] font-reading text-sm leading-6',
-      value: p.dynamic_system_prompt,
-      'aria-label': 'Cérebro do personagem',
-    });
+    const hintInput = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[2.375rem] flex-1 resize-y text-sm leading-5',
+        rows: '1',
+        placeholder: 'Opcional: direção autoral para gerar com IA (ex.: está mentindo sobre a chave)…',
+        'aria-label': 'Direção autoral para gerar com IA',
+      }),
+    );
+    const brainTa = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[10rem] font-reading text-sm leading-6',
+        value: p.dynamic_system_prompt,
+        'aria-label': 'Cérebro do personagem',
+      }),
+    );
     const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
     const genStatus = h(
       'p',
@@ -1033,7 +1041,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         ),
         h(
           'div',
-          { class: 'flex flex-wrap items-center gap-2' },
+          { class: 'flex flex-wrap items-end gap-2' },
           hintInput,
           genBtn,
         ),
@@ -1071,6 +1079,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           { npc_name: npcName, ...(hintInput.value.trim() ? { hint: hintInput.value.trim() } : {}) },
         );
         brainTa.value = res.dynamic_system_prompt;
+        syncAutoGrow(brainTa);
         toast('Cérebro gerado pela IA. Revise e clique em “Salvar cérebro”.', 'info');
       } catch (err) {
         toast((err as Error).message, 'error');
@@ -1140,18 +1149,22 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       placeholder: 'Ex.: Guarda Real, Mercador…',
       'aria-label': 'Nome do novo personagem',
     });
-    const hintInput = h('input', {
-      class: 'input flex-1 text-sm',
-      type: 'text',
-      placeholder: 'Opcional: quem é este personagem ou o que quer na cena…',
-      'aria-label': 'Direção autoral para gerar com IA',
-    });
-    const brainTa = h('textarea', {
-      class: 'input min-h-[10rem] font-reading text-sm leading-6',
-      placeholder:
-        'Descreva quem é o personagem, sua personalidade, humor atual, o que sabe sobre a cena e seus objetivos (ou clique em “Gerar cérebro com IA”)…',
-      'aria-label': 'Cérebro do novo personagem',
-    });
+    const hintInput = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[2.375rem] flex-1 resize-y text-sm leading-5',
+        rows: '1',
+        placeholder: 'Opcional: quem é este personagem ou o que quer na cena…',
+        'aria-label': 'Direção autoral para gerar com IA',
+      }),
+    );
+    const brainTa = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[10rem] font-reading text-sm leading-6',
+        placeholder:
+          'Descreva quem é o personagem, sua personalidade, humor atual, o que sabe sobre a cena e seus objetivos (ou clique em “Gerar cérebro com IA”)…',
+        'aria-label': 'Cérebro do novo personagem',
+      }),
+    );
     const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
     const genStatus = h(
       'p',
@@ -1177,7 +1190,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           'Nome do personagem',
           nameInput,
         ),
-        h('div', { class: 'flex flex-wrap items-center gap-2' }, hintInput, genBtn),
+        h('div', { class: 'flex flex-wrap items-end gap-2' }, hintInput, genBtn),
         genStatus,
         h(
           'label',
@@ -1211,6 +1224,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           { npc_name: npcName, ...(hintInput.value.trim() ? { hint: hintInput.value.trim() } : {}) },
         );
         brainTa.value = res.dynamic_system_prompt;
+        syncAutoGrow(brainTa);
         toast('Cérebro sugerido pela IA.', 'info');
       } catch (err) {
         toast((err as Error).message, 'error');
