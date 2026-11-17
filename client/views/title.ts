@@ -1,5 +1,5 @@
 import { api, ApiError, THEMES, type ModelsInfo, type Session, type SettingsInfo, type ThemeId } from '../api';
-import { h, mount, openModal, toast, confirmModal, type ModalHandle } from '../dom';
+import { autoGrow, h, mount, openModal, toast, confirmModal, type ModalHandle } from '../dom';
 import { applyTitleScreen } from '../theme';
 import { modelOptions } from './options';
 
@@ -48,7 +48,13 @@ export async function renderTitle(root: HTMLElement, initial: TitleView): Promis
     const titleInput = h('input', { class: 'input', required: true, maxlength: '200', placeholder: 'Ex.: A Queda de Valdoria', 'aria-label': 'Título da crônica' });
     const themeSelect = h('select', { class: 'input', 'aria-label': 'Tema' }, ...THEMES.map((t) => h('option', { value: t.id }, t.label)));
     const limitInput = h('input', { class: 'input', type: 'number', min: '1000', max: '10000000', step: '1000', value: String(DEFAULT_LIMIT), 'aria-label': 'Limite de tokens' });
-    const worldInput = h('textarea', { class: 'input min-h-[8rem] font-reading', placeholder: 'Mundo, personagens, regras do universo… (opcional; pode editar depois)', 'aria-label': 'Contexto do mundo' });
+    const worldInput = autoGrow(
+      h('textarea', {
+        class: 'input min-h-[8rem] font-reading',
+        placeholder: 'Mundo, personagens, regras do universo… (opcional; pode editar depois)',
+        'aria-label': 'Contexto do mundo',
+      }),
+    );
     const modelSelect = settings.api_key_configured ? h('select', { class: 'input', 'aria-label': 'Modelo da sessão' }, ...modelOptions(models, null, true)) : null;
     return h(
       'form',

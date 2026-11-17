@@ -183,3 +183,30 @@ export function formatNumber(n: number): string {
 export function countPages(n: number): string {
   return `${formatNumber(n)} ${n === 1 ? 'página' : 'páginas'}`;
 }
+
+/**
+ * Ajusta a altura de uma `<textarea>` ao seu conteúdo até um teto proporcional à altura da janela
+ * (por padrão 50% da tela, `50vh`), ativando a barra de rolagem vertical apenas quando ultrapassar o limite.
+ */
+export function syncAutoGrow(ta: HTMLTextAreaElement, maxViewportFraction = 0.5): void {
+  const vh = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 800;
+  const maxPx = Math.max(120, Math.floor(vh * maxViewportFraction));
+  ta.style.maxHeight = `${Math.round(maxViewportFraction * 100)}vh`;
+  ta.style.height = 'auto';
+  const scrollH = ta.scrollHeight;
+  if (scrollH > 0) {
+    const target = Math.min(scrollH, maxPx);
+    ta.style.height = `${target}px`;
+    ta.style.overflowY = scrollH > maxPx ? 'auto' : 'hidden';
+  }
+}
+
+export function autoGrow(ta: HTMLTextAreaElement, maxViewportFraction = 0.5): HTMLTextAreaElement {
+  const sync = () => syncAutoGrow(ta, maxViewportFraction);
+  ta.addEventListener('input', sync);
+  sync();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(sync);
+  }
+  return ta;
+}
