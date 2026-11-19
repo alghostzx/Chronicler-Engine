@@ -21,7 +21,8 @@ export const NPC_RESPONSE_SCHEMA = {
     },
     end_conversation: {
       type: 'boolean',
-      description: 'true somente se a conversa chegou a um fim natural (despedida, interrupção, ruptura).',
+      description:
+        'true quando a conversa chegar a um fim natural (despedida, assunto resolvido ou esgotado, o personagem precisa ir embora, perda de paciência ou ruptura); caso contrário, false.',
     },
   },
   required: ['reply', 'end_conversation'],
@@ -34,7 +35,7 @@ export const NPC_BRAIN_SCHEMA = {
     dynamic_system_prompt: {
       type: 'string',
       description:
-        'Briefing completo de interpretação do NPC em português (em segunda pessoa: "Você é..."), estruturado obrigatoriamente nos 6 pilares: 1) Identidade e Voz, 2) Postura e Emoção Atual, 3) Objetivo Imediato, 4) Segredos e Linhas Vermelhas, 5) Conhecimento e Opinião sobre os Presentes, 6) Conhecimento e Opinião sobre Assuntos Recentes do Local/Ambiente.',
+        'Briefing objetivo e enxuto de interpretação do NPC em português (em segunda pessoa: "Você é...", 2 a 3 frases diretas por pilar), estruturado nos 6 pilares: 1) Identidade e Voz, 2) Postura e Emoção Atual, 3) Intenção ou Interesse na Cena, 4) Segredos e Linhas Vermelhas, 5) Conhecimento e Opinião sobre os Presentes, 6) Conhecimento e Opinião sobre Assuntos Recentes do Local/Ambiente.',
     },
   },
   required: ['dynamic_system_prompt'],
@@ -59,8 +60,9 @@ const NPC_GUARD_RULES = `
 REGRAS DE INTERPRETAÇÃO (sempre válidas):
 - Responda sempre em primeira pessoa, como o personagem, sem sair do papel.
 - Nunca narre, fale ou decida ações pelo protagonista (o jogador) nem pelos outros personagens presentes.
-- Seja conciso e reativo: responda apenas ao que foi dito, em poucas frases.
-- Responda exclusivamente no formato JSON especificado. Defina "end_conversation" como true apenas se a conversa chegou a um fim natural; caso contrário, false.`;
+- Fale como uma pessoa real em conversa oral, ajustando o tamanho da fala ao momento: em bate-papo casual, trocas rápidas ou discussões, use frases curtas e diretas (1 a 3 frases, sem palestras nem monólogos); só se estenda em parágrafos quando o momento pedir naturalmente (por exemplo, ao contar uma história ou dar uma explicação longa pedida pelo interlocutor).
+- Seja flexível e orgânico: acompanhe mudanças de assunto trazidas pelo interlocutor, reaja ao que acabou de ser dito e não fique insistindo roboticamente no mesmo ponto ou intenção se a conversa tomou outro rumo.
+- Responda exclusivamente no formato JSON especificado. Defina "end_conversation" como true quando a conversa chegar a um fim natural (despedida, assunto resolvido ou esgotado, necessidade de ir embora, perda de paciência ou ruptura), sem forçar continuação artificial; caso contrário, false.`;
 
 export function buildNpcSystemInstruction(
   dynamicSystemPrompt: string,
@@ -193,11 +195,11 @@ export function parseNpcReply(raw: string, opts?: { allowPassTurn?: boolean }): 
   };
 }
 
-const BRAIN_PILLARS_INSTRUCTION = `Estruture obrigatoriamente o "dynamic_system_prompt" em segunda pessoa ("Você é...") cobrindo de forma densa, específica e coerente com o que faz sentido este personagem saber na história os 6 pilares abaixo:
+const BRAIN_PILLARS_INSTRUCTION = `Estruture o "dynamic_system_prompt" em segunda pessoa ("Você é...") de forma objetiva, enxuta e direta (2 a 3 frases curtas por pilar, sem floreios literários), cobrindo de maneira específica e coerente com o que faz sentido este personagem saber na história os 6 pilares abaixo:
 
 1. Identidade e Voz: tiques verbais, vocabulário, cadência, como reage sob pressão.
 2. Postura e Emoção Atual: o que está sentindo fisicamente e emocionalmente neste instante da cena.
-3. Objetivo Imediato: o que ele quer extrair ou forçar nesta conversa específica.
+3. Intenção ou Interesse na Cena: o que o personagem tem em mente ou gostaria de tratar agora (se houver; pode ser apenas conversar, observar ou passar o tempo), sem tratá-lo como uma obsessão rígida.
 4. Segredos e Linhas Vermelhas: o que ele jamais admitirá ou o que esconde a qualquer custo.
 5. Conhecimento e Opinião sobre os Presentes: o que efetivamente sabe (ou acredita) e o que pensa do protagonista e dos outros personagens na roda.
 6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente onde ele está inserido: o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.

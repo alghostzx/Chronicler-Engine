@@ -13,11 +13,11 @@ Não existe botão para "entrar em modo diálogo". O gatilho vem **só do Narrad
 
 ## O NPC e o sigilo
 
-O `dynamic_system_prompt`, gerado por `buildNpcBrainRequest` para cada personagem (ou ajustado/regenerado sob demanda pelo autor), é estruturado obrigatoriamente em **6 pilares**:
+O `dynamic_system_prompt`, gerado por `buildNpcBrainRequest` para cada personagem (ou ajustado/regenerado sob demanda pelo autor), é redigido de forma objetiva e enxuta (2 a 3 frases diretas por pilar, para não induzir monólogos prolixos) em **6 pilares**:
 
 1. **Identidade e Voz:** tiques verbais, vocabulário, cadência, como reage sob pressão.
 2. **Postura e Emoção Atual:** o que está sentindo fisicamente e emocionalmente neste instante da cena.
-3. **Objetivo Imediato:** o que ele quer extrair ou forçar nesta conversa específica.
+3. **Intenção ou Interesse na Cena:** o que o personagem tem em mente ou gostaria de tratar agora (se houver; pode ser apenas conversar ou observar), sem rigidez obsessiva.
 4. **Segredos e Linhas Vermelhas:** o que ele jamais admitirá ou o que esconde a qualquer custo.
 5. **Conhecimento e Opinião sobre os Presentes:** o que efetivamente sabe (ou acredita) e o que pensa do protagonista e dos outros personagens na roda (omitindo tudo o que o personagem desconhece, sem nunca listar fatos da trama aos quais ele não teve acesso).
 6. **Conhecimento e Opinião sobre assuntos recentes do local/ambiente:** o que sabe e pensa sobre os últimos acontecimentos relevantes a ele, ou sobre o que ocorreu recentemente no local.

@@ -769,7 +769,7 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
       expect(req.userText).toContain('Os dois se aproximam da mesa.');
       expect(req.userText).toContain('1. Identidade e Voz:');
       expect(req.userText).toContain('2. Postura e Emoção Atual:');
-      expect(req.userText).toContain('3. Objetivo Imediato:');
+      expect(req.userText).toContain('3. Intenção ou Interesse na Cena:');
       expect(req.userText).toContain('4. Segredos e Linhas Vermelhas:');
       expect(req.userText).toContain('5. Conhecimento e Opinião sobre os Presentes:');
       expect(req.userText).toContain('6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente');
