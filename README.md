@@ -60,6 +60,7 @@ Docker Compose, Podman, atualização, backup e solução de problemas: [Instala
 | [Arquitetura](docs/arquitetura.md) | Visão geral, stack, estrutura do código, ciclo de geração, SSE |
 | [Narrador](docs/narrador.md) | Payload e isolamento, regras, saída estruturada, HP, compactação |
 | [Modo Diálogo](docs/modo-dialogo.md) | Persona do NPC, conclusão narrada, fidelidade, refazer e reprocessar |
+| [Prompts e chamadas LLM](docs/prompts-e-chamadas-llm.md) | Comandos, prompts, schemas e payloads enviados à API do Gemini em cada chamada |
 | [Interface](docs/interface.md) | Rotas, tela inicial, Tome, cartão de página, temas, acessibilidade |
 | [Modelo de dados](docs/modelo-de-dados.md) | Schema SQLite, migrações |
 | [API](docs/api.md) | Todas as rotas REST e SSE |

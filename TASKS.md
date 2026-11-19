@@ -15,6 +15,7 @@
 | Visão geral, stack, estrutura do código, ciclo de geração, SSE, Docker | [`docs/arquitetura.md`](docs/arquitetura.md) |
 | Payload do Narrador, regras, saída estruturada, páginas, HP, compactação, export | [`docs/narrador.md`](docs/narrador.md) |
 | Modo Diálogo (persona, conclusão narrada, fidelidade, refazer, reprocessar) | [`docs/modo-dialogo.md`](docs/modo-dialogo.md) |
+| Prompts, schemas e payloads enviados à API do Gemini em cada chamada | [`docs/prompts-e-chamadas-llm.md`](docs/prompts-e-chamadas-llm.md) |
 | Schema, migrações, histórico de versões | [`docs/modelo-de-dados.md`](docs/modelo-de-dados.md) |
 | Rotas REST/SSE (**verificadas por `check:docs`**) | [`docs/api.md`](docs/api.md) |
 | Narração por voz e reprodução contínua | [`docs/narracao-por-voz.md`](docs/narracao-por-voz.md) |
