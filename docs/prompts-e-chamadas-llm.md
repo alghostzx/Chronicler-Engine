@@ -9,7 +9,7 @@ Todas as chamadas passam exclusivamente pela fronteira [`GeminiGateway`](../src/
 | # | Momento / Gatilho | Rota(s) REST/SSE | Método no SDK | Saída | Timeout | Fonte no código |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | [Gerar ou re-gerar página narrativa](#1-gerar-ou-re-gerar-página-narrativa) | `POST /api/sessions/:id/narrative/next`, `POST /api/narrative/pages/:id/regenerate` | `models.generateContentStream` | JSON (`NARRATOR_RESPONSE_SCHEMA`) | `180 s` | [`contextBuilder.ts`](../src/ai/contextBuilder.ts), [`narrator.ts`](../src/prompts/narrator.ts) |
-| 2 | [Gerar cérebro de NPC (6 pilares)](#2-gerar-cérebro-de-npc-6-pilares) | `POST /api/dialogue/:id/prepare-brains`, `POST /api/dialogue/:id/participants/generate-brain` | `models.generateContentStream` | JSON (`NPC_BRAIN_SCHEMA`) | `180 s` | [`dialogue.ts`](../src/ai/dialogue.ts) |
+| 2 | [Gerar ou editar cérebro de NPC (6 pilares)](#2-gerar-ou-editar-cérebro-de-npc-6-pilares) | `POST /api/dialogue/:id/prepare-brains`, `POST /api/dialogue/:id/participants/generate-brain`, `POST /api/dialogue/:id/participants/edit-brain` | `models.generateContentStream` | JSON (`NPC_BRAIN_SCHEMA`) | `180 s` | [`dialogue.ts`](../src/ai/dialogue.ts) |
 | 3 | [Fala de NPC no Modo Diálogo](#3-fala-de-npc-no-modo-diálogo) | `POST /api/dialogue/:id/message` | `models.generateContentStream` | JSON (`NPC_RESPONSE_SCHEMA`) | `180 s` | [`dialogue.ts`](../src/ai/dialogue.ts) |
 | 4 | [Narrar diálogo concluído em prosa](#4-narrar-diálogo-concluído-em-prosa) | `POST /api/dialogue/:id/conclude`, `POST /api/narrative/pages/:id/narrate-dialogue` | `models.generateContentStream` | JSON (`NARRATOR_RESPONSE_SCHEMA`) | `180 s` | [`dialogueProse.ts`](../src/ai/dialogueProse.ts) |
 | 5 | [Compactação: minuta da sinopse](#5-compactação-minuta-da-sinopse) | `POST /api/sessions/:id/compact/preview` | `models.generateContentStream` | Texto livre | `300 s` | [`compaction.ts`](../src/ai/compaction.ts) |
@@ -92,12 +92,14 @@ Montado por `buildNarratorRequest` ([`src/ai/contextBuilder.ts`](../src/ai/conte
 
 ---
 
-## 2. Gerar cérebro de NPC (6 pilares)
+## 2. Gerar ou editar cérebro de NPC (6 pilares)
 
 - **Quando acontece:**
   1. Ao iniciar o Modo Diálogo, quando o autor confirma o cartão de Direção Autoral e clica em **Gerar cérebros e iniciar diálogo** (`POST /api/dialogue/:id/prepare-brains`) — uma chamada sequencial por participante, já incluindo a página que acabou de ser escrita e a direção autoral (`hint`) opcional de cada personagem;
-  2. Sob demanda durante a conversa, quando o autor clica em **Gerar cérebro com IA** nos modais de edição ou inclusão de personagem (`POST /api/dialogue/:id/participants/generate-brain`), incluindo eventuais falas já trocadas na cena e uma direção autoral (`hint`) opcional.
-- **Montador:** `buildNpcBrainRequest` ([`src/ai/dialogue.ts`](../src/ai/dialogue.ts)).
+  2. Sob demanda durante a conversa, quando o autor clica em **Gerar cérebro com IA** nos modais de edição ou inclusão de personagem (`POST /api/dialogue/:id/participants/generate-brain`), gerando um cérebro novo do zero a partir da história, das falas já trocadas na cena e de uma direção autoral (`hint`) opcional;
+  3. Sob demanda durante a conversa, quando o autor clica em **Editar cérebro com IA** no modal do personagem (`POST /api/dialogue/:id/participants/edit-brain`), alterando o cérebro existente (`current_brain`) sem reescrevê-lo do zero, incorporando o histórico da conversa até agora e a nova direção autoral (`hint`).
+- **Montadores:** `buildNpcBrainRequest` (geração do zero) e `buildNpcBrainEditRequest` (edição incremental do cérebro atual) em [`src/ai/dialogue.ts`](../src/ai/dialogue.ts).
+- **Diferença no modo de edição (`buildNpcBrainEditRequest`):** além do `world_context`, do corpus anterior e de `# FALAS DA CENA ATÉ AGORA`, o turno `user` inclui o bloco `# CÉREBRO ATUAL DO PERSONAGEM "<npcName>"` com o conteúdo atual do campo e regras explícitas para preservar identidade, tiques verbais, segredos e ajustes manuais que não conflitem com a nova direção autoral ou com o andamento da conversa. Ambos reutilizam `BRAIN_PILLARS_INSTRUCTION` e `NPC_BRAIN_SCHEMA`.
 
 ### `systemInstruction`
 
