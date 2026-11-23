@@ -49,7 +49,7 @@ A chamada usa `responseMimeType: application/json` + `responseJsonSchema` ([`src
 }
 ```
 
-`dialogue_trigger` com `activate: true` mas sem nenhum nome válido em `npc_names` é tratado como inativo. Quando ativo, logo após o término de `narrative_text` o servidor faz uma chamada separada por personagem (`buildNpcBrainRequest`) para gerar o `dynamic_system_prompt` de 6 pilares levando em conta toda a história (inclusive a página recém-escrita).
+`dialogue_trigger` com `activate: true` mas sem nenhum nome válido em `npc_names` é tratado como inativo. Quando ativo, a página narrativa é gravada imediatamente e o diálogo abre em estado de preparação (Direção Autoral) para que o autor possa opcionalmente orientar cada personagem antes de disparar `POST /api/dialogue/:id/prepare-brains` (`buildNpcBrainRequest`), que gera o `dynamic_system_prompt` de 6 pilares levando em conta toda a história (inclusive a página recém-escrita) e a direção autoral.
 
 ## Páginas
 

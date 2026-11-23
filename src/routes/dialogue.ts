@@ -8,6 +8,7 @@ import {
 } from '../ai/dialogue.js';
 import { cleanSpeakerName } from '../ai/narratorSchema.js';
 import { HttpError, type AppContext } from '../context.js';
+import { formatParticipantsNames } from '../db/repositories/dialogues.js';
 import type { DialogueMessage, DialogueParticipant, DialogueSession } from '../db/types.js';
 import { idParams, requireSession } from './common.js';
 import { friendlyError } from './turnRunner.js';
@@ -98,6 +99,10 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
                   created_at: dialogue.created_at,
                 },
               ];
+
+        if (effectiveParticipants.some((p) => p.dynamic_system_prompt.trim().length === 0)) {
+          throw new HttpError(409, 'Gere os cérebros dos personagens antes de iniciar a conversa.');
+        }
 
         try {
           if (effectiveParticipants.length === 1 && !passTurn) {
@@ -193,6 +198,103 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
           );
         }
       }, repos.dialogues.listParticipants(dialogue.id).length > 1 ? 'Aguarde a resposta anterior dos personagens.' : 'Aguarde a resposta anterior do NPC.');
+    },
+  );
+
+  // --- Preparação inicial dos cérebros com Direção Autoral ----------------------------------------------------------
+  app.post<{
+    Params: { id: string };
+    Body?: { participants?: { npc_name: string; hint?: string }[] } | null;
+  }>(
+    '/api/dialogue/:id/prepare-brains',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: ['object', 'null'],
+          additionalProperties: false,
+          properties: {
+            participants: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 10,
+              items: {
+                type: 'object',
+                required: ['npc_name'],
+                additionalProperties: false,
+                properties: {
+                  npc_name: { type: 'string', minLength: 1, maxLength: 120 },
+                  hint: { type: 'string', maxLength: 4000 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const dialogue = requireActiveDialogue(req.params.id);
+      const session = requireSession(repos, dialogue.session_id);
+      const lockKey = `d:${dialogue.id}`;
+      return turns.withClaim(lockKey, async () => {
+        if (turns.isBusy(session.id)) {
+          throw new HttpError(409, 'Há uma operação em andamento nesta sessão.');
+        }
+        const rawEntries =
+          req.body?.participants && req.body.participants.length > 0
+            ? req.body.participants
+            : repos.dialogues.listParticipants(dialogue.id).map((p) => ({ npc_name: p.npc_name, hint: undefined }));
+
+        const entries: { npc_name: string; hint?: string }[] = [];
+        for (const item of rawEntries) {
+          const cleaned = cleanSpeakerName(item.npc_name);
+          if (cleaned && !entries.some((e) => e.npc_name === cleaned)) {
+            entries.push({ npc_name: cleaned, ...(item.hint?.trim() ? { hint: item.hint.trim() } : {}) });
+          }
+        }
+        if (entries.length === 0) {
+          throw new HttpError(400, 'Informe ao menos um personagem com nome válido.');
+        }
+
+        const gateway = ctx.gatewayProvider();
+        const model = await ctx.models.resolve(session);
+        const activePages = repos.pages.listActive(session.id);
+        const redo = dialogue.redo_page_id ? repos.pages.get(dialogue.redo_page_id) : undefined;
+        const precedingPages = redo ? activePages.filter((p) => p.order_index < redo.order_index) : activePages;
+        const messages = repos.dialogues.listMessages(dialogue.id);
+        const summaryName = formatParticipantsNames(entries.map((e) => e.npc_name));
+        const allParticipants = entries.map((e) => ({ npc_name: e.npc_name }));
+
+        try {
+          const generated: { npc_name: string; dynamic_system_prompt: string }[] = [];
+          for (const entry of entries) {
+            const generateReq = buildNpcBrainRequest({
+              model,
+              session,
+              precedingPages,
+              dialogue: { npc_name: summaryName, player_name: dialogue.player_name },
+              participants: allParticipants,
+              messages,
+              npcName: entry.npc_name,
+              hint: entry.hint,
+            });
+            let raw = '';
+            for await (const fragment of gateway.streamGenerate(generateReq)) raw += fragment;
+            const dynamic_system_prompt = parseNpcBrainResponse(raw);
+            generated.push({ npc_name: entry.npc_name, dynamic_system_prompt });
+          }
+
+          const saved = repos.dialogues.replaceParticipants(dialogue.id, generated);
+          const updated = repos.dialogues.get(dialogue.id)!;
+          return {
+            dialogue: publicDialogue(updated, saved),
+          };
+        } catch (err) {
+          if (err instanceof HttpError) throw err;
+          req.log.error({ err }, 'Falha ao preparar os cérebros do diálogo');
+          throw new HttpError(502, friendlyError(err).replace('narrativa', 'persona dos personagens'));
+        }
+      });
     },
   );
 

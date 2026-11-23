@@ -9,7 +9,7 @@ Todas as chamadas passam exclusivamente pela fronteira [`GeminiGateway`](../src/
 | # | Momento / Gatilho | Rota(s) REST/SSE | Método no SDK | Saída | Timeout | Fonte no código |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | [Gerar ou re-gerar página narrativa](#1-gerar-ou-re-gerar-página-narrativa) | `POST /api/sessions/:id/narrative/next`, `POST /api/narrative/pages/:id/regenerate` | `models.generateContentStream` | JSON (`NARRATOR_RESPONSE_SCHEMA`) | `180 s` | [`contextBuilder.ts`](../src/ai/contextBuilder.ts), [`narrator.ts`](../src/prompts/narrator.ts) |
-| 2 | [Gerar cérebro de NPC (6 pilares)](#2-gerar-cérebro-de-npc-6-pilares) | Gatilho pós-página em `TurnRunner.run`, `POST /api/dialogue/:id/participants/generate-brain` | `models.generateContentStream` | JSON (`NPC_BRAIN_SCHEMA`) | `180 s` | [`dialogue.ts`](../src/ai/dialogue.ts) |
+| 2 | [Gerar cérebro de NPC (6 pilares)](#2-gerar-cérebro-de-npc-6-pilares) | `POST /api/dialogue/:id/prepare-brains`, `POST /api/dialogue/:id/participants/generate-brain` | `models.generateContentStream` | JSON (`NPC_BRAIN_SCHEMA`) | `180 s` | [`dialogue.ts`](../src/ai/dialogue.ts) |
 | 3 | [Fala de NPC no Modo Diálogo](#3-fala-de-npc-no-modo-diálogo) | `POST /api/dialogue/:id/message` | `models.generateContentStream` | JSON (`NPC_RESPONSE_SCHEMA`) | `180 s` | [`dialogue.ts`](../src/ai/dialogue.ts) |
 | 4 | [Narrar diálogo concluído em prosa](#4-narrar-diálogo-concluído-em-prosa) | `POST /api/dialogue/:id/conclude`, `POST /api/narrative/pages/:id/narrate-dialogue` | `models.generateContentStream` | JSON (`NARRATOR_RESPONSE_SCHEMA`) | `180 s` | [`dialogueProse.ts`](../src/ai/dialogueProse.ts) |
 | 5 | [Compactação: minuta da sinopse](#5-compactação-minuta-da-sinopse) | `POST /api/sessions/:id/compact/preview` | `models.generateContentStream` | Texto livre | `300 s` | [`compaction.ts`](../src/ai/compaction.ts) |
@@ -95,8 +95,8 @@ Montado por `buildNarratorRequest` ([`src/ai/contextBuilder.ts`](../src/ai/conte
 ## 2. Gerar cérebro de NPC (6 pilares)
 
 - **Quando acontece:**
-  1. Automaticamente dentro do mesmo SSE de `TurnRunner.run`, logo após o Narrador retornar `dialogue_trigger.activate: true` — uma chamada sequencial por nome em `npc_names`, já incluindo a página que acabou de ser escrita;
-  2. Sob demanda, quando o autor clica em **Gerar cérebro com IA** nos modais de edição ou inclusão de personagem (`POST /api/dialogue/:id/participants/generate-brain`), incluindo eventuais falas já trocadas na cena e uma direção autoral (`hint`) opcional.
+  1. Ao iniciar o Modo Diálogo, quando o autor confirma o cartão de Direção Autoral e clica em **Gerar cérebros e iniciar diálogo** (`POST /api/dialogue/:id/prepare-brains`) — uma chamada sequencial por participante, já incluindo a página que acabou de ser escrita e a direção autoral (`hint`) opcional de cada personagem;
+  2. Sob demanda durante a conversa, quando o autor clica em **Gerar cérebro com IA** nos modais de edição ou inclusão de personagem (`POST /api/dialogue/:id/participants/generate-brain`), incluindo eventuais falas já trocadas na cena e uma direção autoral (`hint`) opcional.
 - **Montador:** `buildNpcBrainRequest` ([`src/ai/dialogue.ts`](../src/ai/dialogue.ts)).
 
 ### `systemInstruction`
@@ -121,7 +121,7 @@ Você é um diretor de dramaturgia e RPG que redige o briefing psicológico e op
 # TAREFA
 Escreva em português o "dynamic_system_prompt" para o personagem "<npcName>", que participa de uma conversa direta com "<playerLabel>"[ (junto na roda com: <outros participantes>)].
 [Opcional — presente se o autor informou `hint`:]
-Direção autoral / dica para o personagem: <hint>
+DIREÇÃO AUTORAL OBRIGATÓRIA PARA ESTE PERSONAGEM (incorpore com prioridade máxima no Pilar 3 e na postura/conduta durante a cena): <hint>
 
 Estruture o "dynamic_system_prompt" em segunda pessoa ("Você é...") de forma objetiva, enxuta e direta (2 a 3 frases curtas por pilar, sem floreios literários), cobrindo de maneira específica e coerente com o que faz sentido este personagem saber na história os 6 pilares abaixo:
 

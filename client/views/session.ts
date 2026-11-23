@@ -87,6 +87,11 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   let busy = false;
   let ghost: Ghost | null = null;
   let dlg: DialogueState | null = null;
+  let brainSetupDraft: {
+    dialogueId: string;
+    items: { npc_name: string; hint: string }[];
+    generating: boolean;
+  } | null = null;
   let editingId: string | null = null;
   let drawerOpen = false;
   let controller: AbortController | null = null;
@@ -456,6 +461,70 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     return id ? detail.pages.find((x) => x.id === id) : undefined;
   }
 
+  function needsBrainSetup(): boolean {
+    if (!dlg) return false;
+    const parts = dlg.dialogue.participants ?? [];
+    return parts.length === 0 || parts.some((p) => !p.dynamic_system_prompt || p.dynamic_system_prompt.trim() === '');
+  }
+
+  function ensureBrainSetupDraft() {
+    if (!dlg) {
+      brainSetupDraft = null;
+      return null;
+    }
+    if (!brainSetupDraft || brainSetupDraft.dialogueId !== dlg.dialogue.id) {
+      const parts = dlg.dialogue.participants ?? [];
+      const items =
+        parts.length > 0
+          ? parts.map((p) => ({ npc_name: p.npc_name, hint: '' }))
+          : [{ npc_name: dlg.dialogue.npc_name, hint: '' }];
+      brainSetupDraft = { dialogueId: dlg.dialogue.id, items, generating: false };
+    }
+    return brainSetupDraft;
+  }
+
+  async function prepareDialogueBrains(): Promise<void> {
+    if (!dlg) return;
+    const draft = ensureBrainSetupDraft();
+    if (!draft || draft.generating) return;
+    const validItems = draft.items
+      .map((it) => ({ npc_name: it.npc_name.trim(), hint: it.hint.trim() }))
+      .filter((it) => it.npc_name.length > 0);
+    if (validItems.length === 0) {
+      toast('Informe o nome de ao menos um personagem para iniciar o diálogo.', 'error');
+      return;
+    }
+    draft.generating = true;
+    dlg.waiting = true;
+    renderTome(false);
+    renderDock();
+    try {
+      const res = await api<{ dialogue: Dialogue }>(
+        'POST',
+        `/api/dialogue/${dlg.dialogue.id}/prepare-brains`,
+        {
+          participants: validItems.map((it) => ({
+            npc_name: it.npc_name,
+            ...(it.hint ? { hint: it.hint } : {}),
+          })),
+        },
+      );
+      if (dlg && dlg.dialogue.id === res.dialogue.id) {
+        dlg.dialogue = res.dialogue;
+        dlg.waiting = false;
+        brainSetupDraft = null;
+      }
+    } catch (err) {
+      draft.generating = false;
+      if (dlg) dlg.waiting = false;
+      toast((err as Error).message, 'error');
+    }
+    if (!disposed) {
+      renderTome(true);
+      renderDock();
+    }
+  }
+
   function dialogueCard(): HTMLElement | null {
     if (ghost?.preparingDialogue) {
       const npcs = ghost.dialogueNpcs ?? [];
@@ -520,6 +589,150 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     if (!dlg || ghost) return null; // enquanto o Narrador escreve a página, o fantasma ocupa o lugar da conversa
     const d = dlg;
     const redoing = redoTarget();
+    if (needsBrainSetup()) {
+      const draft = ensureBrainSetupDraft()!;
+      const locked = busy || draft.generating;
+      return h(
+        'section',
+        {
+          class: 'card border-accent font-sans text-base',
+          'data-dialogue-setup': 'true',
+          'aria-label': `Preparar diálogo com ${d.dialogue.npc_name}`,
+        },
+        h(
+          'div',
+          { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' },
+          h(
+            'h3',
+            { class: 'font-display text-sm uppercase tracking-wider text-accent' },
+            'Preparar Modo Diálogo — Direção Autoral',
+          ),
+          h(
+            'button',
+            {
+              class: 'btn px-2.5 py-1 text-xs',
+              type: 'button',
+              disabled: locked,
+              title: 'Adicionar outro personagem à conversa antes de gerar os cérebros',
+              'aria-label': 'Adicionar personagem ao diálogo',
+              onClick: () => {
+                draft.items.push({ npc_name: '', hint: '' });
+                renderTome(false);
+              },
+            },
+            '+ Personagem',
+          ),
+        ),
+        h(
+          'p',
+          { class: 'mb-3 text-sm text-muted' },
+          'Opcional: escreva uma direção autoral para guiar cada personagem nesta cena (ou deixe em branco), ajuste quem participa e clique em “Gerar cérebros e iniciar diálogo”.',
+        ),
+        h(
+          'div',
+          { class: 'space-y-3' },
+          ...draft.items.map((item, idx) => {
+            const nameInput = h('input', {
+              class: 'input flex-1 text-sm',
+              type: 'text',
+              value: item.npc_name,
+              disabled: locked,
+              placeholder: 'Nome do personagem (ex.: Elena)…',
+              'aria-label': `Nome do personagem ${idx + 1}`,
+            });
+            const hintTa = autoGrow(
+              h('textarea', {
+                class: 'input min-h-[2.375rem] w-full resize-y text-sm leading-5',
+                rows: '1',
+                value: item.hint,
+                disabled: locked,
+                placeholder: `Direção autoral opcional para ${item.npc_name || 'este personagem'} (ex.: ofereça um pouco do seu suco no meio da conversa)…`,
+                'aria-label': item.npc_name
+                  ? `Direção autoral de ${item.npc_name}`
+                  : `Direção autoral do personagem ${idx + 1}`,
+              }),
+            );
+            nameInput.addEventListener('input', () => {
+              item.npc_name = nameInput.value;
+              hintTa.setAttribute(
+                'aria-label',
+                item.npc_name.trim()
+                  ? `Direção autoral de ${item.npc_name.trim()}`
+                  : `Direção autoral do personagem ${idx + 1}`,
+              );
+            });
+            hintTa.addEventListener('input', () => {
+              item.hint = hintTa.value;
+            });
+            const removeBtn =
+              draft.items.length > 1
+                ? h(
+                    'button',
+                    {
+                      class: 'btn btn-danger px-2.5 py-1 text-xs',
+                      type: 'button',
+                      disabled: locked,
+                      'aria-label': `Remover ${item.npc_name || `personagem ${idx + 1}`}`,
+                      onClick: () => {
+                        draft.items.splice(idx, 1);
+                        renderTome(false);
+                      },
+                    },
+                    'Remover',
+                  )
+                : null;
+            return h(
+              'div',
+              { class: 'space-y-2 rounded border border-line bg-main p-3' },
+              h(
+                'div',
+                { class: 'flex items-center gap-2' },
+                h('span', { class: 'font-display text-xs uppercase tracking-wider text-accent' }, `Personagem ${idx + 1}`),
+                nameInput,
+                removeBtn,
+              ),
+              hintTa,
+            );
+          }),
+        ),
+        draft.generating
+          ? h(
+              'p',
+              {
+                class: 'mt-3 flex items-center gap-2 text-sm text-accent',
+                'data-dialogue-loading': 'true',
+                'aria-live': 'polite',
+              },
+              icon('loader', 14),
+              'Analisando a história e gerando os 6 pilares do cérebro de cada personagem…',
+            )
+          : null,
+        h(
+          'div',
+          { class: 'mt-4 flex flex-wrap justify-end gap-2' },
+          h(
+            'button',
+            {
+              class: 'btn btn-danger',
+              type: 'button',
+              disabled: locked,
+              onClick: () => void cancelDialogue(),
+            },
+            'Descartar',
+          ),
+          h(
+            'button',
+            {
+              class: 'btn btn-primary',
+              type: 'button',
+              disabled: locked,
+              onClick: () => void prepareDialogueBrains(),
+            },
+            draft.generating ? 'Gerando cérebros…' : 'Gerar cérebros e iniciar diálogo',
+          ),
+        ),
+      );
+    }
     const playerLabel = d.dialogue.player_name ?? 'Protagonista';
     const participants = d.dialogue.participants ?? [];
     const multi = participants.length > 1 || d.dialogue.npc_name.includes(' e ');
@@ -663,6 +876,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     const selStart = dockTa?.selectionStart ?? 0;
     const selEnd = dockTa?.selectionEnd ?? 0;
     const inDialogue = !!dlg;
+    const setupPending = needsBrainSetup();
     const preparingDialogue = !!ghost?.preparingDialogue;
     const multi = !!dlg && ((dlg.dialogue.participants?.length ?? 0) > 1 || dlg.dialogue.npc_name.includes(' e '));
     const ta = autoGrow(
@@ -670,13 +884,15 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         class: 'input min-h-[3.5rem] flex-1 resize-y font-reading',
         rows: '2',
         value: inputValue,
-        disabled: busy || (inDialogue && dlg!.waiting),
+        disabled: busy || (inDialogue && (dlg!.waiting || setupPending)),
         'aria-label': inDialogue ? 'Sua fala' : 'Instrução para o Narrador',
         placeholder: preparingDialogue
           ? 'Aguarde: preparando os cérebros dos personagens para o diálogo…'
-          : inDialogue
-            ? `Fale com ${dlg!.dialogue.npc_name}…`
-            : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
+          : setupPending
+            ? 'Configure a direção autoral (opcional) no cartão acima e clique em “Gerar cérebros e iniciar diálogo”…'
+            : inDialogue
+              ? `Fale com ${dlg!.dialogue.npc_name}…`
+              : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
       }),
     );
     ta.addEventListener('input', () => {
@@ -690,24 +906,30 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     });
     const send = h(
       'button',
-      { class: 'btn btn-primary min-h-[3.5rem] self-end px-5', type: 'button', disabled: busy || (inDialogue && dlg!.waiting), onClick: () => void submit() },
+      {
+        class: 'btn btn-primary min-h-[3.5rem] self-end px-5',
+        type: 'button',
+        disabled: busy || (inDialogue && (dlg!.waiting || setupPending)),
+        onClick: () => void submit(),
+      },
       preparingDialogue ? 'Preparando diálogo…' : busy ? 'Narrando…' : inDialogue ? 'Falar' : 'Enviar',
     );
-    const passBtn = inDialogue
-      ? h(
-          'button',
-          {
-            class: 'btn min-h-[3.5rem] self-end px-3 text-sm',
-            type: 'button',
-            disabled: busy || dlg!.waiting,
-            title: multi
-              ? 'Ficar em silêncio nesta rodada e deixar os personagens conversarem ou reagirem'
-              : `Ficar em silêncio nesta rodada e deixar ${dlg!.dialogue.npc_name} falar ou reagir`,
-            onClick: () => void passDialogueTurn(),
-          },
-          'Passar a vez',
-        )
-      : null;
+    const passBtn =
+      inDialogue && !setupPending
+        ? h(
+            'button',
+            {
+              class: 'btn min-h-[3.5rem] self-end px-3 text-sm',
+              type: 'button',
+              disabled: busy || dlg!.waiting,
+              title: multi
+                ? 'Ficar em silêncio nesta rodada e deixar os personagens conversarem ou reagirem'
+                : `Ficar em silêncio nesta rodada e deixar ${dlg!.dialogue.npc_name} falar ou reagir`,
+              onClick: () => void passDialogueTurn(),
+            },
+            'Passar a vez',
+          )
+        : null;
 
     const red = tokens?.state === 'red';
     const compact = h(
@@ -731,11 +953,18 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           icon('loader', 14),
           h('span', { class: 'font-display uppercase tracking-wider' }, ghost!.status),
         )
-      : dlg
+      : dlg && setupPending
         ? h(
-          'div',
-          { class: 'mb-2 flex flex-wrap items-center gap-2' },
-          h('span', { class: 'font-display text-sm text-accent' }, `${redoing ? 'Refazendo diálogo — ' : ''}Falando com: ${dlg.dialogue.npc_name}`),
+            'div',
+            { class: 'mb-2 flex flex-wrap items-center gap-2' },
+            h('span', { class: 'font-display text-sm text-accent' }, `Preparando diálogo — ${dlg.dialogue.npc_name}`),
+            h('button', { class: 'btn btn-danger', type: 'button', disabled: dlgLocked, onClick: () => void cancelDialogue() }, 'Descartar'),
+          )
+        : dlg
+          ? h(
+            'div',
+            { class: 'mb-2 flex flex-wrap items-center gap-2' },
+            h('span', { class: 'font-display text-sm text-accent' }, `${redoing ? 'Refazendo diálogo — ' : ''}Falando com: ${dlg.dialogue.npc_name}`),
           dlg.wantsEnd
             ? h('span', { class: 'text-xs text-hp-warn' }, `${dlg.dialogue.npc_name} ${multi ? 'desejam' : 'deseja'} encerrar a conversa.`)
             : null,

@@ -80,6 +80,7 @@ async function newDialogueSession(): Promise<string> {
   const t = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: STORY[0][0] } });
   const dialogueId = /"dialogue_id":"([^"]+)"/.exec(t.body)?.[1];
   if (!dialogueId) throw new Error(`Diálogo não iniciou: ${t.body.slice(0, 300)}`);
+  await app.inject({ method: 'POST', url: `/api/dialogue/${dialogueId}/prepare-brains`, payload: {} });
   for (const [line, reply] of [
     ['Procuro um navio que parta para o norte esta noite. Sabe de algum?', 'O Corvo Cego não faz perguntas, forasteiro, mas o último barco parte na maré da meia-noite.'],
     ['Quanto custa a passagem até um nome que ninguém ousa dizer em voz alta, como o do rei morto?', 'Mais do que você carrega na bolsa. Beba, e esqueça o que ouviu.'],
