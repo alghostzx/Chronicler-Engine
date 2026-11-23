@@ -65,6 +65,10 @@ export interface DialogueSession {
   page_id: string | null;
   /** Página de diálogo que este diálogo ativo vai substituir ao ser encerrado ("refazer diálogo"). */
   redo_page_id: string | null;
+  /** ID do participante em `dialogue_participants` cujo turno falhou e aguarda "Tentar novamente", ou null. */
+  pending_participant_id?: string | null;
+  /** 1 se a rodada interrompida por erro havia começado com "Passar a vez" sem fala de NPC ainda, 0 caso contrário. */
+  pending_pass_turn?: number;
 }
 
 export interface DialogueParticipant {

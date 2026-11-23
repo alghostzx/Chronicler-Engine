@@ -97,6 +97,10 @@ export interface Dialogue {
   player_name: string | null;
   /** Se definido, é um "Refazer diálogo": ao encerrar, substitui esta página. */
   redo_page_id: string | null;
+  /** ID do participante cujo turno falhou e aguarda "Tentar novamente", ou null. */
+  pending_participant_id?: string | null;
+  /** Nome do participante cujo turno falhou, ou null. */
+  pending_npc_name?: string | null;
   status: 'active' | 'concluded';
   created_at: string;
   /** Personagens (NPCs) participantes na roda de conversa, em ordem de turno. */
@@ -326,5 +330,76 @@ export async function streamTurn(
     return { ok: false };
   }
   if (!ok && !sawError && !signal?.aborted) handlers.onError?.('A geração terminou sem resposta.');
+  return { ok };
+}
+
+export interface DialogueRoundHandlers {
+  onPlayerTurn?: (msg: DialogueMessage) => void;
+  onStatus?: (st: { npc_name: string; participant_id: string; index: number; total: number }) => void;
+  onNpcTurn?: (msg: DialogueMessage, npcWantsToEnd: boolean) => void;
+  onDone?: (info: { npc_wants_to_end: boolean }) => void;
+  onError?: (err: { message: string; pending_participant_id: string | null; pending_npc_name: string | null }) => void;
+}
+
+/**
+ * Executa uma rodada do Modo Diálogo via POST + SSE (`/api/dialogue/:id/message`), emitindo cada
+ * turno (do jogador e de cada NPC participante) imediatamente conforme é concluído e persistido.
+ */
+export async function streamDialogueRound(
+  dialogueId: string,
+  body: { message?: string; pass_turn?: boolean; retry_pending?: boolean },
+  handlers: DialogueRoundHandlers,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/dialogue/${dialogueId}/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res);
+  if (!res.body) throw new ApiError('Resposta sem corpo.', res.status);
+
+  const parser = new SseParser();
+  const decoder = new TextDecoder();
+  const reader = res.body.getReader();
+  let ok = false;
+  let sawError = false;
+
+  const dispatch = (event: string, data: unknown) => {
+    const d = (data ?? {}) as Record<string, unknown>;
+    switch (event) {
+      case 'player_turn':
+        if (d.message) handlers.onPlayerTurn?.(d.message as DialogueMessage);
+        break;
+      case 'status':
+        handlers.onStatus?.({
+          npc_name: String(d.npc_name ?? ''),
+          participant_id: String(d.participant_id ?? ''),
+          index: Number(d.index ?? 1),
+          total: Number(d.total ?? 1),
+        });
+        break;
+      case 'npc_turn':
+        if (d.message) handlers.onNpcTurn?.(d.message as DialogueMessage, d.npc_wants_to_end === true);
+        break;
+      case 'done':
+        ok = !sawError;
+        handlers.onDone?.({ npc_wants_to_end: d.npc_wants_to_end === true });
+        break;
+      case 'error':
+        sawError = true;
+        handlers.onError?.({
+          message: String(d.message ?? 'Falha na resposta do personagem.'),
+          pending_participant_id: typeof d.pending_participant_id === 'string' ? d.pending_participant_id : null,
+          pending_npc_name: typeof d.pending_npc_name === 'string' ? d.pending_npc_name : null,
+        });
+        break;
+    }
+  };
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    for (const m of parser.feed(decoder.decode(value, { stream: true }))) dispatch(m.event, m.data);
+  }
   return { ok };
 }

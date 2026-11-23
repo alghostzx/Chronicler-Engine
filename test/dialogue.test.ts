@@ -78,14 +78,29 @@ describe('POST /dialogue/:id/message', () => {
     expect(t.repos.dialogues.get(dialogueId)!.status).toBe('active');
   });
 
-  it('falha da IA não grava nada (nem a fala do jogador)', async () => {
+  it('falha da IA preserva a fala do jogador já encerrada, registra pending_participant_id e permite retry_pending', async () => {
     t.gateway.queue('json quebrado');
     const res = await say('Olá?');
     expect(res.statusCode).toBe(502);
-    expect(t.repos.dialogues.listMessages(dialogueId)).toHaveLength(0);
-    // pode tentar de novo
+    const msgsAfterFail = t.repos.dialogues.listMessages(dialogueId);
+    expect(msgsAfterFail).toHaveLength(1);
+    expect(msgsAfterFail[0]).toMatchObject({ sender: 'player', content: 'Olá?' });
+    const dlgAfterFail = t.repos.dialogues.get(dialogueId)!;
+    const elenaId = t.repos.dialogues.listParticipants(dialogueId)[0]!.id;
+    expect(dlgAfterFail.pending_participant_id).toBe(elenaId);
+
+    // Pode tentar de novo exatamente a partir do NPC que falhou, sem duplicar a fala do jogador
     t.gateway.queue(npcJson('Agora sim.'));
-    expect((await say('Olá?')).statusCode).toBe(200);
+    const retryRes = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${dialogueId}/message`,
+      payload: { retry_pending: true },
+    });
+    expect(retryRes.statusCode).toBe(200);
+    expect(retryRes.json().player_message).toBeNull();
+    expect(retryRes.json().npc_message).toMatchObject({ sender: 'npc', speaker_name: 'Elena Vance', content: 'Agora sim.' });
+    expect(t.repos.dialogues.listMessages(dialogueId)).toHaveLength(2);
+    expect(t.repos.dialogues.get(dialogueId)!.pending_participant_id).toBeNull();
   });
 
   it('valida: 404, 400 (vazio) e 409 (diálogo encerrado)', async () => {
@@ -593,11 +608,12 @@ describe('concorrência', () => {
 });
 
 // garante que o helper mockGateway com falha mid-stream também degrada bem no diálogo
-describe('erros de API no diálogo', () => {
-  it('erro no meio do stream → 502 e nada gravado', async () => {
+describe('erros de API no diálogo e streaming turno a turno (SSE)', () => {
+  it('erro no meio do stream → 502, fala do jogador preservada e pending_participant_id apontando para o NPC que falhou', async () => {
     const failing = withKey(await makeApp(mockGateway({ failWith: new Error('conexão caiu') })));
     const sid = failing.repos.sessions.create({ title: 'x', system_rules: 'r', world_context: '' }).id;
     const did = failing.repos.dialogues.create(sid, 'N', 'p').id;
+    const participantId = failing.repos.dialogues.listParticipants(did)[0]!.id;
     failing.gateway.queue(npcJson('uma resposta razoavelmente longa'));
     const res = await failing.app.inject({
       method: 'POST',
@@ -605,7 +621,66 @@ describe('erros de API no diálogo', () => {
       payload: { message: 'oi' },
     });
     expect(res.statusCode).toBe(502);
-    expect(failing.repos.dialogues.listMessages(did)).toHaveLength(0);
+    const msgs = failing.repos.dialogues.listMessages(did);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatchObject({ sender: 'player', content: 'oi' });
+    expect(failing.repos.dialogues.get(did)!.pending_participant_id).toBe(participantId);
+  });
+
+  it('transmite eventos SSE turno a turno (player_turn, status, npc_turn, done) e retoma do 2º NPC quando só ele falha', async () => {
+    t.repos.dialogues.delete(dialogueId);
+    const multi = t.repos.dialogues.create(sessionId, 'Elena', 'P1', {
+      playerName: 'Kira',
+      participants: [
+        { npc_name: 'Elena', dynamic_system_prompt: 'P1' },
+        { npc_name: 'Guarda', dynamic_system_prompt: 'P2' },
+      ],
+    });
+    const guardaId = t.repos.dialogues.listParticipants(multi.id)[1]!.id;
+
+    // 1ª tentativa via SSE: Elena responde, mas Guarda devolve JSON inválido
+    t.gateway.queue(npcJson('Eu falei primeiro.'), 'json quebrado');
+    const sseFail = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${multi.id}/message`,
+      headers: { accept: 'text/event-stream' },
+      payload: { message: 'Falem os dois.' },
+    });
+    expect(sseFail.statusCode).toBe(200);
+    const failEvents = parseSse(sseFail.body);
+    expect(failEvents.map((e) => e.event)).toEqual(['player_turn', 'status', 'npc_turn', 'status', 'error']);
+    expect(failEvents[0]!.data.message).toMatchObject({ sender: 'player', content: 'Falem os dois.' });
+    expect(failEvents[2]!.data.message).toMatchObject({ sender: 'npc', speaker_name: 'Elena', content: 'Eu falei primeiro.' });
+    expect(failEvents[4]!.data).toMatchObject({
+      pending_participant_id: guardaId,
+      pending_npc_name: 'Guarda',
+    });
+
+    // Tanto a fala do jogador quanto a fala de Elena já estão gravadas no banco
+    expect(t.repos.dialogues.listMessages(multi.id)).toHaveLength(2);
+    expect(t.repos.dialogues.get(multi.id)!.pending_participant_id).toBe(guardaId);
+
+    // 2ª tentativa com retry_pending via SSE: retoma diretamente do Guarda, sem chamar Elena de novo
+    const reqsBeforeRetry = t.gateway.requests.length;
+    t.gateway.queue(npcJson('Agora é minha vez.', true));
+    const sseRetry = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${multi.id}/message`,
+      headers: { accept: 'text/event-stream' },
+      payload: { retry_pending: true },
+    });
+    expect(sseRetry.statusCode).toBe(200);
+    expect(t.gateway.requests.length).toBe(reqsBeforeRetry + 1);
+    const retryEvents = parseSse(sseRetry.body);
+    expect(retryEvents.map((e) => e.event)).toEqual(['status', 'npc_turn', 'done']);
+    expect(retryEvents[1]!.data.message).toMatchObject({
+      sender: 'npc',
+      speaker_name: 'Guarda',
+      content: 'Agora é minha vez.',
+    });
+    expect(retryEvents[2]!.data).toMatchObject({ npc_wants_to_end: true });
+    expect(t.repos.dialogues.listMessages(multi.id)).toHaveLength(3);
+    expect(t.repos.dialogues.get(multi.id)!.pending_participant_id).toBeNull();
   });
 });
 

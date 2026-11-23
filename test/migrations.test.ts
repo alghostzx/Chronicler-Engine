@@ -205,6 +205,36 @@ describe('migrações do banco', () => {
     db.close();
   });
 
+  it('v8 → v9: adiciona pending_participant_id e pending_pass_turn em dialogue_sessions', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chronicler-mig-'));
+    const file = path.join(dir, 'chronicler.db');
+    const raw = new Database(file);
+    raw.pragma('foreign_keys = ON');
+    raw.exec(SCHEMA_V3_SQL);
+    MIGRATIONS[0]!.up(raw);
+    MIGRATIONS[1]!.up(raw);
+    MIGRATIONS[2]!.up(raw);
+    MIGRATIONS[3]!.up(raw);
+    MIGRATIONS[4]!.up(raw);
+    raw.pragma('user_version = 8');
+    raw.exec(`
+      INSERT INTO sessions (id, title, system_rules, world_context) VALUES ('s1', 'Crônica', 'r', 'w');
+      INSERT INTO dialogue_sessions (id, session_id, npc_name, dynamic_system_prompt, status) VALUES
+        ('d1', 's1', 'Elena', 'Persona da Elena', 'active');
+    `);
+    raw.close();
+
+    const db = openDatabase(file);
+    expect(db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
+    expect(db.prepare('SELECT id, pending_participant_id, pending_pass_turn FROM dialogue_sessions WHERE id = ?').get('d1')).toEqual({
+      id: 'd1',
+      pending_participant_id: null,
+      pending_pass_turn: 0,
+    });
+    expect(fs.existsSync(`${file}.v8.bak`)).toBe(true);
+    db.close();
+  });
+
   it('copia o banco antes de migrar (arquivo .v3.bak, íntegro e ainda na versão 3)', () => {
     const file = bancoV3();
     openDatabase(file).close();

@@ -1,6 +1,6 @@
 # Modelo de dados e migrações
 
-O SQLite roda localmente (por padrão em `./data/chronicler.db`; `/data/chronicler.db` no contêiner) com o driver síncrono `better-sqlite3`. A fonte da verdade do schema é [`src/db/schema.ts`](../src/db/schema.ts) (`SCHEMA_VERSION = 8`); este documento explica o que cada parte significa.
+O SQLite roda localmente (por padrão em `./data/chronicler.db`; `/data/chronicler.db` no contêiner) com o driver síncrono `better-sqlite3`. A fonte da verdade do schema é [`src/db/schema.ts`](../src/db/schema.ts) (`SCHEMA_VERSION = 9`); este documento explica o que cada parte significa.
 
 ## Tabelas
 
@@ -24,7 +24,7 @@ Todas as tabelas filhas usam `ON DELETE CASCADE`: excluir uma sessão apaga pág
 | `sessions` | Uma crônica: `title`, `system_rules`, `world_context`, `active_theme` (`medieval`, `cyberpunk`, `pos-apocaliptico`, `contemporaneo`), `token_limit` (1.000.000), `model` (`NULL` = padrão global), `tts_auto` (`NULL` = herda o padrão global; vale para páginas de prosa e de diálogo) |
 | `narrative_pages` | As páginas do Tome (abaixo) |
 | `chronicle_archives` | Um volume por compactação: `volume_number`, `summary_text` (a sinopse revisada) e a faixa `covered_page_start_index`…`covered_page_end_index`. `UNIQUE (session_id, volume_number)` |
-| `dialogue_sessions` | Diálogos com NPC(s): `npc_name` (resumo formatado dos nomes dos participantes), `player_name`, `dynamic_system_prompt`, `status` (`active`/`concluded`), `page_id` (a página em que virou), `redo_page_id` (página que um *Refazer* vai substituir) |
+| `dialogue_sessions` | Diálogos com NPC(s): `npc_name` (resumo formatado dos nomes dos participantes), `player_name`, `dynamic_system_prompt`, `status` (`active`/`concluded`), `page_id` (a página em que virou), `redo_page_id` (página que um *Refazer* vai substituir), `pending_participant_id` e `pending_pass_turn` (ponto de retomada caso o turno de um NPC falhe no meio da rodada) |
 | `dialogue_participants` | NPCs participantes de cada diálogo em ordem de turno (`order_index`), com `npc_name` e `dynamic_system_prompt` individual (editável pelo autor durante o diálogo e preservado para *Refazer*) |
 | `dialogue_messages` | Falas da conversa em andamento (`sender` `player`/`npc`, `speaker_name` para identificar qual NPC falou). **Apagadas ao encerrar**: a página é a fonte da verdade |
 | `page_audio` | O MP3 de cada página narrada (BLOB), em tabela separada para que listar páginas nunca carregue áudio |
@@ -86,6 +86,7 @@ O *runner* vive em [`src/db/connection.ts`](../src/db/connection.ts) e a lista o
 | 6 | Narração automática única: **remove** `sessions.tts_auto_dialogue` | v5 → v6: `DROP COLUMN` e apaga a configuração global `tts_auto_dialogue_default`; `tts_auto` e o padrão global passam a valer também para os diálogos |
 | 7 | Cache de trechos de áudio por página: tabela `page_audio_chunks` | v6 → v7: `CREATE TABLE` e `CREATE INDEX`; preserva o áudio existente em `page_audio` e viabiliza síntese incremental em edições pontuais |
 | 8 | Diálogo multi-NPC: tabela `dialogue_participants` e coluna `speaker_name` em `dialogue_messages` | v7 → v8: cria `dialogue_participants` (copiando o NPC de cada `dialogue_sessions` existente como participante `order_index = 1`) e preenche `speaker_name` nas mensagens `sender = 'npc'` |
+| 9 | Retomada de turno de NPC pendente no Modo Diálogo: `pending_participant_id` e `pending_pass_turn` em `dialogue_sessions` | v8 → v9: `ALTER TABLE dialogue_sessions ADD COLUMN` para guardar o NPC cujo turno falhou e permitir *Tentar novamente* mesmo após recarregar a página |
 
 ### Como criar uma migração
 

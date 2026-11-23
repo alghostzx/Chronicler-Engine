@@ -113,4 +113,14 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 9,
+    description: 'ponto de parada de turno pendente em dialogue_sessions (pending_participant_id e pending_pass_turn)',
+    up(db) {
+      db.exec(`
+        ALTER TABLE dialogue_sessions ADD COLUMN pending_participant_id TEXT;
+        ALTER TABLE dialogue_sessions ADD COLUMN pending_pass_turn INTEGER NOT NULL DEFAULT 0;
+      `);
+    },
+  },
 ];

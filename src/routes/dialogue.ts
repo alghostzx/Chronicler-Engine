@@ -11,10 +11,13 @@ import { HttpError, type AppContext } from '../context.js';
 import { formatParticipantsNames } from '../db/repositories/dialogues.js';
 import type { DialogueMessage, DialogueParticipant, DialogueSession } from '../db/types.js';
 import { idParams, requireSession } from './common.js';
+import { openSse } from './sse.js';
 import { friendlyError } from './turnRunner.js';
 
 /** Visão pública do diálogo, incluindo a lista ordenada de NPCs participantes e seus cérebros (`dynamic_system_prompt`). */
 export function publicDialogue(d: DialogueSession, participants: DialogueParticipant[] = []) {
+  const pendingId = d.pending_participant_id ?? null;
+  const pendingNpc = pendingId ? participants.find((p) => p.id === pendingId)?.npc_name ?? null : null;
   return {
     id: d.id,
     session_id: d.session_id,
@@ -22,6 +25,8 @@ export function publicDialogue(d: DialogueSession, participants: DialoguePartici
     player_name: d.player_name,
     status: d.status,
     redo_page_id: d.redo_page_id,
+    pending_participant_id: pendingId,
+    pending_npc_name: pendingNpc,
     created_at: d.created_at,
     participants,
   };
@@ -52,7 +57,7 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
   );
 
   // --- Troca de mensagens e rodada de turnos (docs/api.md#diálogo) --------------------------------------------------
-  app.post<{ Params: { id: string }; Body: { message?: string; pass_turn?: boolean } }>(
+  app.post<{ Params: { id: string }; Body: { message?: string; pass_turn?: boolean; retry_pending?: boolean } }>(
     '/api/dialogue/:id/message',
     {
       schema: {
@@ -63,11 +68,12 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
           properties: {
             message: { type: 'string', maxLength: 10000 },
             pass_turn: { type: 'boolean' },
+            retry_pending: { type: 'boolean' },
           },
         },
       },
     },
-    async (req) => {
+    async (req, reply) => {
       const dialogue = requireActiveDialogue(req.params.id);
       const session = requireSession(repos, dialogue.session_id);
       const lockKey = `d:${dialogue.id}`;
@@ -77,14 +83,17 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
         }
         const gateway = ctx.gatewayProvider();
         const model = await ctx.models.resolve(session);
+        const retryPending = req.body.retry_pending === true;
         const passTurn = req.body.pass_turn === true;
         const message = typeof req.body.message === 'string' ? req.body.message.trim() : '';
-        if (!passTurn && message.length === 0) {
+        if (retryPending) {
+          if (!dialogue.pending_participant_id) {
+            throw new HttpError(409, 'Não há turno pendente para tentar novamente.');
+          }
+        } else if (!passTurn && message.length === 0) {
           throw new HttpError(400, 'A mensagem não pode ser vazia.');
         }
 
-        // Histórico isolado: apenas as falas desta cena (sem corpus nem prompts do Narrador).
-        const history = repos.dialogues.listMessages(dialogue.id);
         const participants = repos.dialogues.listParticipants(dialogue.id);
         const effectiveParticipants =
           participants.length > 0
@@ -104,98 +113,126 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
           throw new HttpError(409, 'Gere os cérebros dos personagens antes de iniciar a conversa.');
         }
 
+        let startIdx = 0;
+        if (retryPending) {
+          startIdx = effectiveParticipants.findIndex((p) => p.id === dialogue.pending_participant_id);
+          if (startIdx < 0) {
+            repos.dialogues.setPendingTurn(dialogue.id, null, false);
+            throw new HttpError(409, 'O personagem cujo turno falhou não está mais na conversa.');
+          }
+        }
+
+        const wantsSse = typeof req.headers.accept === 'string' && req.headers.accept.includes('text/event-stream');
+        const sse = wantsSse ? openSse(req, reply) : null;
+
+        let playerMsg: DialogueMessage | null = null;
+        if (!retryPending && !passTurn) {
+          playerMsg = repos.dialogues.addMessage(dialogue.id, 'player', message);
+          sse?.send('player_turn', { message: playerMsg });
+        }
+
+        const allNames = effectiveParticipants.map((p) => p.npc_name);
+        const npcMsgs: DialogueMessage[] = [];
+        let anyWantsToEnd = false;
+        const basePassTurn = retryPending ? Boolean(dialogue.pending_pass_turn) : passTurn;
+
+        let currentParticipant: DialogueParticipant = effectiveParticipants[startIdx]!;
         try {
-          if (effectiveParticipants.length === 1 && !passTurn) {
-            const p = effectiveParticipants[0]!;
-            const generateReq = buildNpcRequest({
-              model,
-              dialogue: {
-                npc_name: p.npc_name,
-                dynamic_system_prompt: p.dynamic_system_prompt,
-                player_name: dialogue.player_name,
-              },
-              messages: history,
-              playerMessage: message,
-            });
-            let raw = '';
-            for await (const fragment of gateway.streamGenerate(generateReq)) raw += fragment;
-            const npc = parseNpcReply(raw);
-            const saved = repos.transaction(() => {
-              const playerMsg = repos.dialogues.addMessage(dialogue.id, 'player', message);
-              const npcMsg = repos.dialogues.addMessage(dialogue.id, 'npc', npc.reply, p.npc_name);
-              return {
-                player_message: playerMsg,
-                npc_message: npcMsg,
-                npc_messages: [npcMsg],
-              };
-            });
-            return { ...saved, npc_wants_to_end: npc.end_conversation };
-          }
-
-          // Rodada sequencial (multi-NPC ou quando o jogador passa a vez).
-          const allNames = effectiveParticipants.map((p) => p.npc_name);
-          const roundMessages: (Pick<DialogueMessage, 'sender' | 'content'> &
-            Partial<Pick<DialogueMessage, 'speaker_name'>>)[] = [...history];
-          if (!passTurn) {
-            roundMessages.push({ sender: 'player', content: message, speaker_name: null });
-          }
-
-          const pendingReplies: { speaker_name: string; content: string; end_conversation: boolean }[] = [];
-          for (let i = 0; i < effectiveParticipants.length; i++) {
+          for (let i = startIdx; i < effectiveParticipants.length; i++) {
             const p = effectiveParticipants[i]!;
+            currentParticipant = p;
             const isLast = i === effectiveParticipants.length - 1;
-            // Garante que ao menos um NPC fale na rodada: o último só pode pular se alguém já falou.
-            const allowPassTurn = effectiveParticipants.length > 1 && !(isLast && pendingReplies.length === 0);
-            const generateReq = buildNpcRequest({
-              model,
-              dialogue,
-              messages: roundMessages,
-              passTurn: passTurn && pendingReplies.length === 0,
-              participant: p,
-              otherParticipants: allNames,
-              allowPassTurn,
+            const effectivePassTurn = basePassTurn && npcMsgs.length === 0;
+            repos.dialogues.setPendingTurn(dialogue.id, p.id, effectivePassTurn);
+
+            sse?.send('status', {
+              npc_name: p.npc_name,
+              participant_id: p.id,
+              index: i + 1,
+              total: effectiveParticipants.length,
             });
+
+            const currentHistory = repos.dialogues.listMessages(dialogue.id);
+            const allowPassTurn = effectiveParticipants.length > 1 && !(isLast && npcMsgs.length === 0);
+
+            const isClassicSingleNpc =
+              effectiveParticipants.length === 1 &&
+              !effectivePassTurn &&
+              !allowPassTurn &&
+              currentHistory.at(-1)?.sender === 'player';
+
+            const generateReq = isClassicSingleNpc
+              ? buildNpcRequest({
+                  model,
+                  dialogue: {
+                    npc_name: p.npc_name,
+                    dynamic_system_prompt: p.dynamic_system_prompt,
+                    player_name: dialogue.player_name,
+                  },
+                  messages: currentHistory.slice(0, -1),
+                  playerMessage: currentHistory.at(-1)!.content,
+                })
+              : buildNpcRequest({
+                  model,
+                  dialogue,
+                  messages: currentHistory,
+                  passTurn: effectivePassTurn,
+                  participant: p,
+                  otherParticipants: allNames,
+                  allowPassTurn,
+                });
+
             let raw = '';
-            for await (const fragment of gateway.streamGenerate(generateReq)) raw += fragment;
+            for await (const fragment of gateway.streamGenerate(generateReq)) {
+              raw += fragment;
+              sse?.ping();
+            }
             const npc = parseNpcReply(raw, { allowPassTurn });
             if (npc.pass_turn) continue;
-            pendingReplies.push({
-              speaker_name: p.npc_name,
-              content: npc.reply,
-              end_conversation: npc.end_conversation,
-            });
-            roundMessages.push({
-              sender: 'npc',
-              content: npc.reply,
-              speaker_name: p.npc_name,
+
+            const savedNpcMsg = repos.dialogues.addMessage(dialogue.id, 'npc', npc.reply, p.npc_name);
+            npcMsgs.push(savedNpcMsg);
+            if (npc.end_conversation) anyWantsToEnd = true;
+
+            sse?.send('npc_turn', {
+              message: savedNpcMsg,
+              npc_wants_to_end: anyWantsToEnd,
             });
           }
 
-          const saved = repos.transaction(() => {
-            const playerMsg = passTurn ? null : repos.dialogues.addMessage(dialogue.id, 'player', message);
-            const npcMsgs = pendingReplies.map((r) =>
-              repos.dialogues.addMessage(dialogue.id, 'npc', r.content, r.speaker_name),
-            );
-            return {
-              player_message: playerMsg,
-              npc_message: npcMsgs[0] ?? null,
-              npc_messages: npcMsgs,
-            };
-          });
+          repos.dialogues.setPendingTurn(dialogue.id, null, false);
+          if (sse) {
+            sse.send('done', {
+              npc_wants_to_end: anyWantsToEnd,
+              pending_participant_id: null,
+              pending_npc_name: null,
+            });
+            sse.end();
+            return;
+          }
           return {
-            ...saved,
-            npc_wants_to_end: pendingReplies.some((r) => r.end_conversation),
+            player_message: playerMsg,
+            npc_message: npcMsgs[0] ?? null,
+            npc_messages: npcMsgs,
+            npc_wants_to_end: anyWantsToEnd,
           };
         } catch (err) {
           if (err instanceof HttpError) throw err;
-          req.log.error({ err }, 'Falha na resposta do NPC');
-          throw new HttpError(
-            502,
-            friendlyError(err).replace(
-              'narrativa',
-              effectiveParticipants.length > 1 ? 'resposta dos personagens' : 'resposta do NPC',
-            ),
+          req.log.error({ err, npc: currentParticipant.npc_name }, 'Falha na resposta do NPC');
+          const msg = friendlyError(err).replace(
+            'narrativa',
+            effectiveParticipants.length > 1 ? `resposta de ${currentParticipant.npc_name}` : 'resposta do NPC',
           );
+          if (sse) {
+            sse.send('error', {
+              message: msg,
+              pending_participant_id: currentParticipant.id,
+              pending_npc_name: currentParticipant.npc_name,
+            });
+            sse.end();
+            return;
+          }
+          throw new HttpError(502, msg);
         }
       }, repos.dialogues.listParticipants(dialogue.id).length > 1 ? 'Aguarde a resposta anterior dos personagens.' : 'Aguarde a resposta anterior do NPC.');
     },
