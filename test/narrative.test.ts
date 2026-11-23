@@ -76,39 +76,28 @@ describe('POST /narrative/next', () => {
     expect(t.repos.pages.listActive(sessionId).map((b) => b.order_index)).toEqual([1, 2]);
   });
 
-  it('ativa o Modo Diálogo quando o Narrador pede, gera o cérebro em chamada separada e informa o diálogo ao cliente', async () => {
+  it('ativa o Modo Diálogo quando o Narrador pede (em estado de preparação para direção autoral) e informa o diálogo ao cliente', async () => {
     t.gateway.queue(
       narratorJson('Elena se vira para você.', {
         activate: true,
         npc_names: ['Elena Vance'],
       }),
-      brainJson('Você é Elena Vance, desconfiada.'),
     );
     const events = parseSse((await next('Falo com Elena.')).body);
-    const statusEv = events.find((e) => e.event === 'status')!;
-    expect(statusEv.data).toMatchObject({
-      phase: 'generating_brain',
-      npc_name: 'Elena Vance',
-      index: 1,
-      total: 1,
-    });
     const trigger = events.find((e) => e.event === 'dialogue_trigger')!;
     expect(trigger.data.npc_name).toBe('Elena Vance');
     // page precede dialogue_trigger; ambos só no fechamento
     expect(events.map((e) => e.event).slice(-3)).toEqual(['page', 'dialogue_trigger', 'done']);
 
-    // A 2ª chamada ao Gemini é o buildNpcBrainRequest, contendo a página recém-escrita e os 6 pilares
-    expect(t.gateway.requests).toHaveLength(2);
-    const brainReq = t.gateway.requests[1]!;
-    expect(brainReq.userText).toContain('Elena se vira para você.');
-    expect(brainReq.userText).toContain('1. Identidade e Voz:');
-    expect(brainReq.userText).toContain('6. Conhecimento e Opinião sobre assuntos recentes do local/ambiente');
+    // Apenas 1 chamada ao Gemini (o Narrador); o cérebro só é gerado após a etapa de direção autoral (prepare-brains).
+    expect(t.gateway.requests).toHaveLength(1);
 
     const active = t.repos.dialogues.getActive(sessionId)!;
     expect(active.id).toBe(trigger.data.dialogue_id);
-    expect(active.dynamic_system_prompt).toBe('Você é Elena Vance, desconfiada.');
-    // O prompt do NPC não vaza para o cliente neste evento SSE
-    expect(JSON.stringify(trigger.data)).not.toContain('desconfiada');
+    expect(active.dynamic_system_prompt).toBe('');
+    expect(t.repos.dialogues.listParticipants(active.id)).toMatchObject([
+      { npc_name: 'Elena Vance', dynamic_system_prompt: '' },
+    ]);
   });
 
   it('ignora gatilho incompleto (activate sem npc_names)', async () => {

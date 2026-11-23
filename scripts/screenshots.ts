@@ -45,6 +45,12 @@ async function turn(id: string, instruction: string, text: string, trigger?: { n
   }
   const r = await app.inject({ method: 'POST', url: `/api/sessions/${id}/narrative/next`, payload: { player_instruction: instruction } });
   if (!r.body.includes('event: page')) throw new Error(`Turno falhou: ${r.body.slice(0, 300)}`);
+  if (trigger) {
+    const dialogueId = /"dialogue_id":"([^"]+)"/.exec(r.body)?.[1];
+    if (dialogueId) {
+      await app.inject({ method: 'POST', url: `/api/dialogue/${dialogueId}/prepare-brains`, payload: {} });
+    }
+  }
 }
 
 const medieval = await createSession(

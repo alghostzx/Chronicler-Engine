@@ -159,6 +159,22 @@ export class DialoguesRepository {
     return removed;
   }
 
+  /** Substitui todos os participantes do diálogo (usado ao preparar/gerar os cérebros iniciais da cena). */
+  replaceParticipants(dialogueSessionId: string, participants: NewDialogueParticipant[]): DialogueParticipant[] {
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM dialogue_participants WHERE dialogue_session_id = ?').run(dialogueSessionId);
+      const ins = this.db.prepare(
+        `INSERT INTO dialogue_participants (id, dialogue_session_id, order_index, npc_name, dynamic_system_prompt)
+         VALUES (?, ?, ?, ?, ?)`,
+      );
+      participants.forEach((p, idx) => {
+        ins.run(randomUUID(), dialogueSessionId, idx + 1, p.npc_name, p.dynamic_system_prompt);
+      });
+      this.syncSessionSummary(dialogueSessionId);
+    })();
+    return this.listParticipants(dialogueSessionId);
+  }
+
   private syncSessionSummary(dialogueSessionId: string): void {
     const list = this.listParticipants(dialogueSessionId);
     if (list.length === 0) return;

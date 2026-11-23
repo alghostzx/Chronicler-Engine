@@ -1,9 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { NarratorRequestParts } from '../ai/contextBuilder.js';
-import { buildNpcBrainRequest, NpcResponseError, parseNpcBrainResponse } from '../ai/dialogue.js';
+import { NpcResponseError } from '../ai/dialogue.js';
 import { GenerationError } from '../ai/gateway.js';
 import { streamNarratorTurn } from '../ai/narrator.js';
-import { NarratorResponseError, type DialogueParticipantBrief, type NarratorResult } from '../ai/narratorSchema.js';
+import { NarratorResponseError, type NarratorResult } from '../ai/narratorSchema.js';
 import { buildDialoguePageRequest, checkDialogueFidelity, MAX_NARRATION_ATTEMPTS } from '../ai/dialogueProse.js';
 import { HttpError, type AppContext } from '../context.js';
 import type { DialogueSession, Page, Session } from '../db/types.js';
@@ -109,52 +109,16 @@ export class TurnRunner {
       }
       if (sse.signal.aborted || !result) return;
 
-      // Se o Narrador sinalizou que haverá um diálogo, gera o cérebro (6 pilares) de cada NPC em chamada separada.
+      // Se o Narrador sinalizou que haverá um diálogo, registra os participantes com cérebro vazio
+      // para que o autor possa definir opcionalmente a Direção Autoral antes de gerar os cérebros.
       const trigger = result.dialogue_trigger;
       if (trigger.activate && trigger.npc_names && trigger.npc_names.length > 0) {
-        const basePages = opts.precedingPages ?? this.ctx.repos.pages.listActive(session.id);
-        const nextOrder = basePages.reduce((m, p) => Math.max(m, p.order_index), 0) + 1;
-        const pagesWithCurrent = [...basePages, { order_index: nextOrder, generated_text: result.narrative_text }];
-        const npcNames = trigger.npc_names;
-        const generatedParticipants: DialogueParticipantBrief[] = [];
-
-        for (let i = 0; i < npcNames.length; i++) {
-          const npcName = npcNames[i]!;
-          sse.send('status', {
-            phase: 'generating_brain',
-            npc_name: npcName,
-            npc_names: npcNames,
-            index: i + 1,
-            total: npcNames.length,
-            message:
-              npcNames.length > 1
-                ? `Preparando diálogo: gerando o cérebro de ${npcName} (${i + 1} de ${npcNames.length})…`
-                : `Preparando diálogo: gerando o cérebro de ${npcName}…`,
-          });
-          const brainReq = buildNpcBrainRequest({
-            model,
-            session,
-            precedingPages: pagesWithCurrent,
-            dialogue: {
-              npc_name: trigger.npc_name ?? npcName,
-              player_name: trigger.player_name ?? null,
-            },
-            participants: npcNames.map((n) => ({ npc_name: n })),
-            messages: [],
-            npcName,
-          });
-          let rawBrain = '';
-          for await (const fragment of gateway.streamGenerate({ ...brainReq, signal: sse.signal })) {
-            rawBrain += fragment;
-            sse.ping();
-          }
-          if (sse.signal.aborted) return;
-          const prompt = parseNpcBrainResponse(rawBrain);
-          generatedParticipants.push({ npc_name: npcName, dynamic_system_prompt: prompt });
-        }
-
-        trigger.participants = generatedParticipants;
-        trigger.dynamic_system_prompt = generatedParticipants[0]!.dynamic_system_prompt;
+        const defaultPrompt = trigger.dynamic_system_prompt ?? '';
+        trigger.participants = trigger.npc_names.map((npcName) => ({
+          npc_name: npcName,
+          dynamic_system_prompt: defaultPrompt,
+        }));
+        trigger.dynamic_system_prompt = defaultPrompt;
       }
 
       const outcome = opts.persist(result, model);

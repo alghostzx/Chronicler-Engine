@@ -7,7 +7,12 @@ O Modo Diálogo é uma sub-rotina transitória: o Narrador abre uma conversa com
 Não existe botão para "entrar em modo diálogo". O gatilho vem **só do Narrador**, no `dialogue_trigger` do turno regular (por pedido do jogador, como *"assim que encontro Elena, iniciamos um diálogo direto"*, ou por decisão do próprio Narrador).
 
 - O Narrador **não** redige o briefing dos personagens: ele apenas sinaliza `activate: true`, `player_name` (como o jogador será chamado na cena; sem nome, **"Protagonista"**) e `npc_names` (a lista dos personagens que participarão da conversa, em ordem de turno).
-- Em seguida, ainda dentro do mesmo turno SSE, o servidor emite eventos `status` (`phase: "generating_brain"`, exibindo o progresso no cartão fantasma para a interface não parecer congelada) e faz **uma chamada separada por personagem** via `buildNpcBrainRequest` ([`src/ai/dialogue.ts`](../src/ai/dialogue.ts)), passando o contexto do mundo e toda a história — **incluindo a página narrativa que acabou de ser escrita**.
+- A página narrativa é gravada e exibida imediatamente no Tome, e o diálogo nasce em estado de **preparação (Direção Autoral)**: os participantes são registrados com o cérebro ainda vazio (`dynamic_system_prompt = ''`), sem gastar tokens gerando cérebros antes da revisão do autor.
+- No fim do Tome, o cartão **Preparar Modo Diálogo — Direção Autoral** permite ao autor:
+  - Escrever opcionalmente uma **Direção Autoral** para cada personagem (ex.: *"Você irá oferecer um pouco do seu suco para Sicrano no meio da conversa"*);
+  - Ajustar os nomes, adicionar novos personagens (`+ Personagem`) ou remover participantes antes mesmo de gerar os cérebros;
+  - Clicar em **Descartar** caso não queira conversar naquela cena (cancelando o diálogo sem gastar nenhum token);
+  - Clicar em **Gerar cérebros e iniciar diálogo** (`POST /api/dialogue/:id/prepare-brains`), que faz **uma chamada separada por personagem** via `buildNpcBrainRequest` ([`src/ai/dialogue.ts`](../src/ai/dialogue.ts)), passando o contexto do mundo, toda a história (incluindo a página recém-escrita) e a direção autoral de cada NPC (incorporada com prioridade máxima no Pilar 3), liberando em seguida o chat da conversa.
 - **No máximo um diálogo ativo por sessão** (índice único parcial no banco). Enquanto houver um, `narrative/next`, `regenerate`, ramificar e compactar respondem `409`.
 - Ao recarregar a página, o cliente retoma a cena por `GET /api/sessions/:id/dialogue/active`; `GET /api/sessions/:id` também traz `active_dialogue` com a lista ordenada `participants`.
 

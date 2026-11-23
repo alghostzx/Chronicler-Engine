@@ -298,6 +298,8 @@ describe('UI — sessão', () => {
       brainJson('Você é um mercador astuto.'),
     );
     await send('Entro na feira');
+    await waitFor(() => button('Gerar cérebros e iniciar diálogo'), 'preparação de direção autoral');
+    click(button('Gerar cérebros e iniciar diálogo')!);
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
 
     gateway.queue(npcJson('Olá, viajante!', true));
@@ -337,6 +339,8 @@ describe('UI — sessão', () => {
       brainJson('Você é um mercador astuto.'),
     );
     await send('Entro na feira');
+    await waitFor(() => button('Gerar cérebros e iniciar diálogo'), 'preparação de direção autoral');
+    click(button('Gerar cérebros e iniciar diálogo')!);
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
     gateway.queue(npcJson('Olá, viajante!', false));
     await send('Bom dia', 'Falar');
@@ -377,6 +381,8 @@ describe('UI — sessão', () => {
       brainJson('Você é um mercador astuto.'),
     );
     await send('Entro na feira');
+    await waitFor(() => button('Gerar cérebros e iniciar diálogo'), 'preparação de direção autoral');
+    click(button('Gerar cérebros e iniciar diálogo')!);
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
     gateway.queue(npcJson('Olá, viajante!', false));
     await send('Bom dia', 'Falar');
@@ -437,6 +443,8 @@ describe('UI — sessão', () => {
       brainJson('Você é um guarda.'),
     );
     await send('Avanço');
+    await waitFor(() => button('Gerar cérebros e iniciar diálogo'), 'preparação de direção autoral');
+    click(button('Gerar cérebros e iniciar diálogo')!);
     await waitFor(() => text().includes('Falando com: Guarda'), 'diálogo');
 
     // Simula reload: troca de rota e volta, reconstruindo o estado a partir do servidor.
@@ -709,6 +717,8 @@ describe('UI — sessão', () => {
       brainJson('Mercador.'),
     );
     await send('Falar com o mercador');
+    await waitFor(() => button('Gerar cérebros e iniciar diálogo'), 'preparação de direção autoral');
+    click(button('Gerar cérebros e iniciar diálogo')!);
     await waitFor(() => text().includes('Falando com: Mercador'), 'modo diálogo');
     gateway.queue(npcJson('Boas compras!', false));
     await send('Olá', 'Falar');
@@ -802,19 +812,8 @@ describe('UI — sessão', () => {
     expect(document.querySelectorAll('section[data-page-id]').length).toBe(0);
   });
 
-  it('diálogo multi-NPC na UI: edita o cérebro, adiciona personagem com IA e usa o botão Passar a vez', async () => {
+  it('diálogo multi-NPC na UI: prepara direção autoral inicial, edita o cérebro, adiciona personagem com IA e usa o botão Passar a vez', async () => {
     await openNewSession();
-    let releaseBrain!: () => void;
-    const brainGate = new Promise<void>((r) => {
-      releaseBrain = r;
-    });
-    const origStream = gateway.streamGenerate.bind(gateway);
-    let callIdx = 0;
-    gateway.streamGenerate = async function* (req) {
-      callIdx++;
-      if (callIdx === 2) await brainGate;
-      yield* origStream(req);
-    };
     gateway.queue(
       narratorJson('O mercador olha para você.', {
         activate: true,
@@ -824,14 +823,16 @@ describe('UI — sessão', () => {
       brainJson('Você é um mercador cauteloso.'),
     );
     await send('Converso com o mercador');
-    await waitFor(() => document.querySelector('[data-dialogue-loading="true"]'), 'card de preparação do diálogo');
-    expect(document.querySelector('.cursor-blink')).toBeNull();
-    expect(text()).toContain('Preparando Diálogo — Mercador');
-    expect(button('Preparando diálogo…')).toBeTruthy();
-    releaseBrain();
-    gateway.streamGenerate = origStream;
+    await waitFor(() => document.querySelector('[data-dialogue-setup="true"]'), 'card de preparação e direção autoral');
+    expect(text()).toContain('Preparar Modo Diálogo — Direção Autoral');
+
+    const setupHint = byLabel('Direção autoral de Mercador') as HTMLTextAreaElement;
+    expect(setupHint).toBeTruthy();
+    type(setupHint, 'Ofereça um pouco do seu suco durante a conversa.');
+    click(button('Gerar cérebros e iniciar diálogo')!);
 
     await waitFor(() => byLabel('Cérebro de Mercador'), 'chip do Mercador');
+    expect(gateway.requests.at(-1)!.userText).toContain('Ofereça um pouco do seu suco durante a conversa.');
     expect(byLabel('Personagem no diálogo')).toBeTruthy();
     expect(button('Passar a vez')!.title).toContain('deixar Mercador falar ou reagir');
 

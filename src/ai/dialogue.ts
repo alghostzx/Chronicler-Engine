@@ -226,7 +226,7 @@ export function buildNpcBrainRequest(input: {
       : '';
   const hintBlock =
     input.hint && input.hint.trim().length > 0
-      ? `\nDireção autoral / dica para o personagem: ${input.hint.trim()}\n`
+      ? `\nDIREÇÃO AUTORAL OBRIGATÓRIA PARA ESTE PERSONAGEM (incorpore com prioridade máxima no Pilar 3 e na postura/conduta durante a cena): ${input.hint.trim()}\n`
       : '';
   return {
     model: input.model,

@@ -739,7 +739,7 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
     expect(delOk.json().dialogue.participants).toHaveLength(1);
   });
 
-  it('o gatilho do Narrador aceita npc_names com múltiplos NPCs e gera o cérebro (6 pilares) de cada um em chamadas separadas', async () => {
+  it('o gatilho do Narrador aceita npc_names com múltiplos NPCs e POST /dialogue/:id/prepare-brains gera o cérebro (6 pilares) de cada um com direção autoral', async () => {
     t.repos.dialogues.delete(dialogueId);
     t.gateway.queue(
       narratorJson('Os dois se aproximam da mesa.', {
@@ -747,8 +747,6 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
         player_name: 'Kira',
         npc_names: ['Elena', 'Marcus'],
       }),
-      brainJson('Persona 1 gerada para Elena'),
-      brainJson('Persona 2 gerada para Marcus'),
     );
     const res = await t.app.inject({
       method: 'POST',
@@ -757,14 +755,41 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
     });
     const events = parseSse(res.body);
     expect(events.map((e) => e.event)).toContain('dialogue_trigger');
-    const statusEvents = events.filter((e) => e.event === 'status').map((e) => e.data);
-    expect(statusEvents).toMatchObject([
-      { phase: 'generating_brain', npc_name: 'Elena', index: 1, total: 2 },
-      { phase: 'generating_brain', npc_name: 'Marcus', index: 2, total: 2 },
+    expect(t.gateway.requests).toHaveLength(1);
+
+    const active = t.repos.dialogues.getActive(sessionId)!;
+    expect(active.npc_name).toBe('Elena e Marcus');
+    expect(t.repos.dialogues.listParticipants(active.id)).toMatchObject([
+      { npc_name: 'Elena', dynamic_system_prompt: '', order_index: 1 },
+      { npc_name: 'Marcus', dynamic_system_prompt: '', order_index: 2 },
     ]);
+
+    // Tentar enviar fala antes de gerar os cérebros retorna 409
+    const earlyMsg = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${active.id}/message`,
+      payload: { message: 'Olá!' },
+    });
+    expect(earlyMsg.statusCode).toBe(409);
+
+    // Prepara os cérebros com Direção Autoral individual para cada participante
+    t.gateway.queue(brainJson('Persona 1 gerada para Elena'), brainJson('Persona 2 gerada para Marcus'));
+    const prep = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${active.id}/prepare-brains`,
+      payload: {
+        participants: [
+          { npc_name: 'Elena', hint: 'Ofereça suco ao Marcus no meio da conversa.' },
+          { npc_name: 'Marcus', hint: 'Prove o suco, diga que tem gosto estranho e jogue fora.' },
+        ],
+      },
+    });
+    expect(prep.statusCode).toBe(200);
 
     // 1 chamada ao Narrador + 2 chamadas separadas ao buildNpcBrainRequest
     expect(t.gateway.requests).toHaveLength(3);
+    expect(t.gateway.requests[1]!.userText).toContain('Ofereça suco ao Marcus no meio da conversa.');
+    expect(t.gateway.requests[2]!.userText).toContain('Prove o suco, diga que tem gosto estranho e jogue fora.');
     for (const req of [t.gateway.requests[1]!, t.gateway.requests[2]!]) {
       expect(req.userText).toContain('Os dois se aproximam da mesa.');
       expect(req.userText).toContain('1. Identidade e Voz:');
@@ -777,8 +802,6 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
       expect(req.userText).not.toContain('o que não tem como saber');
     }
 
-    const active = t.repos.dialogues.getActive(sessionId)!;
-    expect(active.npc_name).toBe('Elena e Marcus');
     expect(t.repos.dialogues.listParticipants(active.id)).toMatchObject([
       { npc_name: 'Elena', dynamic_system_prompt: 'Persona 1 gerada para Elena', order_index: 1 },
       { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2 gerada para Marcus', order_index: 2 },
