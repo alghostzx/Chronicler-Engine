@@ -49,7 +49,8 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 | `POST /api/dialogue/:id/participants` | `{ npc_name, dynamic_system_prompt }` → `201 { participant, dialogue }`: adiciona mais um NPC à roda de conversa |
 | `PUT /api/dialogue/:id/participants/:participantId` | `{ npc_name?, dynamic_system_prompt? }` → `{ participant, dialogue, messages }`: altera o nome e/ou o cérebro (`dynamic_system_prompt`) de um NPC durante o diálogo |
 | `DELETE /api/dialogue/:id/participants/:participantId` | `{ dialogue }`: remove o NPC da conversa (`409` se restar apenas 1 participante) |
-| `POST /api/dialogue/:id/participants/generate-brain` | `{ npc_name, hint? }` → `{ dynamic_system_prompt }`: pede à IA para sugerir o cérebro do personagem com base na história e nas falas da cena |
+| `POST /api/dialogue/:id/participants/generate-brain` | `{ npc_name, hint? }` → `{ dynamic_system_prompt }`: pede à IA para gerar um cérebro novo do zero com base na história, nas falas da cena e na direção autoral |
+| `POST /api/dialogue/:id/participants/edit-brain` | `{ npc_name, current_brain, hint? }` → `{ dynamic_system_prompt }`: pede à IA para editar o cérebro existente preservando sua base, incorporando o histórico da conversa até agora e a nova direção autoral |
 | `POST /api/dialogue/:id/conclude` | SSE: o Narrador escreve a página em prosa (até 3 tentativas; *fallback* cru); eventos `start`, `chunk`, `status`, `retry`, `page { page, discarded, narration }`, `error`, `done` |
 | `POST /api/dialogue/:id/cancel` | Descarta o diálogo e as mensagens, sem narrar |
 | `POST /api/narrative/pages/:id/narrate-dialogue` | SSE: reprocessa uma página de diálogo **crua** em prosa; não toca nas seguintes |

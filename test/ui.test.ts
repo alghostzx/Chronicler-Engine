@@ -836,7 +836,7 @@ describe('UI — sessão', () => {
     expect(byLabel('Personagem no diálogo')).toBeTruthy();
     expect(button('Passar a vez')!.title).toContain('deixar Mercador falar ou reagir');
 
-    // Abre o cérebro do Mercador e edita
+    // Abre o cérebro do Mercador, usa "Editar cérebro com IA" preservando a base e salva
     click(byLabel('Cérebro de Mercador')!);
     const brainTa = await waitFor(() => byLabel('Cérebro do personagem') as HTMLTextAreaElement | null, 'textarea do cérebro');
     const hintTa = byLabel('Direção autoral para gerar com IA') as HTMLTextAreaElement | null;
@@ -844,7 +844,17 @@ describe('UI — sessão', () => {
     expect(hintTa?.style.maxHeight).toBe('50vh');
     expect(brainTa.style.maxHeight).toBe('50vh');
     expect(brainTa.value).toBe('Você é um mercador cauteloso.');
-    type(brainTa, 'Você é um mercador muito amigo de Kira.');
+    expect(button('Editar cérebro com IA')).toBeTruthy();
+    expect(button('Gerar cérebro com IA')).toBeTruthy();
+    type(hintTa!, 'Agora confie mais em Kira.');
+    gateway.queue(brainJson('Você é um mercador cauteloso, mas agora muito amigo de Kira.'));
+    click(button('Editar cérebro com IA')!);
+    await waitFor(
+      () => brainTa.value === 'Você é um mercador cauteloso, mas agora muito amigo de Kira.',
+      'cérebro atualizado via Editar cérebro com IA',
+    );
+    expect(gateway.requests.at(-1)!.userText).toContain('Você é um mercador cauteloso.');
+    expect(gateway.requests.at(-1)!.userText).toContain('Agora confie mais em Kira.');
     click(button('Salvar cérebro')!);
     await waitFor(() => !document.querySelector('[role=dialog]'), 'modal de edição fechado');
 

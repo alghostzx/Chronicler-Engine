@@ -882,4 +882,39 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
       { npc_name: 'Marcus', dynamic_system_prompt: 'Persona 2 gerada para Marcus', order_index: 2 },
     ]);
   });
+
+  it('POST /participants/edit-brain envia o cérebro atual, o histórico da conversa até agora e a nova direção autoral', async () => {
+    t.gateway.queue(npcJson('Não sei de nada sobre a chave.'));
+    await say('Onde está a chave do porão?');
+
+    t.gateway.queue(brainJson('Cérebro editado: mantém voz ríspida, agora desconfia do jogador e decide revelar a pista.'));
+    const res = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${dialogueId}/participants/edit-brain`,
+      payload: {
+        npc_name: 'Elena Vance',
+        current_brain: '1. Identidade e Voz: taverneira ríspida com tique de limpar o balcão.',
+        hint: 'Agora ela percebe que o jogador sabe demais e decide entregar a pista.',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().dynamic_system_prompt).toContain('Cérebro editado:');
+
+    const lastReq = t.gateway.requests.at(-1)!;
+    expect(lastReq.userText).toContain('# CÉREBRO ATUAL DO PERSONAGEM "Elena Vance"');
+    expect(lastReq.userText).toContain('taverneira ríspida com tique de limpar o balcão.');
+    expect(lastReq.userText).toContain('# FALAS DA CENA ATÉ AGORA');
+    expect(lastReq.userText).toContain('Onde está a chave do porão?');
+    expect(lastReq.userText).toContain('Não sei de nada sobre a chave.');
+    expect(lastReq.userText).toContain('Agora ela percebe que o jogador sabe demais e decide entregar a pista.');
+    expect(lastReq.userText).toContain('NÃO reescreva do zero sem necessidade');
+
+    // current_brain vazio retorna 400
+    const bad = await t.app.inject({
+      method: 'POST',
+      url: `/api/dialogue/${dialogueId}/participants/edit-brain`,
+      payload: { npc_name: 'Elena Vance', current_brain: '   ' },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
 });

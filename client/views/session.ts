@@ -1332,9 +1332,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
     });
     const hintInput = autoGrow(
       h('textarea', {
-        class: 'input min-h-[2.375rem] flex-1 resize-y text-sm leading-5',
+        class: 'input min-h-[2.375rem] w-full resize-y text-sm leading-5',
         rows: '1',
-        placeholder: 'Opcional: direção autoral para gerar com IA (ex.: está mentindo sobre a chave)…',
+        placeholder: 'Direção autoral para editar ou gerar o cérebro com IA (ex.: está mentindo sobre a chave)…',
         'aria-label': 'Direção autoral para gerar com IA',
       }),
     );
@@ -1345,12 +1345,30 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         'aria-label': 'Cérebro do personagem',
       }),
     );
-    const genBtn = h('button', { class: 'btn whitespace-nowrap text-xs', type: 'button' }, 'Gerar cérebro com IA');
+    const editAiBtn = h(
+      'button',
+      {
+        class: 'btn whitespace-nowrap text-xs',
+        type: 'button',
+        title: 'Altera o cérebro atual mantendo sua base, aplicando a conversa até agora e a direção autoral',
+      },
+      'Editar cérebro com IA',
+    );
+    const genBtn = h(
+      'button',
+      {
+        class: 'btn whitespace-nowrap text-xs',
+        type: 'button',
+        title: 'Gera um cérebro novo do zero a partir da história, da conversa e da direção autoral',
+      },
+      'Gerar cérebro com IA',
+    );
+    const genStatusText = h('span', null, 'Analisando a história e gerando os 6 pilares do cérebro…');
     const genStatus = h(
       'p',
       { class: 'hidden items-center gap-2 text-xs text-accent', 'data-brain-loading': 'true', 'aria-live': 'polite' },
       icon('loader', 14),
-      h('span', null, 'Analisando a história e gerando os 6 pilares do cérebro…'),
+      genStatusText,
     );
     const saveBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Salvar cérebro');
     const removeBtn = canRemove
@@ -1371,9 +1389,9 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         ),
         h(
           'div',
-          { class: 'flex flex-wrap items-end gap-2' },
+          { class: 'space-y-2' },
           hintInput,
-          genBtn,
+          h('div', { class: 'flex flex-wrap items-center justify-end gap-2' }, editAiBtn, genBtn),
         ),
         genStatus,
         h(
@@ -1392,16 +1410,61 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       ),
     );
 
+    const setAiBusy = (mode: 'edit' | 'generate' | null): void => {
+      const active = mode !== null;
+      editAiBtn.disabled = active;
+      genBtn.disabled = active;
+      saveBtn.disabled = active;
+      editAiBtn.textContent = mode === 'edit' ? 'Editando…' : 'Editar cérebro com IA';
+      genBtn.textContent = mode === 'generate' ? 'Gerando…' : 'Gerar cérebro com IA';
+      if (mode === 'edit') {
+        genStatusText.textContent = 'Atualizando o cérebro atual com a conversa e a direção autoral…';
+      } else if (mode === 'generate') {
+        genStatusText.textContent = 'Analisando a história e gerando os 6 pilares do cérebro…';
+      }
+      genStatus.classList.toggle('hidden', !active);
+      genStatus.classList.toggle('flex', active);
+    };
+
+    editAiBtn.addEventListener('click', async () => {
+      const npcName = nameInput.value.trim();
+      const currentBrain = brainTa.value.trim();
+      if (!npcName) {
+        toast('Informe o nome do personagem antes de editar o cérebro.', 'error');
+        return;
+      }
+      if (!currentBrain) {
+        toast('Não há cérebro atual para editar. Use “Gerar cérebro com IA” para criar um do zero.', 'error');
+        return;
+      }
+      setAiBusy('edit');
+      try {
+        const res = await api<{ dynamic_system_prompt: string }>(
+          'POST',
+          `/api/dialogue/${dId}/participants/edit-brain`,
+          {
+            npc_name: npcName,
+            current_brain: currentBrain,
+            ...(hintInput.value.trim() ? { hint: hintInput.value.trim() } : {}),
+          },
+        );
+        brainTa.value = res.dynamic_system_prompt;
+        syncAutoGrow(brainTa);
+        toast('Cérebro atualizado pela IA. Revise e clique em “Salvar cérebro”.', 'info');
+      } catch (err) {
+        toast((err as Error).message, 'error');
+      } finally {
+        setAiBusy(null);
+      }
+    });
+
     genBtn.addEventListener('click', async () => {
       const npcName = nameInput.value.trim();
       if (!npcName) {
         toast('Informe o nome do personagem antes de gerar o cérebro.', 'error');
         return;
       }
-      genBtn.disabled = true;
-      genBtn.textContent = 'Gerando…';
-      genStatus.classList.remove('hidden');
-      genStatus.classList.add('flex');
+      setAiBusy('generate');
       try {
         const res = await api<{ dynamic_system_prompt: string }>(
           'POST',
@@ -1414,10 +1477,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
       } catch (err) {
         toast((err as Error).message, 'error');
       } finally {
-        genBtn.disabled = false;
-        genBtn.textContent = 'Gerar cérebro com IA';
-        genStatus.classList.add('hidden');
-        genStatus.classList.remove('flex');
+        setAiBusy(null);
       }
     });
 

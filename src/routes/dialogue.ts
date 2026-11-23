@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  buildNpcBrainEditRequest,
   buildNpcBrainRequest,
   buildNpcRequest,
   formatDialoguePage,
@@ -506,6 +507,59 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
       } catch (err) {
         if (err instanceof HttpError) throw err;
         req.log.error({ err }, 'Falha ao gerar o cérebro do NPC');
+        throw new HttpError(502, friendlyError(err).replace('narrativa', 'persona do NPC'));
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: { npc_name: string; current_brain: string; hint?: string } }>(
+    '/api/dialogue/:id/participants/edit-brain',
+    {
+      schema: {
+        params: idParams,
+        body: {
+          type: 'object',
+          required: ['npc_name', 'current_brain'],
+          additionalProperties: false,
+          properties: {
+            npc_name: { type: 'string', minLength: 1, maxLength: 120 },
+            current_brain: { type: 'string', minLength: 1, maxLength: 20000 },
+            hint: { type: 'string', maxLength: 4000 },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const dialogue = requireActiveDialogue(req.params.id);
+      const session = requireSession(repos, dialogue.session_id);
+      const npcName = cleanSpeakerName(req.body.npc_name);
+      if (!npcName) throw new HttpError(400, 'Informe o nome do personagem para editar o cérebro.');
+      const currentBrain = req.body.current_brain.trim();
+      if (currentBrain.length === 0) throw new HttpError(400, 'O cérebro atual não pode estar vazio para edição com IA.');
+      const gateway = ctx.gatewayProvider();
+      const model = await ctx.models.resolve(session);
+      const activePages = repos.pages.listActive(session.id);
+      const redo = dialogue.redo_page_id ? repos.pages.get(dialogue.redo_page_id) : undefined;
+      const precedingPages = redo ? activePages.filter((p) => p.order_index < redo.order_index) : activePages;
+      const generateReq = buildNpcBrainEditRequest({
+        model,
+        session,
+        precedingPages,
+        dialogue,
+        participants: repos.dialogues.listParticipants(dialogue.id),
+        messages: repos.dialogues.listMessages(dialogue.id),
+        npcName,
+        currentBrain,
+        hint: req.body.hint,
+      });
+      let raw = '';
+      try {
+        for await (const fragment of gateway.streamGenerate(generateReq)) raw += fragment;
+        const dynamic_system_prompt = parseNpcBrainResponse(raw);
+        return { dynamic_system_prompt };
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        req.log.error({ err }, 'Falha ao editar o cérebro do NPC');
         throw new HttpError(502, friendlyError(err).replace('narrativa', 'persona do NPC'));
       }
     },
