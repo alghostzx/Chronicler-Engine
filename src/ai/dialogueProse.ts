@@ -19,17 +19,47 @@ export interface DialogueLine {
 
 const LABEL = /^\*\*(.{1,80}?):\*\*\s*([\s\S]*)$/;
 
-/** Lê a transcrição crua: um parágrafo por fala, com o rótulo em negrito. Parágrafo sem rótulo = só fala. */
+/**
+ * Divide o conteúdo de um turno de diálogo em trechos de fala (fora de `{...}`) e ações físicas (dentro de `{...}`).
+ */
+export function extractSpeechSegments(text: string): string[] {
+  const segments: string[] = [];
+  const re = /\{([^{}]*)\}/g;
+  let lastIndex = 0;
+  let hasAction = false;
+  for (const m of text.matchAll(re)) {
+    hasAction = true;
+    const before = text.slice(lastIndex, m.index).trim();
+    if (before.length > 0) segments.push(before);
+    lastIndex = (m.index ?? 0) + m[0].length;
+  }
+  if (!hasAction) {
+    const trimmed = text.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
+  const rest = text.slice(lastIndex).trim();
+  if (rest.length > 0) segments.push(rest);
+  return segments;
+}
+
+/**
+ * Lê a transcrição crua: um parágrafo por turno (`**Nome:** fala e/ou {ação}`).
+ * Extrai apenas os segmentos de FALA (`speech`, fora de `{...}`) para verificação literal de fidelidade;
+ * as ações `{...}` são transformadas livremente em prosa narrativa pelo Narrador.
+ */
 export function parseDialoguePage(text: string): DialogueLine[] {
-  return text
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
-    .map((p) => {
-      const m = LABEL.exec(p);
-      return m ? { speaker: m[1]!.trim(), speech: m[2]!.trim() } : { speaker: null, speech: p };
-    })
-    .filter((l) => l.speech.length > 0);
+  const lines: DialogueLine[] = [];
+  for (const rawParagraph of text.split(/\n{2,}/)) {
+    const p = rawParagraph.trim();
+    if (p.length === 0) continue;
+    const m = LABEL.exec(p);
+    const speaker = m ? m[1]!.trim() : null;
+    const body = m ? m[2]!.trim() : p;
+    for (const seg of extractSpeechSegments(body)) {
+      lines.push({ speaker, speech: seg });
+    }
+  }
+  return lines;
 }
 
 /** Palavras comparáveis: sem caixa, acentos nem pontuação (travessões e vírgulas das marcações não contam). */
@@ -98,11 +128,12 @@ export function checkDialogueFidelity(rawTranscript: string, prose: string): Fid
 const INSTRUCTION = `Escreva agora a PÁGINA NARRATIVA que registra essa cena, em prosa literária no estilo definido para a história.
 
 REGRAS DESTA PÁGINA:
-1. Preserve TODAS as falas EXATAMENTE como estão, palavra por palavra e na mesma ordem, em discurso direto, introduzidas por travessão (—). Não resuma, não reescreva, não omita nem acrescente palavras dentro das falas.
-2. Entre e ao redor das falas, acrescente apenas preenchimento narrativo: gestos, olhares, ambiente, tom de voz e pausas. Você pode partir uma fala ao meio para inserir uma marcação (ex.: — Lhe ofereço a cura, — disse ele, com malícia — apenas ao custo...), sem mudar as palavras dela.
-3. Cada fala fica em seu próprio parágrafo (com as marcações e gestos do próprio falante); a narração solta fica em parágrafos próprios e curtos.
-4. NÃO use os rótulos "Nome:" nem negrito: quem fala é identificado pela narração.
-5. NÃO avance a história além do que a conversa mostra e NÃO invente falas novas.`;
+1. Tudo o que está FORA de chaves {…} são FALAS ditas em voz alta: preserve TODAS as falas EXATAMENTE como estão, palavra por palavra e na mesma ordem, em discurso direto, introduzidas por travessão (—). Não resuma, não reescreva, não omita nem acrescente palavras dentro das falas.
+2. Tudo o que está DENTRO de chaves {…} são AÇÕES FÍSICAS e gestos realizados na cena: transforme cada ação {…} em prosa narrativa literária na ordem exata em que aconteceu (sem copiar as chaves "{}" para o texto final). Você tem liberdade literária para redigir a ação em prosa, mas não deve omitir nenhuma ação realizada.
+3. Entre e ao redor das falas e ações, acrescente o preenchimento narrativo necessário: gestos, olhares, ambiente, tom de voz e pausas. Você pode partir uma fala ao meio para inserir uma marcação ou a ação correspondente (ex.: — Lhe ofereço a cura, — disse ele, com malícia — apenas ao custo...), sem mudar as palavras da fala.
+4. Cada fala fica em seu próprio parágrafo (com as marcações e gestos do próprio falante); a narração solta e as ações ficam em parágrafos próprios e curtos.
+5. NÃO use os rótulos "Nome:", negrito nem chaves "{}" no texto final: quem fala e quem age é identificado pela própria narração.
+6. NÃO avance a história além do que a conversa e as ações mostram e NÃO invente falas novas.`;
 
 /**
  * Pedido de narração de um diálogo: mesmo pipeline de docs/narrador.md#pipeline-do-payload (regras, mundo, corpus anterior), com a

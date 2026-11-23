@@ -12,7 +12,20 @@ import {
   type Session,
 } from '../api';
 import { downloadStoryMarkdown, type ExportScope } from '../download';
-import { autoGrow, confirmModal, countPages, formatNumber, h, mount, openModal, paragraphs, syncAutoGrow, toast } from '../dom';
+import {
+  autoGrow,
+  confirmModal,
+  countPages,
+  formatActionLine,
+  formatNumber,
+  h,
+  mount,
+  openModal,
+  paragraphs,
+  splitDialogueSegments,
+  syncAutoGrow,
+  toast,
+} from '../dom';
 import { audioPlayer } from '../audioPlayer';
 import { setQuietReadyToasts } from '../audioUi';
 import { ContinuousPlayback, type EndInfo, type StatusPage } from '../continuousPlayback';
@@ -776,18 +789,31 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
         ),
       ),
       redoing ? h('p', { class: 'mb-3 text-xs text-muted' }, `A página ${redoing.order_index} só é substituída quando você encerrar este novo diálogo. Descartar mantém tudo como estava.`) : null,
-      d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} para começar a conversa (ou passe a vez).`) : null,
+      d.messages.length === 0 ? h('p', { class: 'text-sm text-muted' }, `Diga algo a ${d.dialogue.npc_name} (ou use {ação} entre chaves) para começar a conversa, ou passe a vez.`) : null,
       h(
         'div',
         { class: 'space-y-2' },
-        ...d.messages.map((m) => {
+        ...d.messages.flatMap((m) => {
           const speaker = m.sender === 'npc' ? m.speaker_name || d.dialogue.npc_name : playerLabel;
-          return h(
-            'p',
-            { class: m.sender === 'npc' ? 'text-ink' : 'text-muted italic' },
-            h('strong', { class: m.sender === 'npc' ? 'text-accent' : 'text-strong' }, `${speaker}: `),
-            m.content,
-          );
+          const segments = splitDialogueSegments(m.content);
+          return segments.map((seg) => {
+            if (seg.kind === 'action') {
+              return h(
+                'p',
+                {
+                  class: 'border-l-2 border-accent pl-2.5 text-sm italic text-muted',
+                  'data-dialogue-action': 'true',
+                },
+                formatActionLine(speaker, seg.text),
+              );
+            }
+            return h(
+              'p',
+              { class: m.sender === 'npc' ? 'text-ink' : 'text-muted italic' },
+              h('strong', { class: m.sender === 'npc' ? 'text-accent' : 'text-strong' }, `${speaker}: `),
+              seg.text,
+            );
+          });
         }),
         d.waiting
           ? h(
@@ -891,7 +917,7 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
           : setupPending
             ? 'Configure a direção autoral (opcional) no cartão acima e clique em “Gerar cérebros e iniciar diálogo”…'
             : inDialogue
-              ? `Fale com ${dlg!.dialogue.npc_name}…`
+              ? `Fale com ${dlg!.dialogue.npc_name}… (use {ação} entre chaves para realizar ações físicas)`
               : 'O que o seu personagem faz? Descreva a ação, a cena ou a direção da história… (Ctrl+Enter envia)',
       }),
     );

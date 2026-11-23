@@ -863,12 +863,26 @@ describe('UI — sessão', () => {
     expect(button('Passar a vez')!.title).toContain('deixar os personagens conversarem ou reagirem');
 
     // Usa o botão "Passar a vez" para ouvir os dois NPCs conversarem na rodada (e um sinaliza fim)
-    gateway.queue(npcJson('Guarda, diga a ela que sou honesto!', false), npcJson('Calma, Mercador.', true));
+    gateway.queue(
+      npcJson('Ah é mesmo, preciso te dar isso aqui {tira do bolso uma lata de suco e entrega a Guarda} toma aí', false),
+      npcJson('{pega a lata, abre e dá um gole} Calma, Mercador, isso aqui tá azedo! {derrama o resto no chão}', true),
+    );
     click(button('Passar a vez')!);
     await waitFor(
-      () => text().includes('Mercador: Guarda, diga a ela que sou honesto!') && text().includes('Guarda: Calma, Mercador.'),
-      'falas dos dois NPCs exibidas',
+      () =>
+        text().includes('Mercador: Ah é mesmo, preciso te dar isso aqui') &&
+        text().includes('Mercador: toma aí') &&
+        text().includes('Guarda: Calma, Mercador, isso aqui tá azedo!'),
+      'falas e ações dos dois NPCs exibidas em linhas separadas',
     );
+    const actionLines = Array.from(document.querySelectorAll<HTMLElement>('[data-dialogue-action="true"]')).map(
+      (el) => el.textContent,
+    );
+    expect(actionLines).toEqual([
+      'Mercador tira do bolso uma lata de suco e entrega a Guarda',
+      'Guarda pega a lata, abre e dá um gole',
+      'Guarda derrama o resto no chão',
+    ]);
     expect(text()).toContain('Mercador e Guarda desejam encerrar a conversa.');
   });
 
