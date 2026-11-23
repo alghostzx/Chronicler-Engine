@@ -907,7 +907,12 @@ describe('diálogo multi-NPC e edição do cérebro', () => {
     expect(lastReq.userText).toContain('Onde está a chave do porão?');
     expect(lastReq.userText).toContain('Não sei de nada sobre a chave.');
     expect(lastReq.userText).toContain('Agora ela percebe que o jogador sabe demais e decide entregar a pista.');
-    expect(lastReq.userText).toContain('NÃO reescreva do zero sem necessidade');
+    expect(lastReq.userText).toContain('sem mexer onde não há alterações');
+    expect(lastReq.userText).toContain('atualizar o texto do cérebro existente, e não reescrevê-lo do zero');
+    // Não envia o restante da história nem a explicação dos 6 pilares
+    expect(lastReq.userText).not.toContain('# CONTEXTO DO MUNDO');
+    expect(lastReq.userText).not.toContain('# CORPUS NARRATIVO');
+    expect(lastReq.userText).not.toContain('ISOLAMENTO EPISTÊMICO');
 
     // current_brain vazio retorna 400
     const bad = await t.app.inject({

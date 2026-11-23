@@ -42,6 +42,18 @@ export const NPC_BRAIN_SCHEMA = {
   required: ['dynamic_system_prompt'],
 } as const;
 
+export const NPC_BRAIN_EDIT_SCHEMA = {
+  type: 'object',
+  properties: {
+    dynamic_system_prompt: {
+      type: 'string',
+      description:
+        'O texto atualizado do cérebro (dynamic_system_prompt) do personagem, mantendo intacto tudo o que não precisou mudar.',
+    },
+  },
+  required: ['dynamic_system_prompt'],
+} as const;
+
 export interface NpcReply {
   reply: string;
   end_conversation: boolean;
@@ -245,13 +257,12 @@ export function buildNpcBrainRequest(input: {
 }
 
 /**
- * Monta a requisição ao Gemini para EDITAR o cérebro (`dynamic_system_prompt`) existente de um NPC,
- * preservando sua base e aplicando o contexto da conversa até agora e a direção autoral informada.
+ * Monta a requisição ao Gemini para ATUALIZAR o cérebro (`dynamic_system_prompt`) existente de um NPC,
+ * usando apenas o cérebro atual, as falas da conversa até agora e a direção autoral informada
+ * (sem reenviar o restante da história e sem reescrever o texto do zero).
  */
 export function buildNpcBrainEditRequest(input: {
   model: string;
-  session: Pick<Session, 'system_rules' | 'world_context'>;
-  precedingPages: Pick<Page, 'generated_text' | 'order_index'>[];
   dialogue: Pick<DialogueSession, 'npc_name'> & Partial<Pick<DialogueSession, 'player_name'>>;
   participants: Pick<DialogueParticipant, 'npc_name'>[];
   messages: (Pick<DialogueMessage, 'sender' | 'content'> & Partial<Pick<DialogueMessage, 'speaker_name'>>)[];
@@ -259,32 +270,29 @@ export function buildNpcBrainEditRequest(input: {
   currentBrain: string;
   hint?: string;
 }): GenerateRequest {
-  const prefix = buildStoryPrefix(input.session, buildCorpus(input.precedingPages));
   const playerLabel = cleanSpeakerName(input.dialogue.player_name ?? undefined) ?? DEFAULT_PLAYER_LABEL;
   const others = input.participants.map((p) => p.npc_name).filter((n) => n !== input.npcName);
   const transcript =
     input.messages.length > 0
-      ? `\n\n# FALAS DA CENA ATÉ AGORA\n${formatDialoguePage({ npc_name: input.dialogue.npc_name, player_name: input.dialogue.player_name ?? null }, input.messages)}`
+      ? `# FALAS DA CENA ATÉ AGORA\n${formatDialoguePage({ npc_name: input.dialogue.npc_name, player_name: input.dialogue.player_name ?? null }, input.messages)}\n\n`
       : '';
   const hintBlock =
     input.hint && input.hint.trim().length > 0
-      ? `\nDIREÇÃO AUTORAL PARA ESTA EDIÇÃO (aplique com prioridade máxima, ajustando os pilares afetados sem descartar o que não conflita): ${input.hint.trim()}\n`
-      : '\nNenhuma direção autoral adicional foi informada: apenas atualize o cérebro existente para refletir o que já aconteceu nas falas da cena até agora (emoção atual, postura, intenções e novos fatos descobertos).\n';
+      ? `DIREÇÃO AUTORAL PARA ESTA ATUALIZAÇÃO: ${input.hint.trim()}`
+      : 'Nenhuma direção autoral adicional foi informada: atualize apenas o que mudou por causa das falas/ações da cena até agora.';
   return {
     model: input.model,
     systemInstruction:
-      'Você é um diretor de dramaturgia e RPG que edita e atualiza o briefing psicológico e operacional ("cérebro" / dynamic_system_prompt) existente de um personagem (NPC) no Modo Diálogo, preservando sua identidade, voz, segredos e detalhes já estabelecidos enquanto incorpora o andamento da conversa atual e a nova direção autoral.',
+      'Você é um editor cirúrgico de briefings de personagens (NPCs) para o Modo Diálogo. Seu papel é atualizar o texto do cérebro ("dynamic_system_prompt") existente — e não reescrevê-lo do zero — preservando intacto tudo o que não precisa mudar.',
     history: [],
     userText:
-      `${prefix}${transcript}\n\n# CÉREBRO ATUAL DO PERSONAGEM "${input.npcName}"\n${input.currentBrain.trim()}\n\n# TAREFA\n` +
-      `Edite o "dynamic_system_prompt" acima do personagem "${input.npcName}", que participa de uma conversa direta com "${playerLabel}"${
-        others.length > 0 ? ` (junto na roda com: ${others.join(', ')})` : ''
-      }.\n` +
-      `REGRAS DE EDIÇÃO:\n` +
-      `- NÃO reescreva do zero sem necessidade: preserve identidade, tiques verbais, segredos, opiniões e ajustes manuais do cérebro atual em tudo o que não conflitar com a nova direção autoral ou com os eventos da conversa.\n` +
-      `- Atualize o que mudou por causa das falas/ações ocorridas na cena até agora e aplique integralmente a direção autoral abaixo.\n` +
-      `${hintBlock}\n${BRAIN_PILLARS_INSTRUCTION}`,
-    responseJsonSchema: NPC_BRAIN_SCHEMA,
+      `${transcript}# CÉREBRO ATUAL DO PERSONAGEM "${input.npcName}"\n${input.currentBrain.trim()}\n\n# TAREFA\n` +
+      `Atualize o "dynamic_system_prompt" acima do personagem "${input.npcName}" (em conversa com "${playerLabel}"${
+        others.length > 0 ? ` e ${others.join(', ')}` : ''
+      }), sem mexer onde não há alterações.\n` +
+      `Seu papel é apenas atualizar o texto do cérebro existente, e não reescrevê-lo do zero. Mantenha a estrutura e o texto original intactos em tudo o que não precisar mudar para refletir a conversa até agora e a direção autoral abaixo.\n\n` +
+      hintBlock,
+    responseJsonSchema: NPC_BRAIN_EDIT_SCHEMA,
   };
 }
 

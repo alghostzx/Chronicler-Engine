@@ -538,13 +538,8 @@ export function registerDialogueRoutes(app: FastifyInstance, ctx: AppContext): v
       if (currentBrain.length === 0) throw new HttpError(400, 'O cérebro atual não pode estar vazio para edição com IA.');
       const gateway = ctx.gatewayProvider();
       const model = await ctx.models.resolve(session);
-      const activePages = repos.pages.listActive(session.id);
-      const redo = dialogue.redo_page_id ? repos.pages.get(dialogue.redo_page_id) : undefined;
-      const precedingPages = redo ? activePages.filter((p) => p.order_index < redo.order_index) : activePages;
       const generateReq = buildNpcBrainEditRequest({
         model,
-        session,
-        precedingPages,
         dialogue,
         participants: repos.dialogues.listParticipants(dialogue.id),
         messages: repos.dialogues.listMessages(dialogue.id),
