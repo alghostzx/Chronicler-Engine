@@ -884,6 +884,26 @@ describe('UI — sessão', () => {
       'Guarda derrama o resto no chão',
     ]);
     expect(text()).toContain('Mercador e Guarda desejam encerrar a conversa.');
+
+    // Se o 2º NPC falhar numa rodada, a fala do jogador e a do 1º NPC já aparecem na tela,
+    // e o botão "Tentar novamente (Guarda)" permite retomar exatamente do Guarda.
+    gateway.queue(npcJson('Está tudo bem por aqui.'), 'json inválido do guarda');
+    await send('O que houve?', 'Falar');
+    await waitFor(
+      () =>
+        text().includes('Kira: O que houve?') &&
+        text().includes('Mercador: Está tudo bem por aqui.') &&
+        !!button('Tentar novamente (Guarda)'),
+      'fala do jogador + 1º NPC visíveis e botão Tentar novamente (Guarda)',
+    );
+    expect(document.querySelector('[data-dialogue-retry="true"]')).toBeTruthy();
+
+    gateway.queue(npcJson('Desculpe a demora, Kira.'));
+    click(button('Tentar novamente (Guarda)')!);
+    await waitFor(
+      () => text().includes('Guarda: Desculpe a demora, Kira.') && !document.querySelector('[data-dialogue-retry="true"]'),
+      'retomada do turno do Guarda concluída',
+    );
   });
 
   it('autoGrow: caixas de digitação (Nova Crônica e Doca) expandem até 50% da altura da tela e depois ligam barra de rolagem', async () => {

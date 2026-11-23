@@ -45,7 +45,7 @@ Eventos SSE e o ciclo de geração: [Arquitetura](arquitetura.md#ciclo-de-uma-ge
 | --- | --- |
 | `GET /api/sessions/:id/dialogue/active` | `{ dialogue, messages }` (reconexão após recarregar; `dialogue.participants` traz os NPCs em ordem de turno com seu `dynamic_system_prompt`) |
 | `POST /api/dialogue/:id/prepare-brains` | `{ participants?: [{ npc_name, hint? }] }` → `{ dialogue }`: gera os cérebros iniciais (6 pilares) dos personagens do diálogo incorporando a direção autoral (`hint`) de cada um antes da troca de falas |
-| `POST /api/dialogue/:id/message` | `{ message?, pass_turn? }` → `{ player_message, npc_message, npc_messages, npc_wants_to_end }`: envia fala do jogador ou passa a vez (`pass_turn: true`) e executa a rodada sequencial dos NPCs |
+| `POST /api/dialogue/:id/message` | `{ message?, pass_turn?, retry_pending? }` → SSE (`Accept: text/event-stream`, eventos `player_turn`, `status`, `npc_turn`, `done`, `error`) ou JSON `{ player_message, npc_message, npc_messages, npc_wants_to_end }`: grava e transmite cada turno assim que ele se encerra (fala do jogador e cada NPC em sequência) ou retoma a rodada a partir do NPC pendente (`retry_pending: true`) |
 | `POST /api/dialogue/:id/participants` | `{ npc_name, dynamic_system_prompt }` → `201 { participant, dialogue }`: adiciona mais um NPC à roda de conversa |
 | `PUT /api/dialogue/:id/participants/:participantId` | `{ npc_name?, dynamic_system_prompt? }` → `{ participant, dialogue, messages }`: altera o nome e/ou o cérebro (`dynamic_system_prompt`) de um NPC durante o diálogo |
 | `DELETE /api/dialogue/:id/participants/:participantId` | `{ dialogue }`: remove o NPC da conversa (`409` se restar apenas 1 participante) |

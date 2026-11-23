@@ -1,6 +1,7 @@
 import {
   api,
   ApiError,
+  streamDialogueRound,
   streamTurn,
   type Page,
   type Dialogue,
@@ -45,6 +46,14 @@ interface DialogueState {
   wantsEnd: boolean;
   /** Aguardando a resposta do NPC. */
   waiting: boolean;
+  /** Nome do NPC que está formulando sua resposta no momento (turno a turno). */
+  respondingNpc?: string | null;
+  /** Índice (1-based) do NPC respondendo agora. */
+  respondingIndex?: number;
+  /** Total de NPCs na fila da rodada atual. */
+  respondingTotal?: number;
+  /** Última mensagem de erro do turno que falhou (exibida no banner de Tentar novamente). */
+  lastError?: string | null;
 }
 
 interface Ghost {
@@ -824,11 +833,42 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
                 'aria-live': 'polite',
               },
               icon('loader', 14),
-              multi
-                ? `${d.dialogue.npc_name} estão respondendo (${participants.map((p) => p.npc_name).join(' → ')})…`
-                : `${d.dialogue.npc_name} está respondendo…`,
+              d.respondingNpc
+                ? (d.respondingTotal ?? 1) > 1
+                  ? `${d.respondingNpc} está respondendo (${d.respondingIndex ?? 1} de ${d.respondingTotal})…`
+                  : `${d.respondingNpc} está respondendo…`
+                : multi
+                  ? `${d.dialogue.npc_name} estão respondendo (${participants.map((p) => p.npc_name).join(' → ')})…`
+                  : `${d.dialogue.npc_name} está respondendo…`,
             )
-          : null,
+          : d.dialogue.pending_participant_id
+            ? (() => {
+                const pendingName =
+                  d.dialogue.pending_npc_name ||
+                  participants.find((p) => p.id === d.dialogue.pending_participant_id)?.npc_name ||
+                  d.dialogue.npc_name;
+                return h(
+                  'div',
+                  {
+                    class:
+                      'mt-2 flex flex-wrap items-center justify-between gap-2 rounded border border-hp-low bg-main px-3 py-2 text-xs text-hp-low',
+                    'data-dialogue-retry': 'true',
+                  },
+                  h('span', null, d.lastError || `O turno de ${pendingName} falhou e aguarda nova tentativa.`),
+                  h(
+                    'button',
+                    {
+                      class: 'btn btn-primary px-3 py-1 text-xs',
+                      type: 'button',
+                      disabled: controlsDisabled,
+                      'aria-label': 'Tentar novamente',
+                      onClick: () => void retryDialogueTurn(),
+                    },
+                    `Tentar novamente (${pendingName})`,
+                  ),
+                );
+              })()
+            : null,
       ),
     );
   }
@@ -1211,27 +1251,58 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
   }
 
   // --- Diálogo ----------------------------------------------------------------------------------------
-  async function runDialogueRound(payload: { message?: string; pass_turn?: boolean }): Promise<void> {
+  async function runDialogueRound(payload: { message?: string; pass_turn?: boolean; retry_pending?: boolean }): Promise<void> {
     if (!dlg || dlg.waiting) return;
     const state = dlg;
     state.waiting = true;
+    state.respondingNpc = null;
+    state.lastError = null;
     renderTome(true);
     renderDock();
     try {
-      const r = await api<{
-        player_message: DialogueMessage | null;
-        npc_message: DialogueMessage | null;
-        npc_messages?: DialogueMessage[];
-        npc_wants_to_end: boolean;
-      }>('POST', `/api/dialogue/${state.dialogue.id}/message`, payload);
-      const npcList = r.npc_messages ?? (r.npc_message ? [r.npc_message] : []);
-      state.messages = [...state.messages, ...(r.player_message ? [r.player_message] : []), ...npcList];
-      state.wantsEnd = r.npc_wants_to_end;
-      if (payload.message !== undefined) inputValue = '';
+      await streamDialogueRound(state.dialogue.id, payload, {
+        onPlayerTurn: (playerMsg) => {
+          state.messages = [...state.messages, playerMsg];
+          if (payload.message !== undefined) inputValue = '';
+          if (!disposed) {
+            renderTome(true);
+            renderDock();
+          }
+        },
+        onStatus: (st) => {
+          state.respondingNpc = st.npc_name;
+          state.respondingIndex = st.index;
+          state.respondingTotal = st.total;
+          if (!disposed) renderTome(true);
+        },
+        onNpcTurn: (npcMsg, wantsEnd) => {
+          state.messages = [...state.messages, npcMsg];
+          if (wantsEnd) state.wantsEnd = true;
+          if (!disposed) {
+            renderTome(true);
+            renderDock();
+          }
+        },
+        onDone: (info) => {
+          if (info.npc_wants_to_end) state.wantsEnd = true;
+          state.dialogue = { ...state.dialogue, pending_participant_id: null, pending_npc_name: null };
+          state.lastError = null;
+        },
+        onError: (err) => {
+          state.dialogue = {
+            ...state.dialogue,
+            pending_participant_id: err.pending_participant_id,
+            pending_npc_name: err.pending_npc_name,
+          };
+          state.lastError = err.message;
+          toast(err.message, 'error');
+        },
+      });
     } catch (err) {
       toast((err as Error).message, 'error');
     }
     state.waiting = false;
+    state.respondingNpc = null;
     if (disposed) return;
     renderTome(true);
     renderDock();
@@ -1243,6 +1314,10 @@ export async function renderSession(root: HTMLElement, sessionId: string): Promi
 
   async function passDialogueTurn(): Promise<void> {
     await runDialogueRound({ pass_turn: true });
+  }
+
+  async function retryDialogueTurn(): Promise<void> {
+    await runDialogueRound({ retry_pending: true });
   }
 
   function openParticipantModal(p: DialogueParticipant): void {

@@ -33,7 +33,7 @@
  * descreve o schema de um banco NOVO; a ordem das colunas acrescentadas é a mesma dos `ALTER TABLE`
  * da migração (um teste confere que os dois caminhos geram o mesmo schema).
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS app_settings (
@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS dialogue_sessions (
     player_name TEXT,
     page_id TEXT REFERENCES narrative_pages(id) ON DELETE CASCADE,
     redo_page_id TEXT REFERENCES narrative_pages(id) ON DELETE CASCADE,
+    pending_participant_id TEXT,
+    pending_pass_turn INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 

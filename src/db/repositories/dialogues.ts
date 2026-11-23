@@ -154,9 +154,25 @@ export class DialoguesRepository {
     let removed = false;
     this.db.transaction(() => {
       removed = this.db.prepare('DELETE FROM dialogue_participants WHERE id = ?').run(participantId).changes > 0;
-      if (removed) this.syncSessionSummary(current.dialogue_session_id);
+      if (removed) {
+        this.db
+          .prepare(
+            `UPDATE dialogue_sessions
+                SET pending_participant_id = NULL, pending_pass_turn = 0
+              WHERE id = ? AND pending_participant_id = ?`,
+          )
+          .run(current.dialogue_session_id, participantId);
+        this.syncSessionSummary(current.dialogue_session_id);
+      }
     })();
     return removed;
+  }
+
+  /** Registra ou limpa o participante cujo turno falhou e aguarda "Tentar novamente". */
+  setPendingTurn(dialogueSessionId: string, participantId: string | null, passTurn = false): void {
+    this.db
+      .prepare('UPDATE dialogue_sessions SET pending_participant_id = ?, pending_pass_turn = ? WHERE id = ?')
+      .run(participantId, passTurn ? 1 : 0, dialogueSessionId);
   }
 
   /** Substitui todos os participantes do diálogo (usado ao preparar/gerar os cérebros iniciais da cena). */
@@ -191,7 +207,15 @@ export class DialoguesRepository {
    */
   conclude(id: string, pageId: string): void {
     this.db
-      .prepare(`UPDATE dialogue_sessions SET status = 'concluded', page_id = ?, redo_page_id = NULL WHERE id = ?`)
+      .prepare(
+        `UPDATE dialogue_sessions
+            SET status = 'concluded',
+                page_id = ?,
+                redo_page_id = NULL,
+                pending_participant_id = NULL,
+                pending_pass_turn = 0
+          WHERE id = ?`,
+      )
       .run(pageId, id);
     this.db.prepare('DELETE FROM dialogue_messages WHERE dialogue_session_id = ?').run(id);
   }
