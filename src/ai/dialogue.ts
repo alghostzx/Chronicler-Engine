@@ -17,7 +17,8 @@ export const NPC_RESPONSE_SCHEMA = {
     },
     reply: {
       type: 'string',
-      description: 'A resposta do NPC, em primeira pessoa, conforme a persona (vazio apenas se pass_turn = true).',
+      description:
+        'A resposta do NPC na rodada (vazio apenas se pass_turn = true). Escreva as falas em primeira pessoa e, quando houver ações físicas, gestos ou interações com objetos/ambiente, coloque a ação entre chaves {assim} em terceira pessoa no presente (ex.: "Pegue isto. {tira uma lata de suco do bolso e a entrega} Toma aí." ou apenas "{abre a lata, dá um gole e faz uma careta}" se agir em silêncio).',
     },
     end_conversation: {
       type: 'boolean',
@@ -58,10 +59,11 @@ export class NpcResponseError extends Error {
 const NPC_GUARD_RULES = `
 
 REGRAS DE INTERPRETAÇÃO (sempre válidas):
-- Responda sempre em primeira pessoa, como o personagem, sem sair do papel.
-- Nunca narre, fale ou decida ações pelo protagonista (o jogador) nem pelos outros personagens presentes.
-- Fale como uma pessoa real em conversa oral, ajustando o tamanho da fala ao momento: em bate-papo casual, trocas rápidas ou discussões, use frases curtas e diretas (1 a 3 frases, sem palestras nem monólogos); só se estenda em parágrafos quando o momento pedir naturalmente (por exemplo, ao contar uma história ou dar uma explicação longa pedida pelo interlocutor).
-- Seja flexível e orgânico: acompanhe mudanças de assunto trazidas pelo interlocutor, reaja ao que acabou de ser dito e não fique insistindo roboticamente no mesmo ponto ou intenção se a conversa tomou outro rumo.
+- Responda sempre como o personagem, sem sair do papel: escreva as FALAS em primeira pessoa e, quando realizar ações físicas, gestos relevantes, movimentação ou interação com objetos/ambiente, escreva a ação entre chaves {assim}, em terceira pessoa no presente (ex.: {tira do bolso uma lata de suco e a entrega}, {abre a lata e dá um gole}).
+- Você pode intercalar fala e {ação} livremente no mesmo turno (ex.: fala {ação} fala), usar apenas fala, ou responder APENAS com {ação} (sem fala alguma) quando o personagem preferir agir ou reagir em silêncio.
+- Nas ações {entre chaves}, descreva somente a ação ou iniciativa do seu próprio personagem; nunca narre, fale ou decrete a reação, fala ou consequência sofrida pelo protagonista nem pelos outros personagens presentes (deixe que o alvo reaja no turno dele).
+- Cadência e bom senso de conversa real: conversa falada não é uma carta. Pessoas reais reagem ao imediato, tratam de uma coisa ou pergunta por vez e deixam espaço para o outro responder. Use bom senso para julgar o tamanho natural do turno: cabe desde uma reação rápida, interjeição, frase curta ou apenas uma {ação}, até uma explicação mais longa somente quando o assunto e o momento realmente pedirem.
+- Seja flexível e orgânico: acompanhe mudanças de assunto ou ações trazidas pelo interlocutor, reaja ao que acabou de acontecer e não fique insistindo roboticamente no mesmo ponto ou intenção se a cena tomou outro rumo.
 - Responda exclusivamente no formato JSON especificado. Defina "end_conversation" como true quando a conversa chegar a um fim natural (despedida, assunto resolvido ou esgotado, necessidade de ir embora, perda de paciência ou ruptura), sem forçar continuação artificial; caso contrário, false.`;
 
 export function buildNpcSystemInstruction(
@@ -77,11 +79,11 @@ export function buildNpcSystemInstruction(
   const others = (opts?.otherParticipants ?? []).filter((n) => n && n !== opts?.npcName);
   const othersLine =
     others.length > 0
-      ? `\n- Outros personagens também estão presentes nesta roda de conversa: ${others.join(', ')}. As falas no histórico vêm identificadas pelo nome de quem falou; NÃO inclua o seu próprio nome como prefixo na sua resposta ("reply").`
+      ? `\n- Outros personagens também estão presentes nesta roda de conversa: ${others.join(', ')}. As falas e {ações} no histórico vêm identificadas pelo nome de quem falou ou agiu; NÃO inclua o seu próprio nome como prefixo na sua resposta ("reply").`
       : '';
   const passLine = opts?.allowPassTurn
-    ? `\n- Se a fala anterior foi dirigida claramente a outro personagem presente e o seu personagem não tiver nada relevante a acrescentar ou interromper agora, você pode pular sua vez definindo "pass_turn": true e "reply": "".`
-    : `\n- Nesta rodada você deve responder (defina "pass_turn": false e preencha "reply").`;
+    ? `\n- Se a fala ou {ação} anterior foi dirigida especificamente a outro personagem presente (como entregar um objeto, fazer uma pergunta direta ou interagir fisicamente com outro) e o seu personagem não tiver motivo imediato para intervir agora, prefira pular sua vez definindo "pass_turn": true e "reply": "".`
+    : `\n- Nesta rodada você deve responder com fala e/ou {ação} (defina "pass_turn": false e preencha "reply").`;
   const extra = others.length > 0 || opts?.allowPassTurn ? selfLine + othersLine + passLine : '';
   return dynamicSystemPrompt.trim() + NPC_GUARD_RULES + interlocutor + extra;
 }

@@ -1,5 +1,5 @@
 import type { Page } from './api';
-import { h, paragraphs } from './dom';
+import { formatActionLine, h, paragraphs, splitDialogueSegments } from './dom';
 import { audioControls } from './audioUi';
 import { iconButton } from './controls';
 import { icon } from './icons';
@@ -52,11 +52,18 @@ export function dialogueBadge(npcName: string | null): HTMLElement {
   return h('span', { class: 'page-badge', 'data-badge': 'dialogue' }, icon('dialogue', 14), npcName ? `Diálogo com ${npcName}` : 'Diálogo');
 }
 
-/** Parágrafo de página: na transcrição crua de um diálogo, o rótulo `**Falante:**` vira destaque (tolera edições). */
-function pageParagraph(text: string, rawDialogue: boolean): HTMLElement {
+/** Parágrafo(s) de página: na transcrição crua de um diálogo, o rótulo `**Falante:**` vira destaque e `{ação}` vira linha narrativa em itálico. */
+function pageParagraphs(text: string, rawDialogue: boolean): HTMLElement[] {
   const m = rawDialogue ? /^\*\*(.{1,80}?):\*\*\s*([\s\S]*)$/.exec(text) : null;
-  if (!m) return h('p', null, text);
-  return h('p', { class: 'dialogue-line' }, h('strong', { class: 'dialogue-speaker' }, `${m[1]}:`), ' ', m[2]);
+  if (!m) return [h('p', null, text)];
+  const speaker = m[1]!;
+  const segments = splitDialogueSegments(m[2]!);
+  return segments.map((seg) => {
+    if (seg.kind === 'action') {
+      return h('p', { class: 'dialogue-action italic text-muted' }, formatActionLine(speaker, seg.text));
+    }
+    return h('p', { class: 'dialogue-line' }, h('strong', { class: 'dialogue-speaker' }, `${speaker}:`), ' ', seg.text);
+  });
 }
 
 /** Cartão de uma página: folha separada, cabeçalho numerado, prosa e ações em ícones. */
@@ -71,7 +78,7 @@ export function pageCard(o: PageCardOptions): HTMLElement {
     h(
       'div',
       { class: `prose-tome page-card-body ${o.dropCap ? 'drop-cap' : ''}` },
-      ...paragraphs(page.generated_text).map((p) => pageParagraph(p, page.kind === 'dialogue' && page.raw_dialogue)),
+      ...paragraphs(page.generated_text).flatMap((p) => pageParagraphs(p, page.kind === 'dialogue' && page.raw_dialogue)),
     ),
   ];
   // Narração: o botão "Ouvir" (e o menu de opções do áudio, quando há áudio pronto) ficam sempre no

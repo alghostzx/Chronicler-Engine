@@ -184,6 +184,50 @@ export function countPages(n: number): string {
   return `${formatNumber(n)} ${n === 1 ? 'página' : 'páginas'}`;
 }
 
+export interface DialogueSegment {
+  kind: 'speech' | 'action';
+  text: string;
+}
+
+/**
+ * Divide uma mensagem do Modo Diálogo em segmentos ordenados de fala (`speech`, fora de `{...}`)
+ * e ação física (`action`, dentro de `{...}`).
+ */
+export function splitDialogueSegments(content: string): DialogueSegment[] {
+  const segments: DialogueSegment[] = [];
+  const re = /\{([^{}]+)\}/g;
+  let lastIndex = 0;
+  for (const m of content.matchAll(re)) {
+    const before = content.slice(lastIndex, m.index).trim();
+    if (before.length > 0) segments.push({ kind: 'speech', text: before });
+    const action = m[1]!.trim();
+    if (action.length > 0) segments.push({ kind: 'action', text: action });
+    lastIndex = (m.index ?? 0) + m[0].length;
+  }
+  const rest = content.slice(lastIndex).trim();
+  if (rest.length > 0) segments.push({ kind: 'speech', text: rest });
+  if (segments.length === 0 && content.trim().length > 0) {
+    segments.push({ kind: 'speech', text: content.trim() });
+  }
+  return segments;
+}
+
+/**
+ * Formata uma linha de ação física do diálogo: prefixa com o nome do personagem a menos que
+ * o texto da ação já comece com o nome dele.
+ */
+export function formatActionLine(speaker: string, actionText: string): string {
+  const cleanSpeaker = speaker.trim();
+  const cleanAction = actionText.trim();
+  if (!cleanSpeaker) return cleanAction;
+  const lowerAction = cleanAction.toLowerCase();
+  const lowerSpeaker = cleanSpeaker.toLowerCase();
+  if (lowerAction === lowerSpeaker || lowerAction.startsWith(`${lowerSpeaker} `)) {
+    return cleanAction;
+  }
+  return `${cleanSpeaker} ${cleanAction}`;
+}
+
 /**
  * Ajusta a altura de uma `<textarea>` ao seu conteúdo até um teto proporcional à altura da janela
  * (por padrão 50% da tela, `50vh`), ativando a barra de rolagem vertical apenas quando ultrapassar o limite.

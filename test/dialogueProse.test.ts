@@ -22,6 +22,18 @@ describe('parseDialoguePage', () => {
       { speaker: 'Ana', speech: 'Tchau.' },
     ]);
   });
+
+  it('separa trechos de fala intercalados por {ações} e ignora turnos compostos apenas por {ação}', () => {
+    const withActions =
+      '**Fulano:** Ah é mesmo, preciso te dar isso aqui {tira do bolso uma lata de suco e entrega a Sicrano} toma aí.\n\n' +
+      '**Sicrano:** {pega a lata, abre e dá um gole} Nossa, tá azedo, não dá para beber isso. {derrama o resto do suco no chão}\n\n' +
+      '**Guarda:** {observa a cena em silêncio de braços cruzados}';
+    expect(parseDialoguePage(withActions)).toEqual([
+      { speaker: 'Fulano', speech: 'Ah é mesmo, preciso te dar isso aqui' },
+      { speaker: 'Fulano', speech: 'toma aí.' },
+      { speaker: 'Sicrano', speech: 'Nossa, tá azedo, não dá para beber isso.' },
+    ]);
+  });
 });
 
 describe('speechWords', () => {
@@ -71,6 +83,19 @@ describe('checkDialogueFidelity', () => {
 
   it('prosa sem nenhuma fala reprova', () => {
     expect(checkDialogueFidelity(RAW, 'Os dois se encararam em silêncio.').ok).toBe(false);
+  });
+
+  it('exige fidelidade literal das falas mas permite ao Narrador reescrever as {ações} livremente em prosa literária', () => {
+    const transcriptWithActions =
+      '**Fulano:** Ah é mesmo, preciso te dar isso aqui {tira do bolso uma lata de suco e entrega a Sicrano} toma aí.\n\n' +
+      '**Sicrano:** {pega a lata, abre e dá um gole} Nossa, tá azedo, não dá para beber isso. {derrama o resto do suco no chão}';
+    const narratedProse =
+      'Fulano levou a mão ao casaco como quem recorda um detalhe importante.\n\n' +
+      '— Ah é mesmo, preciso te dar isso aqui — disse, sacando um recipiente metálico amassado e estendendo-o ao companheiro. — Toma aí.\n\n' +
+      'Sicrano rompeu o lacre e provou um trago rápido, franzindo o rosto imediatamente.\n\n' +
+      '— Nossa, tá azedo, não dá para beber isso.\n\n' +
+      'Sem cerimônia, virou a lata e deixou o líquido escorrer pelas pedras do chão.';
+    expect(checkDialogueFidelity(transcriptWithActions, narratedProse)).toEqual({ ok: true, missing: [] });
   });
 });
 
